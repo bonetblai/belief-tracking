@@ -1,0 +1,42 @@
+begin-parameters
+    ncols : integer ;
+    nrows : integer ;
+end-parameters
+
+begin-variables
+    mine(?x,?y) : boolean such that ?x is integer[ncols] and ?y is integer[nrows] ;
+    flag(?x,?y) : boolean such that ?x is integer[ncols] and ?y is integer[nrows] ;
+    uncovered(?x,?y) : boolean such that ?x is integer[ncols] and ?y is integer[nrows] ;
+    dead : boolean ;
+end-variables
+
+begin-defined-variables
+    obs(?x,?y) : integer[0,9] such that ?x is integer[ncols] and ?y is integer[nrows] ;
+    dead : boolean ;
+end-defined-variables
+
+begin-actions
+    open_cell(?x,?y) for ?x is integer[ncols] and ?y is integer[nrows] ;
+    open_cell(?x,?y) : if true then uncovered(?x,?y) := true ;
+    open_cell(?x,?y) : if mine(?x,?y) then dead := true ;
+
+    put_flag(?x,?y) for ?x is integer[ncols] and ?y is integer[nrows] ;
+    put_flag(?x,?y) : if true then flag(?x,?y) := true ;
+end-actions
+
+begin-axioms
+    obs(?x,?y) := mine(?x-1,?y-1) + mine(?x,?y-1) + mine(?x+1,?y-1) +
+                  mine(?x-1,?y) + mine(?x,?y) + mine(?x+1,?y) +
+                  mine(?x-1,?y+1) + mine(?x,?y+1) + mine(?x+1,?y+1) ;
+end-axioms
+    
+begin-observables
+    obs(?x,?y) if uncovered(?x,?y) ;
+end-observables
+
+begin-initial-situation
+    uncovered(?x,?y) = false ;
+    flag(?x,?y) = false ;
+    unknown mine(?x,?y) ;
+end-initial-situation
+

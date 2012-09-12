@@ -1,0 +1,1919 @@
+
+
+Terminals which are not used:
+
+   KW_PAIR
+   KW_SUCH
+   KW_THAT
+   KW_SOME
+   KW_DUMMY
+
+
+Conflict in state 141 between rule 75 and token KW_AND resolved as shift.
+Conflict in state 142 between rule 73 and token KW_AND resolved as shift.
+Conflict in state 143 between rule 74 and token KW_AND resolved as shift.
+State 105 contains 1 shift/reduce conflict.
+State 125 contains 3 shift/reduce conflicts.
+
+Grammar
+rule 1    btl_declarations -> btl_input_parameters btl_variables btl_defined_variables btl_actions btl_axioms btl_observables btl_initial_situation
+rule 2    btl_input_parameters -> KW_BEGIN_INPUT_PARAMETERS input_parameter_list KW_END_INPUT_PARAMETERS
+rule 3    btl_input_parameters ->		/* empty */
+rule 4    input_parameter_list -> input_parameter_list input_parameter_def
+rule 5    input_parameter_list -> input_parameter_def
+rule 6    input_parameter_def -> new_input_parameter_symbol COLON primitive_type SEMICOLON
+rule 7    primitive_type -> KW_INTEGER
+rule 8    primitive_type -> KW_BOOLEAN
+rule 9    btl_variables -> KW_BEGIN_VARIABLES variable_list KW_END_VARIABLES
+rule 10   btl_variables ->		/* empty */
+rule 11   variable_list -> variable_list variable_def
+rule 12   variable_list -> variable_def
+rule 13   variable_def -> new_variable_symbol_with_parameters SEMICOLON
+rule 14   new_variable_symbol_with_parameters -> new_variable_symbol COLON fully_qualified_type parameters_description
+rule 15   fully_qualified_type -> KW_BOOLEAN
+rule 16   fully_qualified_type -> KW_INTEGER LEFTSQPAR bounded_integer RIGHTSQPAR
+rule 17   bounded_integer -> TK_INTEGER
+rule 18   bounded_integer -> input_parameter_symbol
+rule 19   parameters_description -> KW_FOR parameter_description_list
+rule 20   parameters_description ->		/* empty */
+rule 21   parameter_description_list -> parameter_description_list KW_AND single_parameter_description
+rule 22   parameter_description_list -> single_parameter_description
+rule 23   single_parameter_description -> TK_PARAMETER_SYMBOL KW_IS fully_qualified_type
+rule 24   btl_defined_variables -> KW_BEGIN_DEFINED_VARIABLES defined_variable_list KW_END_DEFINED_VARIABLES
+rule 25   btl_defined_variables ->		/* empty */
+rule 26   defined_variable_list -> defined_variable_list defined_variable_def
+rule 27   defined_variable_list -> defined_variable_def
+rule 28   defined_variable_def -> new_defined_variable_symbol COLON fully_qualified_type SEMICOLON
+rule 29   btl_actions -> KW_BEGIN_ACTIONS action_list KW_END_ACTIONS
+rule 30   btl_actions ->		/* empty */
+rule 31   action_list -> action_list action_def
+rule 32   action_list -> action_def
+rule 33   action_def -> action_name_and_precondition action_effects
+rule 34   action_name_and_precondition -> action_symbol_with_parameters action_precondition SEMICOLON
+rule 35   action_symbol_with_parameters -> new_action_symbol parameters_description
+rule 36   action_precondition -> KW_WITH KW_PRECONDITION condition
+rule 37   action_precondition ->		/* empty */
+rule 38   action_effects -> action_effects named_conditional_effect
+rule 39   action_effects ->		/* empty */
+rule 40   named_conditional_effect -> action_symbol COLON conditional_effect SEMICOLON
+rule 41   conditional_effect -> KW_IF condition KW_THEN effect
+rule 42   condition -> constant_condition
+rule 43   condition -> conjunction_condition
+rule 44   constant_condition -> KW_TRUE
+rule 45   constant_condition -> KW_FALSE
+rule 46   conjunction_condition -> conjunction_condition KW_AND literal_condition
+rule 47   conjunction_condition -> literal_condition
+rule 48   literal_condition -> atomic_condition
+rule 49   literal_condition -> KW_NOT atomic_condition
+rule 50   atomic_condition -> TK_VAR_SYMBOL
+rule 51   atomic_condition -> TK_VAR_SYMBOL EQ expr
+rule 52   atomic_condition -> TK_VAR_SYMBOL NOT_EQ expr
+rule 53   effect -> effect atomic_effect
+rule 54   effect ->		/* empty */
+rule 55   atomic_effect -> TK_VAR_SYMBOL ASSIGN expr
+rule 56   btl_axioms -> KW_BEGIN_AXIOMS axiom_list KW_END_AXIOMS
+rule 57   btl_axioms ->		/* empty */
+rule 58   axiom_list -> axiom_list axiom_def
+rule 59   axiom_list -> axiom_def
+rule 60   axiom_def -> variable_symbol ASSIGN expr
+rule 61   btl_observables -> KW_BEGIN_OBSERVABLES observable_list KW_END_OBSERVABLES
+rule 62   btl_observables ->		/* empty */
+rule 63   observable_list -> observable_list observable_def
+rule 64   observable_list -> observable_def
+rule 65   observable_def -> variable_symbol SEMICOLON
+rule 66   observable_def -> defined_variable_symbol SEMICOLON
+rule 67   btl_initial_situation -> KW_BEGIN_INITIAL_BELIEF init_list KW_END_INITIAL_BELIEF
+rule 68   btl_initial_situation ->		/* empty */
+rule 69   init_list -> init_list init_def
+rule 70   init_list -> init_def
+rule 71   init_def -> variable_symbol EQ expr SEMICOLON
+rule 72   init_def -> KW_UNKNOWN variable_symbol SEMICOLON
+rule 73   expr -> expr PLUS term
+rule 74   expr -> expr MINUS term
+rule 75   expr -> expr KW_OR term
+rule 76   expr -> term
+rule 77   term -> term KW_AND factor
+rule 78   term -> factor
+rule 79   factor -> constant_expr
+rule 80   factor -> variable_symbol
+rule 81   factor -> KW_NOT expr
+rule 82   factor -> LEFTPAR expr RIGHTPAR
+rule 83   factor -> LEFTPAR expr RIGHTPAR KW_MOD TK_INTEGER
+rule 84   constant_expr -> KW_FALSE
+rule 85   constant_expr -> KW_TRUE
+rule 86   constant_expr -> TK_INTEGER
+rule 87   new_input_parameter_symbol -> TK_NEW_SYMBOL
+rule 88   input_parameter_symbol -> TK_INPUT_PARAMETER_SYMBOL
+rule 89   new_variable_symbol -> TK_NEW_VAR_SYMBOL
+rule 90   variable_symbol -> TK_VAR_SYMBOL
+rule 91   new_defined_variable_symbol -> TK_NEW_VAR_SYMBOL
+rule 92   defined_variable_symbol -> TK_DEF_VAR_SYMBOL
+rule 93   new_action_symbol -> TK_NEW_SYMBOL
+rule 94   action_symbol -> TK_ACTION_SYMBOL
+
+Terminals, with rules where they appear
+
+$ (-1)
+error (256)
+TK_NEW_SYMBOL (258) 87 93
+TK_INPUT_PARAMETER_SYMBOL (259) 88
+TK_PARAMETER_SYMBOL (260) 23
+TK_NEW_VAR_SYMBOL (261) 89 91
+TK_VAR_SYMBOL (262) 50 51 52 55 90
+TK_DEF_VAR_SYMBOL (263) 92
+TK_ACTION_SYMBOL (264) 94
+TK_INTEGER (265) 17 83 86
+KW_BEGIN_INPUT_PARAMETERS (266) 2
+KW_END_INPUT_PARAMETERS (267) 2
+KW_BEGIN_VARIABLES (268) 9
+KW_END_VARIABLES (269) 9
+KW_BEGIN_DEFINED_VARIABLES (270) 24
+KW_END_DEFINED_VARIABLES (271) 24
+KW_BEGIN_ACTIONS (272) 29
+KW_END_ACTIONS (273) 29
+KW_BEGIN_AXIOMS (274) 56
+KW_END_AXIOMS (275) 56
+KW_BEGIN_OBSERVABLES (276) 61
+KW_END_OBSERVABLES (277) 61
+KW_BEGIN_INITIAL_BELIEF (278) 67
+KW_END_INITIAL_BELIEF (279) 67
+KW_BOOLEAN (280) 8 15
+KW_INTEGER (281) 7 16
+KW_PAIR (282)
+KW_SUCH (283)
+KW_THAT (284)
+KW_IS (285) 23
+KW_FOR (286) 19
+KW_WITH (287) 36
+KW_PRECONDITION (288) 36
+KW_IF (289) 41
+KW_THEN (290) 41
+KW_AND (291) 21 46 77
+KW_OR (292) 75
+KW_NOT (293) 49 81
+KW_SOME (294)
+KW_TRUE (295) 44 85
+KW_FALSE (296) 45 84
+KW_MOD (297) 83
+KW_UNKNOWN (298) 72
+KW_DUMMY (299)
+PLUS (300) 73
+MINUS (301) 74
+EQ (302) 51 71
+NOT_EQ (303) 52
+ASSIGN (304) 55 60
+COLON (305) 6 14 28 40
+SEMICOLON (306) 6 13 28 34 40 65 66 71 72
+LEFTSQPAR (307) 16
+RIGHTSQPAR (308) 16
+LEFTPAR (309) 82 83
+RIGHTPAR (310) 82 83
+
+Nonterminals, with rules where they appear
+
+btl_declarations (56)
+    on left: 1
+btl_input_parameters (57)
+    on left: 2 3, on right: 1
+input_parameter_list (58)
+    on left: 4 5, on right: 2 4
+input_parameter_def (59)
+    on left: 6, on right: 4 5
+primitive_type (60)
+    on left: 7 8, on right: 6
+btl_variables (61)
+    on left: 9 10, on right: 1
+variable_list (62)
+    on left: 11 12, on right: 9 11
+variable_def (63)
+    on left: 13, on right: 11 12
+new_variable_symbol_with_parameters (64)
+    on left: 14, on right: 13
+fully_qualified_type (65)
+    on left: 15 16, on right: 14 23 28
+bounded_integer (66)
+    on left: 17 18, on right: 16
+parameters_description (67)
+    on left: 19 20, on right: 14 35
+parameter_description_list (68)
+    on left: 21 22, on right: 19 21
+single_parameter_description (69)
+    on left: 23, on right: 21 22
+btl_defined_variables (70)
+    on left: 24 25, on right: 1
+defined_variable_list (71)
+    on left: 26 27, on right: 24 26
+defined_variable_def (72)
+    on left: 28, on right: 26 27
+btl_actions (73)
+    on left: 29 30, on right: 1
+action_list (74)
+    on left: 31 32, on right: 29 31
+action_def (75)
+    on left: 33, on right: 31 32
+action_name_and_precondition (76)
+    on left: 34, on right: 33
+action_symbol_with_parameters (77)
+    on left: 35, on right: 34
+action_precondition (78)
+    on left: 36 37, on right: 34
+action_effects (79)
+    on left: 38 39, on right: 33 38
+named_conditional_effect (80)
+    on left: 40, on right: 38
+conditional_effect (81)
+    on left: 41, on right: 40
+condition (82)
+    on left: 42 43, on right: 36 41
+constant_condition (83)
+    on left: 44 45, on right: 42
+conjunction_condition (84)
+    on left: 46 47, on right: 43 46
+literal_condition (85)
+    on left: 48 49, on right: 46 47
+atomic_condition (86)
+    on left: 50 51 52, on right: 48 49
+effect (87)
+    on left: 53 54, on right: 41 53
+atomic_effect (88)
+    on left: 55, on right: 53
+btl_axioms (89)
+    on left: 56 57, on right: 1
+axiom_list (90)
+    on left: 58 59, on right: 56 58
+axiom_def (91)
+    on left: 60, on right: 58 59
+btl_observables (92)
+    on left: 61 62, on right: 1
+observable_list (93)
+    on left: 63 64, on right: 61 63
+observable_def (94)
+    on left: 65 66, on right: 63 64
+btl_initial_situation (95)
+    on left: 67 68, on right: 1
+init_list (96)
+    on left: 69 70, on right: 67 69
+init_def (97)
+    on left: 71 72, on right: 69 70
+expr (98)
+    on left: 73 74 75 76, on right: 51 52 55 60 71 73 74 75 81 82 83
+term (99)
+    on left: 77 78, on right: 73 74 75 76 77
+factor (100)
+    on left: 79 80 81 82 83, on right: 77 78
+constant_expr (101)
+    on left: 84 85 86, on right: 79
+new_input_parameter_symbol (102)
+    on left: 87, on right: 6
+input_parameter_symbol (103)
+    on left: 88, on right: 18
+new_variable_symbol (104)
+    on left: 89, on right: 14
+variable_symbol (105)
+    on left: 90, on right: 60 65 71 72 80
+new_defined_variable_symbol (106)
+    on left: 91, on right: 28
+defined_variable_symbol (107)
+    on left: 92, on right: 66
+new_action_symbol (108)
+    on left: 93, on right: 35
+action_symbol (109)
+    on left: 94, on right: 40
+
+
+state 0
+
+    KW_BEGIN_INPUT_PARAMETERS	shift, and go to state 1
+
+    $default	reduce using rule 3 (btl_input_parameters)
+
+    btl_declarations	go to state 156
+    btl_input_parameters	go to state 2
+
+
+
+state 1
+
+    btl_input_parameters  ->  KW_BEGIN_INPUT_PARAMETERS . input_parameter_list KW_END_INPUT_PARAMETERS   (rule 2)
+
+    TK_NEW_SYMBOL	shift, and go to state 3
+
+    input_parameter_list	go to state 4
+    input_parameter_def	go to state 5
+    new_input_parameter_symbol	go to state 6
+
+
+
+state 2
+
+    btl_declarations  ->  btl_input_parameters . btl_variables btl_defined_variables btl_actions btl_axioms btl_observables btl_initial_situation   (rule 1)
+
+    KW_BEGIN_VARIABLES	shift, and go to state 7
+
+    $default	reduce using rule 10 (btl_variables)
+
+    btl_variables	go to state 8
+
+
+
+state 3
+
+    new_input_parameter_symbol  ->  TK_NEW_SYMBOL .   (rule 87)
+
+    $default	reduce using rule 87 (new_input_parameter_symbol)
+
+
+
+state 4
+
+    btl_input_parameters  ->  KW_BEGIN_INPUT_PARAMETERS input_parameter_list . KW_END_INPUT_PARAMETERS   (rule 2)
+    input_parameter_list  ->  input_parameter_list . input_parameter_def   (rule 4)
+
+    TK_NEW_SYMBOL	shift, and go to state 3
+    KW_END_INPUT_PARAMETERS	shift, and go to state 9
+
+    input_parameter_def	go to state 10
+    new_input_parameter_symbol	go to state 6
+
+
+
+state 5
+
+    input_parameter_list  ->  input_parameter_def .   (rule 5)
+
+    $default	reduce using rule 5 (input_parameter_list)
+
+
+
+state 6
+
+    input_parameter_def  ->  new_input_parameter_symbol . COLON primitive_type SEMICOLON   (rule 6)
+
+    COLON	shift, and go to state 11
+
+
+
+state 7
+
+    btl_variables  ->  KW_BEGIN_VARIABLES . variable_list KW_END_VARIABLES   (rule 9)
+
+    TK_NEW_VAR_SYMBOL	shift, and go to state 12
+
+    variable_list	go to state 13
+    variable_def	go to state 14
+    new_variable_symbol_with_parameters	go to state 15
+    new_variable_symbol	go to state 16
+
+
+
+state 8
+
+    btl_declarations  ->  btl_input_parameters btl_variables . btl_defined_variables btl_actions btl_axioms btl_observables btl_initial_situation   (rule 1)
+
+    KW_BEGIN_DEFINED_VARIABLES	shift, and go to state 17
+
+    $default	reduce using rule 25 (btl_defined_variables)
+
+    btl_defined_variables	go to state 18
+
+
+
+state 9
+
+    btl_input_parameters  ->  KW_BEGIN_INPUT_PARAMETERS input_parameter_list KW_END_INPUT_PARAMETERS .   (rule 2)
+
+    $default	reduce using rule 2 (btl_input_parameters)
+
+
+
+state 10
+
+    input_parameter_list  ->  input_parameter_list input_parameter_def .   (rule 4)
+
+    $default	reduce using rule 4 (input_parameter_list)
+
+
+
+state 11
+
+    input_parameter_def  ->  new_input_parameter_symbol COLON . primitive_type SEMICOLON   (rule 6)
+
+    KW_BOOLEAN	shift, and go to state 19
+    KW_INTEGER	shift, and go to state 20
+
+    primitive_type	go to state 21
+
+
+
+state 12
+
+    new_variable_symbol  ->  TK_NEW_VAR_SYMBOL .   (rule 89)
+
+    $default	reduce using rule 89 (new_variable_symbol)
+
+
+
+state 13
+
+    btl_variables  ->  KW_BEGIN_VARIABLES variable_list . KW_END_VARIABLES   (rule 9)
+    variable_list  ->  variable_list . variable_def   (rule 11)
+
+    TK_NEW_VAR_SYMBOL	shift, and go to state 12
+    KW_END_VARIABLES	shift, and go to state 22
+
+    variable_def	go to state 23
+    new_variable_symbol_with_parameters	go to state 15
+    new_variable_symbol	go to state 16
+
+
+
+state 14
+
+    variable_list  ->  variable_def .   (rule 12)
+
+    $default	reduce using rule 12 (variable_list)
+
+
+
+state 15
+
+    variable_def  ->  new_variable_symbol_with_parameters . SEMICOLON   (rule 13)
+
+    SEMICOLON	shift, and go to state 24
+
+
+
+state 16
+
+    new_variable_symbol_with_parameters  ->  new_variable_symbol . COLON fully_qualified_type parameters_description   (rule 14)
+
+    COLON	shift, and go to state 25
+
+
+
+state 17
+
+    btl_defined_variables  ->  KW_BEGIN_DEFINED_VARIABLES . defined_variable_list KW_END_DEFINED_VARIABLES   (rule 24)
+
+    TK_NEW_VAR_SYMBOL	shift, and go to state 26
+
+    defined_variable_list	go to state 27
+    defined_variable_def	go to state 28
+    new_defined_variable_symbol	go to state 29
+
+
+
+state 18
+
+    btl_declarations  ->  btl_input_parameters btl_variables btl_defined_variables . btl_actions btl_axioms btl_observables btl_initial_situation   (rule 1)
+
+    KW_BEGIN_ACTIONS	shift, and go to state 30
+
+    $default	reduce using rule 30 (btl_actions)
+
+    btl_actions	go to state 31
+
+
+
+state 19
+
+    primitive_type  ->  KW_BOOLEAN .   (rule 8)
+
+    $default	reduce using rule 8 (primitive_type)
+
+
+
+state 20
+
+    primitive_type  ->  KW_INTEGER .   (rule 7)
+
+    $default	reduce using rule 7 (primitive_type)
+
+
+
+state 21
+
+    input_parameter_def  ->  new_input_parameter_symbol COLON primitive_type . SEMICOLON   (rule 6)
+
+    SEMICOLON	shift, and go to state 32
+
+
+
+state 22
+
+    btl_variables  ->  KW_BEGIN_VARIABLES variable_list KW_END_VARIABLES .   (rule 9)
+
+    $default	reduce using rule 9 (btl_variables)
+
+
+
+state 23
+
+    variable_list  ->  variable_list variable_def .   (rule 11)
+
+    $default	reduce using rule 11 (variable_list)
+
+
+
+state 24
+
+    variable_def  ->  new_variable_symbol_with_parameters SEMICOLON .   (rule 13)
+
+    $default	reduce using rule 13 (variable_def)
+
+
+
+state 25
+
+    new_variable_symbol_with_parameters  ->  new_variable_symbol COLON . fully_qualified_type parameters_description   (rule 14)
+
+    KW_BOOLEAN	shift, and go to state 33
+    KW_INTEGER	shift, and go to state 34
+
+    fully_qualified_type	go to state 35
+
+
+
+state 26
+
+    new_defined_variable_symbol  ->  TK_NEW_VAR_SYMBOL .   (rule 91)
+
+    $default	reduce using rule 91 (new_defined_variable_symbol)
+
+
+
+state 27
+
+    btl_defined_variables  ->  KW_BEGIN_DEFINED_VARIABLES defined_variable_list . KW_END_DEFINED_VARIABLES   (rule 24)
+    defined_variable_list  ->  defined_variable_list . defined_variable_def   (rule 26)
+
+    TK_NEW_VAR_SYMBOL	shift, and go to state 26
+    KW_END_DEFINED_VARIABLES	shift, and go to state 36
+
+    defined_variable_def	go to state 37
+    new_defined_variable_symbol	go to state 29
+
+
+
+state 28
+
+    defined_variable_list  ->  defined_variable_def .   (rule 27)
+
+    $default	reduce using rule 27 (defined_variable_list)
+
+
+
+state 29
+
+    defined_variable_def  ->  new_defined_variable_symbol . COLON fully_qualified_type SEMICOLON   (rule 28)
+
+    COLON	shift, and go to state 38
+
+
+
+state 30
+
+    btl_actions  ->  KW_BEGIN_ACTIONS . action_list KW_END_ACTIONS   (rule 29)
+
+    TK_NEW_SYMBOL	shift, and go to state 39
+
+    action_list	go to state 40
+    action_def	go to state 41
+    action_name_and_precondition	go to state 42
+    action_symbol_with_parameters	go to state 43
+    new_action_symbol	go to state 44
+
+
+
+state 31
+
+    btl_declarations  ->  btl_input_parameters btl_variables btl_defined_variables btl_actions . btl_axioms btl_observables btl_initial_situation   (rule 1)
+
+    KW_BEGIN_AXIOMS	shift, and go to state 45
+
+    $default	reduce using rule 57 (btl_axioms)
+
+    btl_axioms	go to state 46
+
+
+
+state 32
+
+    input_parameter_def  ->  new_input_parameter_symbol COLON primitive_type SEMICOLON .   (rule 6)
+
+    $default	reduce using rule 6 (input_parameter_def)
+
+
+
+state 33
+
+    fully_qualified_type  ->  KW_BOOLEAN .   (rule 15)
+
+    $default	reduce using rule 15 (fully_qualified_type)
+
+
+
+state 34
+
+    fully_qualified_type  ->  KW_INTEGER . LEFTSQPAR bounded_integer RIGHTSQPAR   (rule 16)
+
+    LEFTSQPAR	shift, and go to state 47
+
+
+
+state 35
+
+    new_variable_symbol_with_parameters  ->  new_variable_symbol COLON fully_qualified_type . parameters_description   (rule 14)
+
+    KW_FOR	shift, and go to state 48
+
+    $default	reduce using rule 20 (parameters_description)
+
+    parameters_description	go to state 49
+
+
+
+state 36
+
+    btl_defined_variables  ->  KW_BEGIN_DEFINED_VARIABLES defined_variable_list KW_END_DEFINED_VARIABLES .   (rule 24)
+
+    $default	reduce using rule 24 (btl_defined_variables)
+
+
+
+state 37
+
+    defined_variable_list  ->  defined_variable_list defined_variable_def .   (rule 26)
+
+    $default	reduce using rule 26 (defined_variable_list)
+
+
+
+state 38
+
+    defined_variable_def  ->  new_defined_variable_symbol COLON . fully_qualified_type SEMICOLON   (rule 28)
+
+    KW_BOOLEAN	shift, and go to state 33
+    KW_INTEGER	shift, and go to state 34
+
+    fully_qualified_type	go to state 50
+
+
+
+state 39
+
+    new_action_symbol  ->  TK_NEW_SYMBOL .   (rule 93)
+
+    $default	reduce using rule 93 (new_action_symbol)
+
+
+
+state 40
+
+    btl_actions  ->  KW_BEGIN_ACTIONS action_list . KW_END_ACTIONS   (rule 29)
+    action_list  ->  action_list . action_def   (rule 31)
+
+    TK_NEW_SYMBOL	shift, and go to state 39
+    KW_END_ACTIONS	shift, and go to state 51
+
+    action_def	go to state 52
+    action_name_and_precondition	go to state 42
+    action_symbol_with_parameters	go to state 43
+    new_action_symbol	go to state 44
+
+
+
+state 41
+
+    action_list  ->  action_def .   (rule 32)
+
+    $default	reduce using rule 32 (action_list)
+
+
+
+state 42
+
+    action_def  ->  action_name_and_precondition . action_effects   (rule 33)
+
+    $default	reduce using rule 39 (action_effects)
+
+    action_effects	go to state 53
+
+
+
+state 43
+
+    action_name_and_precondition  ->  action_symbol_with_parameters . action_precondition SEMICOLON   (rule 34)
+
+    KW_WITH	shift, and go to state 54
+
+    $default	reduce using rule 37 (action_precondition)
+
+    action_precondition	go to state 55
+
+
+
+state 44
+
+    action_symbol_with_parameters  ->  new_action_symbol . parameters_description   (rule 35)
+
+    KW_FOR	shift, and go to state 48
+
+    $default	reduce using rule 20 (parameters_description)
+
+    parameters_description	go to state 56
+
+
+
+state 45
+
+    btl_axioms  ->  KW_BEGIN_AXIOMS . axiom_list KW_END_AXIOMS   (rule 56)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+
+    axiom_list	go to state 58
+    axiom_def	go to state 59
+    variable_symbol	go to state 60
+
+
+
+state 46
+
+    btl_declarations  ->  btl_input_parameters btl_variables btl_defined_variables btl_actions btl_axioms . btl_observables btl_initial_situation   (rule 1)
+
+    KW_BEGIN_OBSERVABLES	shift, and go to state 61
+
+    $default	reduce using rule 62 (btl_observables)
+
+    btl_observables	go to state 62
+
+
+
+state 47
+
+    fully_qualified_type  ->  KW_INTEGER LEFTSQPAR . bounded_integer RIGHTSQPAR   (rule 16)
+
+    TK_INPUT_PARAMETER_SYMBOL	shift, and go to state 63
+    TK_INTEGER	shift, and go to state 64
+
+    bounded_integer	go to state 65
+    input_parameter_symbol	go to state 66
+
+
+
+state 48
+
+    parameters_description  ->  KW_FOR . parameter_description_list   (rule 19)
+
+    TK_PARAMETER_SYMBOL	shift, and go to state 67
+
+    parameter_description_list	go to state 68
+    single_parameter_description	go to state 69
+
+
+
+state 49
+
+    new_variable_symbol_with_parameters  ->  new_variable_symbol COLON fully_qualified_type parameters_description .   (rule 14)
+
+    $default	reduce using rule 14 (new_variable_symbol_with_parameters)
+
+
+
+state 50
+
+    defined_variable_def  ->  new_defined_variable_symbol COLON fully_qualified_type . SEMICOLON   (rule 28)
+
+    SEMICOLON	shift, and go to state 70
+
+
+
+state 51
+
+    btl_actions  ->  KW_BEGIN_ACTIONS action_list KW_END_ACTIONS .   (rule 29)
+
+    $default	reduce using rule 29 (btl_actions)
+
+
+
+state 52
+
+    action_list  ->  action_list action_def .   (rule 31)
+
+    $default	reduce using rule 31 (action_list)
+
+
+
+state 53
+
+    action_def  ->  action_name_and_precondition action_effects .   (rule 33)
+    action_effects  ->  action_effects . named_conditional_effect   (rule 38)
+
+    TK_ACTION_SYMBOL	shift, and go to state 71
+
+    $default	reduce using rule 33 (action_def)
+
+    named_conditional_effect	go to state 72
+    action_symbol	go to state 73
+
+
+
+state 54
+
+    action_precondition  ->  KW_WITH . KW_PRECONDITION condition   (rule 36)
+
+    KW_PRECONDITION	shift, and go to state 74
+
+
+
+state 55
+
+    action_name_and_precondition  ->  action_symbol_with_parameters action_precondition . SEMICOLON   (rule 34)
+
+    SEMICOLON	shift, and go to state 75
+
+
+
+state 56
+
+    action_symbol_with_parameters  ->  new_action_symbol parameters_description .   (rule 35)
+
+    $default	reduce using rule 35 (action_symbol_with_parameters)
+
+
+
+state 57
+
+    variable_symbol  ->  TK_VAR_SYMBOL .   (rule 90)
+
+    $default	reduce using rule 90 (variable_symbol)
+
+
+
+state 58
+
+    btl_axioms  ->  KW_BEGIN_AXIOMS axiom_list . KW_END_AXIOMS   (rule 56)
+    axiom_list  ->  axiom_list . axiom_def   (rule 58)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    KW_END_AXIOMS	shift, and go to state 76
+
+    axiom_def	go to state 77
+    variable_symbol	go to state 60
+
+
+
+state 59
+
+    axiom_list  ->  axiom_def .   (rule 59)
+
+    $default	reduce using rule 59 (axiom_list)
+
+
+
+state 60
+
+    axiom_def  ->  variable_symbol . ASSIGN expr   (rule 60)
+
+    ASSIGN	shift, and go to state 78
+
+
+
+state 61
+
+    btl_observables  ->  KW_BEGIN_OBSERVABLES . observable_list KW_END_OBSERVABLES   (rule 61)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_DEF_VAR_SYMBOL	shift, and go to state 79
+
+    observable_list	go to state 80
+    observable_def	go to state 81
+    variable_symbol	go to state 82
+    defined_variable_symbol	go to state 83
+
+
+
+state 62
+
+    btl_declarations  ->  btl_input_parameters btl_variables btl_defined_variables btl_actions btl_axioms btl_observables . btl_initial_situation   (rule 1)
+
+    KW_BEGIN_INITIAL_BELIEF	shift, and go to state 84
+
+    $default	reduce using rule 68 (btl_initial_situation)
+
+    btl_initial_situation	go to state 85
+
+
+
+state 63
+
+    input_parameter_symbol  ->  TK_INPUT_PARAMETER_SYMBOL .   (rule 88)
+
+    $default	reduce using rule 88 (input_parameter_symbol)
+
+
+
+state 64
+
+    bounded_integer  ->  TK_INTEGER .   (rule 17)
+
+    $default	reduce using rule 17 (bounded_integer)
+
+
+
+state 65
+
+    fully_qualified_type  ->  KW_INTEGER LEFTSQPAR bounded_integer . RIGHTSQPAR   (rule 16)
+
+    RIGHTSQPAR	shift, and go to state 86
+
+
+
+state 66
+
+    bounded_integer  ->  input_parameter_symbol .   (rule 18)
+
+    $default	reduce using rule 18 (bounded_integer)
+
+
+
+state 67
+
+    single_parameter_description  ->  TK_PARAMETER_SYMBOL . KW_IS fully_qualified_type   (rule 23)
+
+    KW_IS	shift, and go to state 87
+
+
+
+state 68
+
+    parameters_description  ->  KW_FOR parameter_description_list .   (rule 19)
+    parameter_description_list  ->  parameter_description_list . KW_AND single_parameter_description   (rule 21)
+
+    KW_AND	shift, and go to state 88
+
+    $default	reduce using rule 19 (parameters_description)
+
+
+
+state 69
+
+    parameter_description_list  ->  single_parameter_description .   (rule 22)
+
+    $default	reduce using rule 22 (parameter_description_list)
+
+
+
+state 70
+
+    defined_variable_def  ->  new_defined_variable_symbol COLON fully_qualified_type SEMICOLON .   (rule 28)
+
+    $default	reduce using rule 28 (defined_variable_def)
+
+
+
+state 71
+
+    action_symbol  ->  TK_ACTION_SYMBOL .   (rule 94)
+
+    $default	reduce using rule 94 (action_symbol)
+
+
+
+state 72
+
+    action_effects  ->  action_effects named_conditional_effect .   (rule 38)
+
+    $default	reduce using rule 38 (action_effects)
+
+
+
+state 73
+
+    named_conditional_effect  ->  action_symbol . COLON conditional_effect SEMICOLON   (rule 40)
+
+    COLON	shift, and go to state 89
+
+
+
+state 74
+
+    action_precondition  ->  KW_WITH KW_PRECONDITION . condition   (rule 36)
+
+    TK_VAR_SYMBOL	shift, and go to state 90
+    KW_NOT	shift, and go to state 91
+    KW_TRUE	shift, and go to state 92
+    KW_FALSE	shift, and go to state 93
+
+    condition	go to state 94
+    constant_condition	go to state 95
+    conjunction_condition	go to state 96
+    literal_condition	go to state 97
+    atomic_condition	go to state 98
+
+
+
+state 75
+
+    action_name_and_precondition  ->  action_symbol_with_parameters action_precondition SEMICOLON .   (rule 34)
+
+    $default	reduce using rule 34 (action_name_and_precondition)
+
+
+
+state 76
+
+    btl_axioms  ->  KW_BEGIN_AXIOMS axiom_list KW_END_AXIOMS .   (rule 56)
+
+    $default	reduce using rule 56 (btl_axioms)
+
+
+
+state 77
+
+    axiom_list  ->  axiom_list axiom_def .   (rule 58)
+
+    $default	reduce using rule 58 (axiom_list)
+
+
+
+state 78
+
+    axiom_def  ->  variable_symbol ASSIGN . expr   (rule 60)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    expr	go to state 104
+    term	go to state 105
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 79
+
+    defined_variable_symbol  ->  TK_DEF_VAR_SYMBOL .   (rule 92)
+
+    $default	reduce using rule 92 (defined_variable_symbol)
+
+
+
+state 80
+
+    btl_observables  ->  KW_BEGIN_OBSERVABLES observable_list . KW_END_OBSERVABLES   (rule 61)
+    observable_list  ->  observable_list . observable_def   (rule 63)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_DEF_VAR_SYMBOL	shift, and go to state 79
+    KW_END_OBSERVABLES	shift, and go to state 109
+
+    observable_def	go to state 110
+    variable_symbol	go to state 82
+    defined_variable_symbol	go to state 83
+
+
+
+state 81
+
+    observable_list  ->  observable_def .   (rule 64)
+
+    $default	reduce using rule 64 (observable_list)
+
+
+
+state 82
+
+    observable_def  ->  variable_symbol . SEMICOLON   (rule 65)
+
+    SEMICOLON	shift, and go to state 111
+
+
+
+state 83
+
+    observable_def  ->  defined_variable_symbol . SEMICOLON   (rule 66)
+
+    SEMICOLON	shift, and go to state 112
+
+
+
+state 84
+
+    btl_initial_situation  ->  KW_BEGIN_INITIAL_BELIEF . init_list KW_END_INITIAL_BELIEF   (rule 67)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    KW_UNKNOWN	shift, and go to state 113
+
+    init_list	go to state 114
+    init_def	go to state 115
+    variable_symbol	go to state 116
+
+
+
+state 85
+
+    btl_declarations  ->  btl_input_parameters btl_variables btl_defined_variables btl_actions btl_axioms btl_observables btl_initial_situation .   (rule 1)
+
+    $default	reduce using rule 1 (btl_declarations)
+
+
+
+state 86
+
+    fully_qualified_type  ->  KW_INTEGER LEFTSQPAR bounded_integer RIGHTSQPAR .   (rule 16)
+
+    $default	reduce using rule 16 (fully_qualified_type)
+
+
+
+state 87
+
+    single_parameter_description  ->  TK_PARAMETER_SYMBOL KW_IS . fully_qualified_type   (rule 23)
+
+    KW_BOOLEAN	shift, and go to state 33
+    KW_INTEGER	shift, and go to state 34
+
+    fully_qualified_type	go to state 117
+
+
+
+state 88
+
+    parameter_description_list  ->  parameter_description_list KW_AND . single_parameter_description   (rule 21)
+
+    TK_PARAMETER_SYMBOL	shift, and go to state 67
+
+    single_parameter_description	go to state 118
+
+
+
+state 89
+
+    named_conditional_effect  ->  action_symbol COLON . conditional_effect SEMICOLON   (rule 40)
+
+    KW_IF	shift, and go to state 119
+
+    conditional_effect	go to state 120
+
+
+
+state 90
+
+    atomic_condition  ->  TK_VAR_SYMBOL .   (rule 50)
+    atomic_condition  ->  TK_VAR_SYMBOL . EQ expr   (rule 51)
+    atomic_condition  ->  TK_VAR_SYMBOL . NOT_EQ expr   (rule 52)
+
+    EQ  	shift, and go to state 121
+    NOT_EQ	shift, and go to state 122
+
+    $default	reduce using rule 50 (atomic_condition)
+
+
+
+state 91
+
+    literal_condition  ->  KW_NOT . atomic_condition   (rule 49)
+
+    TK_VAR_SYMBOL	shift, and go to state 90
+
+    atomic_condition	go to state 123
+
+
+
+state 92
+
+    constant_condition  ->  KW_TRUE .   (rule 44)
+
+    $default	reduce using rule 44 (constant_condition)
+
+
+
+state 93
+
+    constant_condition  ->  KW_FALSE .   (rule 45)
+
+    $default	reduce using rule 45 (constant_condition)
+
+
+
+state 94
+
+    action_precondition  ->  KW_WITH KW_PRECONDITION condition .   (rule 36)
+
+    $default	reduce using rule 36 (action_precondition)
+
+
+
+state 95
+
+    condition  ->  constant_condition .   (rule 42)
+
+    $default	reduce using rule 42 (condition)
+
+
+
+state 96
+
+    condition  ->  conjunction_condition .   (rule 43)
+    conjunction_condition  ->  conjunction_condition . KW_AND literal_condition   (rule 46)
+
+    KW_AND	shift, and go to state 124
+
+    $default	reduce using rule 43 (condition)
+
+
+
+state 97
+
+    conjunction_condition  ->  literal_condition .   (rule 47)
+
+    $default	reduce using rule 47 (conjunction_condition)
+
+
+
+state 98
+
+    literal_condition  ->  atomic_condition .   (rule 48)
+
+    $default	reduce using rule 48 (literal_condition)
+
+
+
+state 99
+
+    constant_expr  ->  TK_INTEGER .   (rule 86)
+
+    $default	reduce using rule 86 (constant_expr)
+
+
+
+state 100
+
+    factor  ->  KW_NOT . expr   (rule 81)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    expr	go to state 125
+    term	go to state 105
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 101
+
+    constant_expr  ->  KW_TRUE .   (rule 85)
+
+    $default	reduce using rule 85 (constant_expr)
+
+
+
+state 102
+
+    constant_expr  ->  KW_FALSE .   (rule 84)
+
+    $default	reduce using rule 84 (constant_expr)
+
+
+
+state 103
+
+    factor  ->  LEFTPAR . expr RIGHTPAR   (rule 82)
+    factor  ->  LEFTPAR . expr RIGHTPAR KW_MOD TK_INTEGER   (rule 83)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    expr	go to state 126
+    term	go to state 105
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 104
+
+    axiom_def  ->  variable_symbol ASSIGN expr .   (rule 60)
+    expr  ->  expr . PLUS term   (rule 73)
+    expr  ->  expr . MINUS term   (rule 74)
+    expr  ->  expr . KW_OR term   (rule 75)
+
+    KW_OR	shift, and go to state 127
+    PLUS	shift, and go to state 128
+    MINUS	shift, and go to state 129
+
+    $default	reduce using rule 60 (axiom_def)
+
+
+
+state 105
+
+    expr  ->  term .   (rule 76)
+    term  ->  term . KW_AND factor   (rule 77)
+
+    KW_AND	shift, and go to state 130
+
+    KW_AND	[reduce using rule 76 (expr)]
+    $default	reduce using rule 76 (expr)
+
+
+
+state 106
+
+    term  ->  factor .   (rule 78)
+
+    $default	reduce using rule 78 (term)
+
+
+
+state 107
+
+    factor  ->  constant_expr .   (rule 79)
+
+    $default	reduce using rule 79 (factor)
+
+
+
+state 108
+
+    factor  ->  variable_symbol .   (rule 80)
+
+    $default	reduce using rule 80 (factor)
+
+
+
+state 109
+
+    btl_observables  ->  KW_BEGIN_OBSERVABLES observable_list KW_END_OBSERVABLES .   (rule 61)
+
+    $default	reduce using rule 61 (btl_observables)
+
+
+
+state 110
+
+    observable_list  ->  observable_list observable_def .   (rule 63)
+
+    $default	reduce using rule 63 (observable_list)
+
+
+
+state 111
+
+    observable_def  ->  variable_symbol SEMICOLON .   (rule 65)
+
+    $default	reduce using rule 65 (observable_def)
+
+
+
+state 112
+
+    observable_def  ->  defined_variable_symbol SEMICOLON .   (rule 66)
+
+    $default	reduce using rule 66 (observable_def)
+
+
+
+state 113
+
+    init_def  ->  KW_UNKNOWN . variable_symbol SEMICOLON   (rule 72)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+
+    variable_symbol	go to state 131
+
+
+
+state 114
+
+    btl_initial_situation  ->  KW_BEGIN_INITIAL_BELIEF init_list . KW_END_INITIAL_BELIEF   (rule 67)
+    init_list  ->  init_list . init_def   (rule 69)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    KW_END_INITIAL_BELIEF	shift, and go to state 132
+    KW_UNKNOWN	shift, and go to state 113
+
+    init_def	go to state 133
+    variable_symbol	go to state 116
+
+
+
+state 115
+
+    init_list  ->  init_def .   (rule 70)
+
+    $default	reduce using rule 70 (init_list)
+
+
+
+state 116
+
+    init_def  ->  variable_symbol . EQ expr SEMICOLON   (rule 71)
+
+    EQ  	shift, and go to state 134
+
+
+
+state 117
+
+    single_parameter_description  ->  TK_PARAMETER_SYMBOL KW_IS fully_qualified_type .   (rule 23)
+
+    $default	reduce using rule 23 (single_parameter_description)
+
+
+
+state 118
+
+    parameter_description_list  ->  parameter_description_list KW_AND single_parameter_description .   (rule 21)
+
+    $default	reduce using rule 21 (parameter_description_list)
+
+
+
+state 119
+
+    conditional_effect  ->  KW_IF . condition KW_THEN effect   (rule 41)
+
+    TK_VAR_SYMBOL	shift, and go to state 90
+    KW_NOT	shift, and go to state 91
+    KW_TRUE	shift, and go to state 92
+    KW_FALSE	shift, and go to state 93
+
+    condition	go to state 135
+    constant_condition	go to state 95
+    conjunction_condition	go to state 96
+    literal_condition	go to state 97
+    atomic_condition	go to state 98
+
+
+
+state 120
+
+    named_conditional_effect  ->  action_symbol COLON conditional_effect . SEMICOLON   (rule 40)
+
+    SEMICOLON	shift, and go to state 136
+
+
+
+state 121
+
+    atomic_condition  ->  TK_VAR_SYMBOL EQ . expr   (rule 51)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    expr	go to state 137
+    term	go to state 105
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 122
+
+    atomic_condition  ->  TK_VAR_SYMBOL NOT_EQ . expr   (rule 52)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    expr	go to state 138
+    term	go to state 105
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 123
+
+    literal_condition  ->  KW_NOT atomic_condition .   (rule 49)
+
+    $default	reduce using rule 49 (literal_condition)
+
+
+
+state 124
+
+    conjunction_condition  ->  conjunction_condition KW_AND . literal_condition   (rule 46)
+
+    TK_VAR_SYMBOL	shift, and go to state 90
+    KW_NOT	shift, and go to state 91
+
+    literal_condition	go to state 139
+    atomic_condition	go to state 98
+
+
+
+state 125
+
+    expr  ->  expr . PLUS term   (rule 73)
+    expr  ->  expr . MINUS term   (rule 74)
+    expr  ->  expr . KW_OR term   (rule 75)
+    factor  ->  KW_NOT expr .   (rule 81)
+
+    KW_OR	shift, and go to state 127
+    PLUS	shift, and go to state 128
+    MINUS	shift, and go to state 129
+
+    KW_OR	[reduce using rule 81 (factor)]
+    PLUS	[reduce using rule 81 (factor)]
+    MINUS	[reduce using rule 81 (factor)]
+    $default	reduce using rule 81 (factor)
+
+
+
+state 126
+
+    expr  ->  expr . PLUS term   (rule 73)
+    expr  ->  expr . MINUS term   (rule 74)
+    expr  ->  expr . KW_OR term   (rule 75)
+    factor  ->  LEFTPAR expr . RIGHTPAR   (rule 82)
+    factor  ->  LEFTPAR expr . RIGHTPAR KW_MOD TK_INTEGER   (rule 83)
+
+    KW_OR	shift, and go to state 127
+    PLUS	shift, and go to state 128
+    MINUS	shift, and go to state 129
+    RIGHTPAR	shift, and go to state 140
+
+
+
+state 127
+
+    expr  ->  expr KW_OR . term   (rule 75)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    term	go to state 141
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 128
+
+    expr  ->  expr PLUS . term   (rule 73)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    term	go to state 142
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 129
+
+    expr  ->  expr MINUS . term   (rule 74)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    term	go to state 143
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 130
+
+    term  ->  term KW_AND . factor   (rule 77)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    factor	go to state 144
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 131
+
+    init_def  ->  KW_UNKNOWN variable_symbol . SEMICOLON   (rule 72)
+
+    SEMICOLON	shift, and go to state 145
+
+
+
+state 132
+
+    btl_initial_situation  ->  KW_BEGIN_INITIAL_BELIEF init_list KW_END_INITIAL_BELIEF .   (rule 67)
+
+    $default	reduce using rule 67 (btl_initial_situation)
+
+
+
+state 133
+
+    init_list  ->  init_list init_def .   (rule 69)
+
+    $default	reduce using rule 69 (init_list)
+
+
+
+state 134
+
+    init_def  ->  variable_symbol EQ . expr SEMICOLON   (rule 71)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    expr	go to state 146
+    term	go to state 105
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 135
+
+    conditional_effect  ->  KW_IF condition . KW_THEN effect   (rule 41)
+
+    KW_THEN	shift, and go to state 147
+
+
+
+state 136
+
+    named_conditional_effect  ->  action_symbol COLON conditional_effect SEMICOLON .   (rule 40)
+
+    $default	reduce using rule 40 (named_conditional_effect)
+
+
+
+state 137
+
+    atomic_condition  ->  TK_VAR_SYMBOL EQ expr .   (rule 51)
+    expr  ->  expr . PLUS term   (rule 73)
+    expr  ->  expr . MINUS term   (rule 74)
+    expr  ->  expr . KW_OR term   (rule 75)
+
+    KW_OR	shift, and go to state 127
+    PLUS	shift, and go to state 128
+    MINUS	shift, and go to state 129
+
+    $default	reduce using rule 51 (atomic_condition)
+
+
+
+state 138
+
+    atomic_condition  ->  TK_VAR_SYMBOL NOT_EQ expr .   (rule 52)
+    expr  ->  expr . PLUS term   (rule 73)
+    expr  ->  expr . MINUS term   (rule 74)
+    expr  ->  expr . KW_OR term   (rule 75)
+
+    KW_OR	shift, and go to state 127
+    PLUS	shift, and go to state 128
+    MINUS	shift, and go to state 129
+
+    $default	reduce using rule 52 (atomic_condition)
+
+
+
+state 139
+
+    conjunction_condition  ->  conjunction_condition KW_AND literal_condition .   (rule 46)
+
+    $default	reduce using rule 46 (conjunction_condition)
+
+
+
+state 140
+
+    factor  ->  LEFTPAR expr RIGHTPAR .   (rule 82)
+    factor  ->  LEFTPAR expr RIGHTPAR . KW_MOD TK_INTEGER   (rule 83)
+
+    KW_MOD	shift, and go to state 148
+
+    $default	reduce using rule 82 (factor)
+
+
+
+state 141
+
+    expr  ->  expr KW_OR term .   (rule 75)
+    term  ->  term . KW_AND factor   (rule 77)
+
+    KW_AND	shift, and go to state 130
+
+    $default	reduce using rule 75 (expr)
+
+
+
+state 142
+
+    expr  ->  expr PLUS term .   (rule 73)
+    term  ->  term . KW_AND factor   (rule 77)
+
+    KW_AND	shift, and go to state 130
+
+    $default	reduce using rule 73 (expr)
+
+
+
+state 143
+
+    expr  ->  expr MINUS term .   (rule 74)
+    term  ->  term . KW_AND factor   (rule 77)
+
+    KW_AND	shift, and go to state 130
+
+    $default	reduce using rule 74 (expr)
+
+
+
+state 144
+
+    term  ->  term KW_AND factor .   (rule 77)
+
+    $default	reduce using rule 77 (term)
+
+
+
+state 145
+
+    init_def  ->  KW_UNKNOWN variable_symbol SEMICOLON .   (rule 72)
+
+    $default	reduce using rule 72 (init_def)
+
+
+
+state 146
+
+    init_def  ->  variable_symbol EQ expr . SEMICOLON   (rule 71)
+    expr  ->  expr . PLUS term   (rule 73)
+    expr  ->  expr . MINUS term   (rule 74)
+    expr  ->  expr . KW_OR term   (rule 75)
+
+    KW_OR	shift, and go to state 127
+    PLUS	shift, and go to state 128
+    MINUS	shift, and go to state 129
+    SEMICOLON	shift, and go to state 149
+
+
+
+state 147
+
+    conditional_effect  ->  KW_IF condition KW_THEN . effect   (rule 41)
+
+    $default	reduce using rule 54 (effect)
+
+    effect	go to state 150
+
+
+
+state 148
+
+    factor  ->  LEFTPAR expr RIGHTPAR KW_MOD . TK_INTEGER   (rule 83)
+
+    TK_INTEGER	shift, and go to state 151
+
+
+
+state 149
+
+    init_def  ->  variable_symbol EQ expr SEMICOLON .   (rule 71)
+
+    $default	reduce using rule 71 (init_def)
+
+
+
+state 150
+
+    conditional_effect  ->  KW_IF condition KW_THEN effect .   (rule 41)
+    effect  ->  effect . atomic_effect   (rule 53)
+
+    TK_VAR_SYMBOL	shift, and go to state 152
+
+    $default	reduce using rule 41 (conditional_effect)
+
+    atomic_effect	go to state 153
+
+
+
+state 151
+
+    factor  ->  LEFTPAR expr RIGHTPAR KW_MOD TK_INTEGER .   (rule 83)
+
+    $default	reduce using rule 83 (factor)
+
+
+
+state 152
+
+    atomic_effect  ->  TK_VAR_SYMBOL . ASSIGN expr   (rule 55)
+
+    ASSIGN	shift, and go to state 154
+
+
+
+state 153
+
+    effect  ->  effect atomic_effect .   (rule 53)
+
+    $default	reduce using rule 53 (effect)
+
+
+
+state 154
+
+    atomic_effect  ->  TK_VAR_SYMBOL ASSIGN . expr   (rule 55)
+
+    TK_VAR_SYMBOL	shift, and go to state 57
+    TK_INTEGER	shift, and go to state 99
+    KW_NOT	shift, and go to state 100
+    KW_TRUE	shift, and go to state 101
+    KW_FALSE	shift, and go to state 102
+    LEFTPAR	shift, and go to state 103
+
+    expr	go to state 155
+    term	go to state 105
+    factor	go to state 106
+    constant_expr	go to state 107
+    variable_symbol	go to state 108
+
+
+
+state 155
+
+    atomic_effect  ->  TK_VAR_SYMBOL ASSIGN expr .   (rule 55)
+    expr  ->  expr . PLUS term   (rule 73)
+    expr  ->  expr . MINUS term   (rule 74)
+    expr  ->  expr . KW_OR term   (rule 75)
+
+    KW_OR	shift, and go to state 127
+    PLUS	shift, and go to state 128
+    MINUS	shift, and go to state 129
+
+    $default	reduce using rule 55 (atomic_effect)
+
+
+
+state 156
+
+    $   	go to state 157
+
+
+
+state 157
+
+    $   	go to state 158
+
+
+
+state 158
+
+    $default	accept

@@ -1,0 +1,46 @@
+BEGIN_PARS	begin-parameters
+END_PARS	end-parameters
+BEGIN_VARS	begin-variables
+END_VARS	end-variables
+BEGIN_DEF_VARS	begin-defined-variables
+END_DEF_VARS	end-defined-variables
+BEGIN_ACTIONS	begin-actions
+END_ACTIONS	end-actions
+BEGIN_AXIOMS	begin-axioms
+END_AXIOMS	end-axioms
+BEGIN_OBS	begin-observables
+END_OBS		end-observables
+BEGIN_INIT	begin-initial-situation
+END_INIT	end-initial-situation
+
+BOOLEAN		boolean
+INTEGER 	integer
+PAIR		pair
+SUCH		such
+THAT		that
+IS		is
+
+IF		if
+THEN		then
+AND		and
+OR		or
+NOT		not
+SOME		some
+TRUE		true
+FALSE		false
+FOR		for
+
+PLUS		+
+MINUS		-
+MOD		mod
+EQUAL		=
+NEQUAL		!=
+ASSIGN		:=
+
+COLON		:
+SEMICOLON	;
+LEFTSQPAR	[
+RIGHTSQPAR	]
+LEFTPAR		(
+RIGHTPAR	)
+
