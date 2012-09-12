@@ -1,0 +1,58 @@
+begin-parameters
+    ncols : integer ;
+    nrows : integer ;
+end-parameters
+
+begin-variables
+    wumpus(x,y) : boolean such that x is integer[ncols] and y is integer[nrows] ;
+    pit(x,y) : boolean such that x is integer[ncols] and y is integer[nrows] ;
+    agent_pos : pair(x,y) such that x is integer[ncols] and y is integer[nrows] ;
+    heading : integer[3] ;
+    gold_pos : pair(x,y) such that x is integer[ncols] and y is integer[nrows] ;
+    have_gold : boolean ;
+end-variables
+
+begin-defined-variables
+    glitter : boolean ;
+    breeze : boolean ;
+    stench : boolean ;
+end-defined-variables
+
+begin-actions
+    move-forward ;
+    move-forward: if agent_pos = (x,y) and heading = 0 then agent_pos := (x,y+1) ;
+    move-forward: if agent_pos = (x,y) and heading = 1 then agent_pos := (x+1,y) ;
+    move-forward: if agent_pos = (x,y) and heading = 2 then agent_pos := (x,y-1) ;
+    move-forward: if agent_pos = (x,y) and heading = 3 then agent_pos := (x-1,y) ;
+
+    turn-left ;
+    turn-left: if true then heading := heading - 1 mod 4 ;
+
+    turn-right ;
+    turn-right: if true then heading := heading + 1 mod 4 ;
+
+    grab-gold with precondition gold_pos = agent_pos ;
+    grab-gold : if true then have_gold := true ;
+end-actions
+
+begin-axioms
+    glitter := agent_pos = gold_pos and not have_gold ;
+    breeze := agent_pos = (x,y) and (pit(x-1,y-1) or pit(x+1,y-1) or pit(x-1,y+1) or pit(x+1,y+1)) ;
+    stench := agent_pos = (x,y) and (wumpus(x-1,y-1) or wumpus(x+1,y-1) or wumpus(x-1,y+1) or wumpus(x+1,y+1)) ;
+end-axioms
+    
+begin-observables
+    glitter ;
+    breeze ;
+    stench ;
+end-observables
+
+begin-initial-situation
+    agent_pos = (0,0) ;
+    heading = 0 ;
+    unknown gold_pos ;
+    unknown wumpus(x,y) ;
+    unknown pit(x,y) ;
+    wumpus(0,0) = false ;
+    pit(0,0) = false ;
+end-initial-situation

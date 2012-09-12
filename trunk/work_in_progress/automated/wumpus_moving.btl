@@ -1,0 +1,58 @@
+begin-parameters
+    ncols : integer ;
+    nrows : integer ;
+    nwumpus : integer ;
+end-parameters
+
+begin-variables
+    wumpus(i) : pair(x,y) such that i is integer[nwumpus] and x is integer[ncols] and y is integer[nrows] ;
+    agent_pos : pair(x,y) such that x is integer[ncols] and y is integer[nrows] ;
+    heading : integer[3] ;
+    gold_pos : pair(x,y) such that x is integer[ncols] and y is integer[nrows] ;
+    have_gold : boolean ;
+end-variables
+
+begin-defined-variables
+    glitter : boolean ;
+    stench(i) : boolean such that i is integer[nwumpus] ;
+    stench : boolean ;
+end-defined-variables
+
+begin-actions
+    move-forward ;
+    move-forward: if agent_pos = (x,y) and heading = 0 then agent_pos := (x,y+1) ;
+    move-forward: if agent_pos = (x,y) and heading = 1 then agent_pos := (x+1,y) ;
+    move-forward: if agent_pos = (x,y) and heading = 2 then agent_pos := (x,y-1) ;
+    move-forward: if agent_pos = (x,y) and heading = 3 then agent_pos := (x-1,y) ;
+    move-forward: if wumpus(i) = (x,y) then wumpus(i) := (x-1,y) | (x+1,y) | (x,y-1) | (x,y+1) ;
+
+    turn-left ;
+    turn-left: if true then heading := heading - 1 mod 4 ;
+    turn-left: if wumpus(i) = (x,y) then wumpus(i) := (x-1,y) | (x+1,y) | (x,y-1) | (x,y+1) ;
+
+    turn-right ;
+    turn-right: if true then heading := heading + 1 mod 4 ;
+    turn-right: if wumpus(i) = (x,y) then wumpus(i) := (x-1,y) | (x+1,y) | (x,y-1) | (x,y+1) ;
+
+    grab-gold with precondition gold_pos = agent_pos ;
+    grab-gold : if true then have_gold := true ;
+end-actions
+
+begin-axioms
+    glitter := agent_pos = gold_pos and not have_gold ;
+    stench(i) := agent_pos = (x,y) and (wumpus(i)=(x-1,y-1) or wumpus(i)=(x+1,y-1) or wumpus(i)=(x-1,y+1) or wumpus(i)=(x+1,y+1)) ;
+    stench := some stench(i) ;
+end-axioms
+    
+begin-observables
+    glitter ;
+    stench ;
+end-observables
+
+begin-initial-situation
+    agent_pos = (0,0) ;
+    heading = 0 ;
+    unknown gold_pos ;
+    unknown wumpus(i) ;
+    wumpus(i) != (0,0) ;
+end-initial-situation
