@@ -21,17 +21,16 @@
 #define GRID_VAR_BEAM_H
 
 #include "ordered_vector.h"
-
 #include <cassert>
 #include <iostream>
 #include <vector>
 #include <math.h>
 
-inline int intabs(int x) {
+inline int int_abs(int x) {
     return x >= 0 ? x : -x;
 }
 
-inline int intpow(int base, int expn) {
+inline int int_pow(int base, int expn) {
     int result = 1;
     for( int i = 0; i < expn; ++i )
         result *= base;
@@ -49,7 +48,7 @@ class grid_var_beam_t {
 
   public:
     grid_var_beam_t(int nvars)
-      : nvars_(nvars), num_particles_(intpow(ncells_, nvars_)) { }
+      : nvars_(nvars), num_particles_(int_pow(ncells_, nvars_)) { }
     explicit grid_var_beam_t(const grid_var_beam_t &beam)
       : nvars_(beam.nvars_), num_particles_(beam.num_particles_),
         beam_(beam.beam_) { }
@@ -81,7 +80,7 @@ class grid_var_beam_t {
     enum { manhattan_neighbourhood = 0, octile_neighbourhood = 1 };
     static bool adjacent_cells(int row1, int col1, int cell, int neighbourhood, int radius) {
         int row2 = cell / ncols_, col2 = cell % ncols_;
-        int abs_rdiff = intabs(row1 - row2), abs_cdiff = intabs(col1 - col2);
+        int abs_rdiff = int_abs(row1 - row2), abs_cdiff = int_abs(col1 - col2);
         if( neighbourhood == manhattan_neighbourhood ) {
             return ((abs_rdiff == 0) && (abs_cdiff <= radius)) ||
                    ((abs_cdiff == 0) && (abs_rdiff <= radius));
@@ -257,7 +256,7 @@ class grid_var_beam_t {
 
     void move_non_det() {
         static ordered_vector_t tmp;
-        tmp.reserve(intpow(5, nvars_));
+        tmp.reserve(int_pow(5, nvars_));
         ordered_vector_t nbeam_; // can't be static because of the std::move()
         for( const_iterator it = begin(); it != end(); ++it ) {
             int p = *it;
