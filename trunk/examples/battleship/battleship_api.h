@@ -22,28 +22,12 @@
 #include "battleship_wrapper_belief.h"
 #include "lookahead.h"
 
-#define EXPERIMENT
-
 #include <dispatcher.h>
 
 #include <stdlib.h>
 #include <cassert>
 #include <iostream>
 #include <vector>
-
-#ifndef GLOBAL_HEURISTIC
-#define GLOBAL_HEURISTIC
-namespace Online {
-  namespace Policy {
-    namespace AOT {
-      void *global_heuristic = 0;
-    };
-    namespace AOT2 {
-      void *global_heuristic = 0;
-    };
-  };
-};
-#endif
 
 namespace Battleship {
 
@@ -101,8 +85,6 @@ class api_t {
         // construct heuristic
         heuristic_ = new admissible_heuristic_t(num_ship_segments_);
         //heuristic_ = new heuristic_t(1000, nrows_ * ncols_, num_ship_segments_);
-        Online::Policy::AOT::global_heuristic = heuristic_;
-        Online::Policy::AOT2::global_heuristic = heuristic_;
 
         // set base policies and default policy
         base_policy_t base(*problem_);
