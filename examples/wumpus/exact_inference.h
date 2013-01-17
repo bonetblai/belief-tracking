@@ -38,6 +38,9 @@
  * Exact inference by calling a SAT solver. Propositional variables
  * are 4nm where n is nrows and m is ncols. So, 4 variables per cell
  * that denote whether the cell has wumpus, pit, stench or breeze.
+ *
+ * Minisat should be in the path for this module to work correctly.
+ *
  */
 
 struct exact_inference_t {
@@ -179,7 +182,7 @@ struct exact_inference_t {
     }
     virtual ~exact_inference_t() { }
 
-    bool is_world_explored(const char *sensed_info) const {
+    bool is_world_explored(const char *sensed_info, bool verbose = false) const {
         std::vector<int> unvisited_cells_at_fringe;
         process_sensed_information(sensed_info, unvisited_cells_at_fringe);
 
@@ -192,7 +195,10 @@ struct exact_inference_t {
             //q = q && !make_inference(sensed_info, offset_[Pit] + p);
             //if( q ) return false;
             if( !make_inference(sensed_info, offset_[Wumpus] + p) && !make_inference(sensed_info, offset_[Pit] + p) ) {
-                std::cout << "warning: cell (" << p / ncols_ << "," << p % ncols_ << ") was not visited but safe to do it!" << std::endl;
+                if( verbose ) {
+                    std::cout << "warning: cell (" << p / ncols_ << "," << p % ncols_ << ") was not visited but safe to do it!"
+                              << std::endl;
+                }
                 return false;
             }
         }
