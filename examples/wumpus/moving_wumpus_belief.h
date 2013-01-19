@@ -20,8 +20,8 @@
 #define MOVING_WUMPUS_BELIEF_H
 
 #include "grid_belief.h"
-#include "grid_var_beam.h"
 #include "defs.h"
+#include <grid_var_beam.h>
 
 #include <stdlib.h>
 #include <cassert>
@@ -71,6 +71,7 @@ class moving_wumpus_belief_t : public grid_belief_t {
             pits_.set_domain(cell, new cell_beam_t(*bel.pits_.domain(cell)));
         }
     }
+#if 0
     moving_wumpus_belief_t(moving_wumpus_belief_t &&bel)
       : grid_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
         have_gold_(bel.have_gold_), dead_(bel.dead_),
@@ -80,6 +81,7 @@ class moving_wumpus_belief_t : public grid_belief_t {
             bel.pits_.set_domain(cell, 0);
         }
     }
+#endif
     virtual ~moving_wumpus_belief_t() { }
 
     static moving_wumpus_belief_t* allocate() {

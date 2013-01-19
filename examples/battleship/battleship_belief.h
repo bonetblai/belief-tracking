@@ -57,6 +57,7 @@ class belief_t : public base_belief_t {
             beams_.set_domain(cell, new var_beam_t(*bel.beams_.domain(cell)));
         }
     }
+#if 0
     belief_t(belief_t &&bel)
       : base_belief_t(std::move(bel)), beams_(ncols_, allow_adjacent_ships_) {
         for( int cell = 0; cell < ncells_; ++cell ) {
@@ -64,6 +65,7 @@ class belief_t : public base_belief_t {
             bel.beams_.set_domain(cell, 0);
         }
     }
+#endif
     virtual ~belief_t() { }
 
     static belief_t* allocate() {
