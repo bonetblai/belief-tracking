@@ -20,7 +20,7 @@
 #ifndef GRID_VAR_BEAM_H
 #define GRID_VAR_BEAM_H
 
-#include "ordered_vector.h"
+#include <ordered_vector.h>
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -52,9 +52,11 @@ class grid_var_beam_t {
     explicit grid_var_beam_t(const grid_var_beam_t &beam)
       : nvars_(beam.nvars_), num_particles_(beam.num_particles_),
         beam_(beam.beam_) { }
+#if 0
     grid_var_beam_t(grid_var_beam_t &&beam)
       : nvars_(beam.nvars_), num_particles_(beam.num_particles_),
         beam_(std::move(beam.beam_)) { }
+#endif
     ~grid_var_beam_t() { }
 
     static void initialize(int nrows, int ncols) {
@@ -264,7 +266,8 @@ class grid_var_beam_t {
             nbeam_.insert(tmp);
             tmp.clear();
         }
-        beam_ = std::move(nbeam_);
+        //beam_ = std::move(nbeam_);
+        beam_ = nbeam_; // CHECK
     }
 };
 

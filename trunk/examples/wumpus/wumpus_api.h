@@ -19,7 +19,7 @@
 #ifndef WUMPUS_API_H
 #define WUMPUS_API_H
 
-#include "problem.h"
+#include "wumpus_problem.h"
 #include "base_policy.h"
 #include "exact_inference.h"
 
@@ -70,12 +70,13 @@ struct abstract_api_t {
 
     // exact inference
     virtual bool is_world_explored() const = 0;
+    virtual bool is_there_an_unvisited_safe_cell() const = 0;
 };
 
 template<typename T> struct template_wumpus_api_t : public abstract_api_t {
     template_problem_t<T> *problem_;
-    T *state_;
     char *sensed_info_;
+    T *state_;
 
     std::vector<std::pair<const Online::Policy::policy_t<T>*, std::string> > bases_;
     std::vector<std::pair<const Heuristic::heuristic_t<T>*, std::string> > heuristics_;
@@ -169,6 +170,17 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
     virtual bool is_world_explored() const {
         exact_inference_t inference(nrows_, ncols_);
         return inference.is_world_explored(sensed_info_);
+    }
+
+    virtual bool is_there_an_unvisited_safe_cell() const {
+        for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
+            if( sensed_info_[cell] == 255 ) {
+                // this cell is unvisited
+                if( state_->no_hazard_at(cell) )
+                    return true;
+            }
+        }
+        return false;
     }
 };
 

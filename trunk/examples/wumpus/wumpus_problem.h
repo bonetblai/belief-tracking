@@ -19,7 +19,7 @@
 #ifndef WUMPUS_PROBLEM_H
 #define WUMPUS_PROBLEM_H
 
-#include "state.h"
+#include "wumpus_state.h"
 
 #include <problem.h>
 #include <heuristic.h>

@@ -53,6 +53,7 @@ class wrapper_belief_t {
         belief_ = belief_t::allocate();
         *belief_ = *bel.belief_;
     }
+#if 0
     wrapper_belief_t(wrapper_belief_t &&bel) {
         num_hit_segments_ = bel.num_hit_segments_;
         num_uncovered_cells_ = bel.num_uncovered_cells_;
@@ -61,6 +62,7 @@ class wrapper_belief_t {
         belief_ = bel.belief_;
         bel.belief_ = 0;
     }
+#endif
     virtual ~wrapper_belief_t() {
         belief_t::deallocate(belief_);
     }

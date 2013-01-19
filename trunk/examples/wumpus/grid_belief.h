@@ -19,8 +19,8 @@
 #ifndef GRID_BELIEF_H
 #define GRID_BELIEF_H
 
-#include "cell_beam.h"
-#include "arc_consistency.h"
+#include <cell_beam.h>
+#include <arc_consistency.h>
 
 #include <cassert>
 #include <iostream>
