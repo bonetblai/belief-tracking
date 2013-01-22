@@ -122,9 +122,13 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
     virtual void select_policy(const std::string &base_name, const std::string &policy_type) {
         std::pair<const Online::Policy::policy_t<T>*, std::string> p =
           Online::Evaluation::select_policy(*problem_, base_name, policy_type, bases_, heuristics_, eval_pars_);
-        policy_ = p.first;
-        policy_name_ = p.second;
-        //std::cout << "template_wumpus_api_t::policy=" << policy_name_ << std::endl;
+        if( p.first == 0 ) {
+            std::cout << "Warning: unrecognized policy '" << policy_type << ":" << base_name << std::endl;
+        } else {
+            policy_ = p.first;
+            policy_name_ = p.second;
+            //std::cout << "template_wumpus_api_t::policy=" << policy_name_ << std::endl;
+        }
     }
 
     virtual void prepare_new_trial(int heading) {
