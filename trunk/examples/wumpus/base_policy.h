@@ -52,28 +52,16 @@ template<typename T> class wumpus_distances_t {
         distances_ = std::vector<int>(dim, INT_MAX);
     }
 
-    void _setup_goal_cells(int cell) const {
-        if( nesw_movements_ ) {
-            distances_[cell] = 0;
-            queue_.push(std::make_pair(cell, 0));
-        } else {
-            for( int heading = 0; heading < 4; ++heading ) {
-                int node = (cell << 2) + heading;
-                distances_[node] = 0;
-                queue_.push(std::make_pair(node, 0));
-            }
-        }
-    }
-
-    void _setup_goal_cells(const std::vector<int> &cells) const {
-        for( int i = 0, isz = cells.size(); i < isz; ++i  )
-            _setup_goal_cells(cells[i]);
+    void _setup_goal_pos(int p) const {
+        distances_[p] = 0;
+        queue_.push(std::make_pair(p, 0));
     }
 
     void _compute_distances(const T &state, bool safe) const {
         assert(!nesw_movements_);
         assert(!nesw_movements_ || ((int)distances_.size() == nrows_ * ncols_));
         assert(nesw_movements_ || ((int)distances_.size() == 4 * nrows_ * ncols_));
+
         while( !queue_.empty() ) {
             std::pair<int, int> p = queue_.top();
             queue_.pop();
@@ -83,13 +71,11 @@ template<typename T> class wumpus_distances_t {
                 int cell = nesw_movements_ ? node : (node >> 2);
                 int heading = nesw_movements_ ? -1 : (node & 0x3);
                 for( int action = 0; action < n_move_actions_; ++action ) {
-                    // compute regression
                     int ncell = cell, nheading = heading;
                     if( action == ActionMoveForward ) {
-                        ncell = target_cell(cell, (2 + heading) & 0x3, action, nrows_, ncols_, nesw_movements_);
+                        ncell = target_cell(cell, heading, action, nrows_, ncols_, nesw_movements_);
                     } else {
                         nheading = target_heading(heading, action);
-                        nheading = (2 + nheading) & 0x3;
                     }
                     if( state.hazard_at(ncell) ) continue;
                     if( safe && !state.no_hazard_at(ncell) ) continue;
@@ -131,18 +117,13 @@ template<typename T> class wumpus_distances_t {
     int ncols() const { return ncols_; }
     int operator[](int i) const { return distances_[i]; }
 
-    void compute_distances(const T &state, bool safe, const std::vector<int> &goals) const {
+    void compute_distances(const T &state, bool safe, int p) const {
         _initialize_distances();
-        _setup_goal_cells(goals);
+        _setup_goal_pos(p);
         _compute_distances(state, safe);
     }
 
-    void compute_distances(const T &state, bool safe, int goal) const {
-        _initialize_distances();
-        _setup_goal_cells(goal);
-        _compute_distances(state, safe);
-    }
-
+#if 0
     int heading(int from, int to) const {
         int from_row = from / ncols_, from_col = from % ncols_;
         int to_row = to / ncols_, to_col = to % ncols_;
@@ -172,184 +153,61 @@ template<typename T> class wumpus_distances_t {
             return row2 > row1 ? ActionMoveNorth : ActionMoveSouth;
         }
     }
+#endif
 
     void print(std::ostream &os) const {
-        std::cout << "distances:";
+        os << "distances:";
         int dim = nrows_ * ncols_;
         if( !nesw_movements_ ) dim *= 4;
         for( int p = 0; p < dim; ++p )
-            std::cout << " " << distances_[p];
-        std::cout << std::endl;
+            os << " " << p << ":" << distances_[p];
+        os << std::endl;
     }
 };
-
-
-#if 0 // deprecated
-template<typename T> class __wumpus_base_policy_t {
-  protected:
-    bool nesw_movements_;
-    wumpus_distances_t<T> distances_;
-
-  public:
-    __wumpus_base_policy_t(int nrows, int ncols, bool nesw_movements)
-        : nesw_movements_(nesw_movements), distances_(nrows, ncols, nesw_movements) { }
-    ~__wumpus_base_policy_t() { }
-
-    int operator()(const T &state) const {
-        if( state.have_gold() ) {
-            // if have goal and at entry, just EXIT
-            if( state.position() == 0 ) return ActionExit;
-
-            // must go home (outside cave)
-            distances_.compute_distances(state, 0, true);
-            int min_dist = INT_MAX, best_cell = -1;
-            for( int p = 0; p < distances_.nrows() * distances_.ncols(); ++p ) {
-                if( distances_.adjacent(p, state.position()) && (distances_[p] < min_dist) ) {
-                    min_dist = distances_[p];
-                    best_cell = p;
-                }
-            }
-            assert(min_dist < INT_MAX);
-            assert(distances_[state.position()] == 1 + distances_[best_cell]);
-
-            // move if right heading, else turn around
-            if( nesw_movements_ ) {
-                return distances_.movement(state.position(), best_cell);
-            } else {
-                if( state.heading() == distances_.heading(state.position(), best_cell) ) {
-                    return ActionMoveForward;
-                } else {
-                    return ActionTurnRight;
-                }
-            }
-        } else {
-            // move around safely
-            std::vector<int> actions;
-            actions.reserve(6);
-            for( int action = 0; action <= ActionExit; ++action ) {
-                if( state.applicable(action) ) {
-                    int ncell = state.target_cell(action);
-                    if( state.no_hazard_at(ncell) )
-                        actions.push_back(action);
-                }
-            }
-            assert(!actions.empty());
-            int action = actions[Random::uniform(actions.size())];
-            assert(state.no_hazard_at(state.target_cell(action)));
-            return action;
-        }
-    }
-
-};
-
-
-template<typename T> class wumpus_base_policy_t : public Policy::policy_t<T> {
-  protected:
-    int nrows_;
-    int ncols_;
-    bool nesw_movements_;
-    __wumpus_base_policy_t<T> base_;
-
-  public:
-    wumpus_base_policy_t(const Problem::problem_t<T> &problem, int nrows, int ncols, bool nesw_movements)
-      : Policy::policy_t<T>(problem),
-        nrows_(nrows), ncols_(ncols), nesw_movements_(nesw_movements),
-        base_(nrows_, ncols_, nesw_movements_) {
-    }
-    virtual ~wumpus_base_policy_t() { }
-
-    virtual Problem::action_t operator()(const T &s) const {
-        return base_(s);
-    }
-    virtual const Policy::policy_t<T>* clone() const {
-        return new wumpus_base_policy_t<T>(Policy::policy_t<T>::problem(), nrows_, ncols_, nesw_movements_);
-    }
-    virtual void print_stats(std::ostream &os) const { }
-};
-#endif
-
 
 template<typename T> struct shortest_distance_to_unvisited_cell_t : public Heuristic::heuristic_t<T> {
     const template_problem_t<T> &problem_;
     bool nesw_movements_;
     wumpus_distances_t<T> distances_;
+    mutable std::vector<bool> visited_cells_;
+    int ncells_;
 
   public:
     shortest_distance_to_unvisited_cell_t(const template_problem_t<T> &problem, bool nesw_movements)
       : problem_(problem), nesw_movements_(nesw_movements),
-        distances_(problem_.nrows(), problem_.ncols(), nesw_movements) { }
+        distances_(problem_.nrows(), problem_.ncols(), nesw_movements) {
+        ncells_ = problem_.nrows() * problem_.ncols();
+    }
     virtual ~shortest_distance_to_unvisited_cell_t() { }
 
+    void prepare_new_trial() const {
+        visited_cells_ = std::vector<bool>(ncells_, false);
+    }
+    void mark_as_visited(int cell) const {
+        visited_cells_[cell] = true;
+    }
+
     virtual float value(const T &s) const {
-        if( s.dead() ) return 10000;
+        if( s.dead() ) return 1e6;
         if( s.have_gold() ) return 0;
         if( s.in_gold_cell() ) return 1;
 
-#if 1
-        distances_.compute_distances(s, false, s.position());
+        distances_.compute_distances(s, true, s.heading() + (s.position() << 2));
         //distances_.print(std::cout);
 
         int min_value = INT_MAX;
-        for( int p = 0; p < problem_.nrows() * problem_.ncols(); ++p ) {
-            if( s.possible_gold_at(p) ) {
+        for( int cell = 0; cell < ncells_; ++cell ) {
+            if( !visited_cells_[cell] ) {
                 for( int h = 0; h < 4; ++h ) {
-                    int n = (p << 2) + h;
+                    int n = (cell << 2) + h;
                     if( distances_[n] < min_value ) {
                         min_value = distances_[n];
                     }
                 }
             }
         }
-
-        assert(min_value > 0);
-        return min_value;
-#endif
-
-
-        // OLD STUFF BELOW
-
-        
-#if 1
-        std::vector<int> goals;
-        goals.reserve(problem_.nrows() * problem_.ncols());
-        for( int p = 0; p < problem_.nrows() * problem_.ncols(); ++p ) {
-#ifdef DEBUG
-            std::cout << "shortest: p=" << p << ":"
-                      << " p-gold=" << (s.possible_gold_at(p) ? 1 : 0)
-                      << ", hazard=" << (s.hazard_at(p) ? 1 : 0)
-                      << std::endl;
-#endif
-            if( s.possible_gold_at(p) && !s.hazard_at(p) ) {
-                goals.push_back(p);
-            }
-        }
-        distances_.compute_distances(s, false, goals);
-        int node = nesw_movements_ ? s.position() : ((s.position() << 2) + s.heading());
-        assert(distances_[node] != 0);
-#endif
-
-        // cost is distance + 1 that counts grab action
-        //int value = distances_[node] == INT_MAX ? distances_[node] : 1 + distances_[node];
-        int value = distances_[node] == INT_MAX ? 10000 : 1 + distances_[node];
-
-#ifdef DEBUG
-        std::cout << "heuristic:"
-                  << " pos=(" << (s.position() % problem_.ncols())
-                  << "," << (s.position() / problem_.ncols())
-                  << "," << heading_name(s.heading())
-                  << "), value=" << value
-                  << std::endl;
-
-        std::cout << "gold/hazard: ";
-        for( int p = 0; p < problem_.nrows() * problem_.ncols(); ++p ) {
-            std::cout << " " << (s.possible_gold_at(p) ? 1 : 0)
-                      << "/" << (s.hazard_at(p) ? 1 : 0);
-        }
-        std::cout << std::endl;
-        distances_.print(std::cout);
-#endif
-
-        return value;
+        assert(min_value >= 0);
+        return min_value == INT_MAX ? 1e6 : 1 + min_value;
     }
     virtual void reset_stats() const { }
     virtual float setup_time() const { return 0; }

@@ -81,7 +81,7 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
     std::vector<std::pair<const Online::Policy::policy_t<T>*, std::string> > bases_;
     std::vector<std::pair<const Heuristic::heuristic_t<T>*, std::string> > heuristics_;
 
-    Heuristic::heuristic_t<T> *heuristic_;
+    shortest_distance_to_unvisited_cell_t<T> *heuristic_;
     const Online::Policy::policy_t<T> *policy_;
 
   public:
@@ -137,15 +137,18 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
         state_ = new T(0, heading);
         //state_->set_narrows(narrows_);
         state_->set_initial_configuration();
+        heuristic_->prepare_new_trial();
+        heuristic_->mark_as_visited(0);
     }
 
     virtual int select_action() const {
         Problem::action_t action = (*policy_)(*state_);
         assert(action != Problem::noop);
         assert(state_->applicable(action));
-        //std::cout << "pos=(" << (state_->pos() % ncols_) << ","
-        //          << (state_->pos() / ncols_) << ")"
+        //std::cout << "pos=(" << (state_->position() % ncols_) << ","
+        //          << (state_->position() / ncols_) << ")"
         //          << ", heading=" << heading_name(state_->heading())
+        //          << ": action=" << action
         //          << std::endl;
         return action;
     }
@@ -157,6 +160,8 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
     }
     virtual void apply_action_and_update(int action, int obs) {
         state_->apply_action_and_update(action, obs);
+        int p = state_->position();// + (state_->position() << 2);
+        heuristic_->mark_as_visited(p);
         update_sensed_info(state_->position(), obs);
         //std::cout << *state_;
     }
