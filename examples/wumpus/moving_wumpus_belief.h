@@ -59,7 +59,7 @@ class moving_wumpus_belief_t : public grid_belief_t {
             }
         }
         if( nwumpus_ > 1 ) {
-            std::cout << "error: number of wumpus should be at most one!" << std::endl;
+            std::cout << "Error: number of wumpus should be at most one!" << std::endl;
             exit(-1);
         }
     }

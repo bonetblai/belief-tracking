@@ -196,7 +196,7 @@ struct exact_inference_t {
             //if( q ) return false;
             if( !make_inference(sensed_info, offset_[Wumpus] + p) && !make_inference(sensed_info, offset_[Pit] + p) ) {
                 if( verbose ) {
-                    std::cout << "warning: cell (" << p / ncols_ << "," << p % ncols_ << ") was not visited but safe to do it!"
+                    std::cout << "Warning: cell (" << p / ncols_ << "," << p % ncols_ << ") was not visited but safe to do it!"
                               << std::endl;
                 }
                 return false;
