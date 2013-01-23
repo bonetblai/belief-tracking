@@ -207,7 +207,7 @@ template<typename T> struct shortest_distance_to_unvisited_cell_t : public Heuri
             }
         }
         assert(min_value >= 0);
-        return min_value == INT_MAX ? 1e6 : 1 + min_value;
+        return min_value == INT_MAX ? 1e4 : 1 + min_value;
     }
     virtual void reset_stats() const { }
     virtual float setup_time() const { return 0; }
