@@ -38,7 +38,7 @@ class subset_beam_t {
   public:
     subset_beam_t() { }
     explicit subset_beam_t(const subset_beam_t &beam) : beam_(beam.beam_) { }
-    subset_beam_t(subset_beam_t &&beam) : beam_(std::move(beam.beam_)) { }
+    subset_beam_t(subset_beam_t &&beam) = default;
     ~subset_beam_t() { }
 
     static void initialize(int n, int k) {
