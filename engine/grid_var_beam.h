@@ -267,7 +267,7 @@ class grid_var_beam_t {
             tmp.clear();
         }
         //beam_ = std::move(nbeam_);
-        beam_ = nbeam_; // CHECK
+        beam_ = nbeam_; // CHECK: replace this by std::move()
     }
 };
 
