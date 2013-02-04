@@ -42,11 +42,7 @@ class cell_beam_t {
     explicit cell_beam_t(const cell_beam_t &beam)
       : row_(beam.row_), col_(beam.col_), type_(beam.type_),
         beam_(beam.beam_) { }
-#if 0
-    cell_beam_t(cell_beam_t &&beam)
-      : row_(beam.row_), col_(beam.col_), type_(beam.type_),
-        beam_(std::move(beam.beam_)) { }
-#endif
+    cell_beam_t(cell_beam_t &&beam) = default;
     ~cell_beam_t() { }
 
     enum { TOP = 1, BOTTOM = 2, LEFT = 4, RIGHT = 8 };

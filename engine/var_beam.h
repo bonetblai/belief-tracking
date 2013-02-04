@@ -46,14 +46,12 @@ class var_beam_t {
         beam_ = beam.beam_;
         initial_size_ = beam.initial_size_;
     }
-#if 0
     var_beam_t(var_beam_t &&beam)
       : nvars_(beam.nvars_), domsz_(beam.domsz_),
         max_particle_(beam.max_particle_), initial_size_(beam.initial_size_),
-        beam_(std::move(beam.beam_)) {
+        beam_(beam.beam_) {
         beam.domsz_ = 0;
     }
-#endif
     ~var_beam_t() { delete[] domsz_; }
 
     uint32_t hash() const { return beam_.hash(); }
