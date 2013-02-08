@@ -22,9 +22,9 @@ Constraints:
 
 Obs:
 
-boolean WATER
-boolean HIT
-boolean SUNK__<size>__<anchor>__<horiz>
+boolean WATER(x,y) = size(x,y) = 0
+boolean HIT(x,y) = size(x,y) != 0
+boolean SUNK(x,y) = size(x,y) != 0 && nhits(x,y) = size(x,y)
 
 Num Particles in Beam: O(max_ship_size^3)
 

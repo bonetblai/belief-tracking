@@ -53,9 +53,8 @@ class api_t {
     const Online::Policy::policy_t<wrapper_belief_t> *policy_;
 
     std::vector<std::pair<const Online::Policy::policy_t<wrapper_belief_t>*, std::string> > bases_;
-    std::vector<std::pair<const Heuristic::heuristic_t<wrapper_belief_t>*, std::string> > filler_heuristics_;
+    std::vector<std::pair<const Heuristic::heuristic_t<wrapper_belief_t>*, std::string> > heuristics_;
 
-    Heuristic::heuristic_t<wrapper_belief_t> *heuristic_;
     Online::Evaluation::parameters_t eval_pars_;
 
   public:
@@ -65,8 +64,7 @@ class api_t {
         max_ship_size_(max_ship_size),
         simple_observations_(simple_observations),
         allow_adjacent_ships_(allow_adjacent_ships),
-        random_play_(random_play),
-        heuristic_(0) {
+        random_play_(random_play) {
 
         num_ship_segments_ = 0;
         for( int d = 1; d <= max_ship_size_; ++d )
@@ -83,16 +81,17 @@ class api_t {
         belief_ = new wrapper_belief_t();
 
         // construct heuristic
-        heuristic_ = new admissible_heuristic_t(num_ship_segments_);
+        admissible_heuristic_t *h = new admissible_heuristic_t(num_ship_segments_);
+        heuristics_.push_back(std::make_pair(h, "admissible_heuristic"));
         //heuristic_ = new heuristic_t(1000, nrows_ * ncols_, num_ship_segments_);
 
         // set base policies and default policy
         base_policy_t base(*problem_);
-        bases_.push_back(std::make_pair(base.clone(), "base"));
+        bases_.push_back(std::make_pair(base.clone(), "base-policy"));
         base_policy_t random_base(*problem_, true);
-        bases_.push_back(std::make_pair(random_base.clone(), "random-base"));
-        Online::Policy::random_greedy_t<wrapper_belief_t> greedy(*problem_, *heuristic_);
-        bases_.push_back(std::make_pair(greedy.clone(), "random-greedy"));
+        bases_.push_back(std::make_pair(random_base.clone(), "random-base-policy"));
+        Online::Policy::random_greedy_t<wrapper_belief_t> greedy(*problem_, *h);
+        bases_.push_back(std::make_pair(greedy.clone(), "random-greedy-policy"));
     }
     virtual ~api_t() {
         for( size_t i = 0; i < bases_.size(); ++i )
@@ -103,7 +102,7 @@ class api_t {
 
     void select_policy(const std::string &base_name, const std::string &policy_type) {
         std::pair<const Online::Policy::policy_t<wrapper_belief_t>*, std::string> p =
-          Online::Evaluation::select_policy(*problem_, base_name, policy_type, bases_, filler_heuristics_, eval_pars_);
+          Online::Evaluation::select_policy(*problem_, base_name, policy_type, bases_, heuristics_, eval_pars_);
         policy_ = p.first;
         policy_name_ = p.second;
         std::cout << "api_t: policy=\"" << policy_name_ << "\" selected!" << std::endl;
