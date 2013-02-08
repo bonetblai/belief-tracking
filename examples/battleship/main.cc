@@ -361,6 +361,9 @@ struct field_t {
     }
 };
 
+void usage(ostream &os) {
+}
+
 int main(int argc, const char **argv) {
     int ntrials = 1;
     int nrows = 10;
