@@ -17,12 +17,15 @@
  */
 
 #include <cassert>
+#include <string>
 #include <iostream>
 #include <string.h>
 #include <vector>
 #include <stdlib.h>
 
 #include "battleship_api.h"
+
+using namespace std;
 
 struct cell_t {
     int id_;
@@ -366,7 +369,7 @@ int main(int argc, const char **argv) {
     bool verbose = false;
     bool save_fields = false;
 
-    int policy = 0;
+    string policy = "base-policy:direct";
     int width = 100;
     int depth = 10;
 
@@ -377,44 +380,44 @@ int main(int argc, const char **argv) {
     --argc;
     ++argv;
     while( (argc > 0) && (**argv == '-') ) {
-        if( !strcmp(argv[0], "-t") ) {
+        if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
             ntrials = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-r") ) {
+        } else if( !strcmp(argv[0], "-r") || !strcmp(argv[0], "--nrows") ) {
             nrows = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-c") ) {
+        } else if( !strcmp(argv[0], "-c") || !strcmp(argv[0], "--ncols") ) {
             ncols = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-i") ) {
+        } else if( !strcmp(argv[0], "-i") || !strcmp(argv[0], "--inventory") ) {
             free(inventory_str);
             inventory_str = strdup(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-s") ) {
+        } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
             seed = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-v") ) {
+        } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
             verbose = true;
             --argc;
             ++argv;
-        } else if( !strcmp(argv[0], "-S") ) {
+        } else if( !strcmp(argv[0], "-S") || !strcmp(argv[0], "--save-fields") ) {
             save_fields = true;
             --argc;
             ++argv;
-        } else if( !strcmp(argv[0], "-p") ) {
-            policy = atoi(argv[1]);
+        } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
+            policy = argv[1];
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-w") ) {
+        } else if( !strcmp(argv[0], "-w") || !strcmp(argv[0], "--width") ) {
             width = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-d") ) {
+        } else if( !strcmp(argv[0], "-d") || !strcmp(argv[0], "--depth") ) {
             depth = atoi(argv[1]);
             argc -= 2;
             argv += 2;
@@ -451,6 +454,8 @@ int main(int argc, const char **argv) {
     // create empty battleship field
     std::vector<field_t*> fields;
     if( save_fields ) {
+        // if save_fields, generate all the battleship games before playing.
+        // Used to recreate games for solving them with another algorithm.
         fields.reserve(ntrials);
         for( int trial = 0; trial < ntrials; ++trial ) {
             fields.push_back(new field_t(nrows, ncols, ship_inventory, allow_adjacent_ships));
@@ -463,35 +468,19 @@ int main(int argc, const char **argv) {
     // create player
     Battleship::api_t player(nrows, ncols, &ship_inventory[0], max_ship_size, true, allow_adjacent_ships, false);
 
-    // set policy parameters
-    if( (policy >= 2) && (policy <= 4) ) {
+    // select policy and parameters
+    unsigned pos = policy.find(":");
+    string policy_arg1 = policy.substr(0, pos);
+    string policy_arg2 = policy.substr(pos + 1);
+
+    if( policy_arg2.find("aot") != string::npos ) {
         player.set_policy_parameters(width, depth, 0.5, 1);
-    } else if( (policy == 5) || (policy == 6) ) {
+    } else if( policy_arg2.find("uct") != string::npos ) {
         player.set_policy_parameters(width, depth, 0, 0);
     } else {
         player.set_policy_parameters(width, depth, 1, 0);
     }
-
-    // select policy
-    if( policy == 0 ) { // base direct
-        player.select_policy("base", "direct");
-    } else if( policy == 1 ) { // random direct
-        player.select_policy("random-base", "direct");
-    } else if( policy == 2 ) { // greedy direct
-        player.select_policy("random-greedy", "direct");
-    } else if( policy == 3 ) { // AOT-VALUE
-        player.select_policy("base", "naot-value");
-    } else if( policy == 4 ) { // AOT(base)
-        player.select_policy("base", "naot");
-    } else if( policy == 5 ) { // AOT(greedy)
-        player.select_policy("random-greedy", "naot");
-    } else if( policy == 6 ) { // UCT(base)
-        player.select_policy("base", "uct");
-    } else if( policy == 7 ) { // UCT(greedy)
-        player.select_policy("random-greedy", "uct");
-    } else if( policy == 8 ) { // Rollout(base)
-        player.select_policy("base", "rollout");
-    }
+    player.select_policy(policy_arg1, policy_arg2);
 
     // run for the specified number of trials
     int max_steps = nrows * ncols;
