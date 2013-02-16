@@ -59,21 +59,21 @@ struct field_t {
     int ncells_;
     bool allow_adjacent_ships_;
 
-    std::vector<int> ship_inventory_;
-    std::vector<int> num_ship_segments_to_sink_;
-    std::vector<std::vector<int> > ship_segments_;
+    vector<int> ship_inventory_;
+    vector<int> num_ship_segments_to_sink_;
+    vector<vector<int> > ship_segments_;
 
-    std::vector<cell_t> cells_;
+    vector<cell_t> cells_;
     int num_fired_torpedos_;
     int num_remaining_ships_;
 
-    field_t(int nrows, int ncols, const std::vector<int> &ship_inventory, bool allow_adjacent_ships)
+    field_t(int nrows, int ncols, const vector<int> &ship_inventory, bool allow_adjacent_ships)
       : nrows_(nrows),
         ncols_(ncols),
         ncells_(nrows_ * ncols_),
         allow_adjacent_ships_(allow_adjacent_ships),
         ship_inventory_(ship_inventory) {
-        cells_ = std::vector<cell_t>(ncells_);
+        cells_ = vector<cell_t>(ncells_);
     }
 
     int num_remaining_ships() const { return num_remaining_ships_; }
@@ -83,9 +83,9 @@ struct field_t {
         for( unsigned i = 0; i < ship_inventory_.size(); ++i ) {
             nships += ship_inventory_[i];
         }
-        num_ship_segments_to_sink_ = std::vector<int>(nships, 0);
-        ship_segments_ = std::vector<std::vector<int> >(nships);
-        cells_ = std::vector<cell_t>(ncells_);
+        num_ship_segments_to_sink_ = vector<int>(nships, 0);
+        ship_segments_ = vector<vector<int> >(nships);
+        cells_ = vector<cell_t>(ncells_);
 
         num_fired_torpedos_ = 0;
         num_remaining_ships_ = 0;
@@ -93,7 +93,7 @@ struct field_t {
         int ship_id = 0;
         for( unsigned i = 1; i < ship_inventory_.size(); ++i ) {
             for( int j = 0; j < ship_inventory_[i]; ++j ) {
-                ship_segments_[ship_id] = std::vector<int>();
+                ship_segments_[ship_id] = vector<int>();
                 add_ship(ship_id, i);
                 ++ship_id;
             }
@@ -101,7 +101,7 @@ struct field_t {
     }
 
     void add_ship(int ship_id, int size) {
-        std::vector<int> vertical, horizontal;
+        vector<int> vertical, horizontal;
 
         // calculate available anchors
         for( int c = 0; c < ncols_; ++c ) {
@@ -154,11 +154,11 @@ struct field_t {
         num_ship_segments_to_sink_[ship_id] = size;
         ship_segments_[ship_id].push_back(anchor);
 #if 0
-        std::cout << "new ship: id=" << ship_id
-                  << " @ (" << c << "," << r << ")"
-                  << ", size=" << size
-                  << ", horiz=" << (horizontal_ship ? "true" : "false")
-                  << std::endl;
+        cout << "new ship: id=" << ship_id
+             << " @ (" << c << "," << r << ")"
+             << ", size=" << size
+             << ", horiz=" << (horizontal_ship ? "true" : "false")
+             << endl;
 #endif
 
         if( size == 1 ) {
@@ -221,9 +221,9 @@ struct field_t {
         for( unsigned i = 0; i < ship_inventory_.size(); ++i ) {
             nships += ship_inventory_[i];
         }
-        num_ship_segments_to_sink_ = std::vector<int>(nships, 0);
-        ship_segments_ = std::vector<std::vector<int> >(nships);
-        cells_ = std::vector<cell_t>(ncells_);
+        num_ship_segments_to_sink_ = vector<int>(nships, 0);
+        ship_segments_ = vector<vector<int> >(nships);
+        cells_ = vector<cell_t>(ncells_);
 
         num_fired_torpedos_ = 0;
         num_remaining_ships_ = 0;
@@ -314,54 +314,66 @@ struct field_t {
     }
 
     int fire_torpedo(int r, int c, bool verbose = false) {
-        if( verbose ) std::cout << "torpedo fired @ (" << c << "," << r << "):";
+        if( verbose ) cout << "torpedo fired @ (" << c << "," << r << "):";
         ++num_fired_torpedos_;
         int index = r * ncols_ + c;
         if( cells_[index].is_ship_segment() ) {
-            if( verbose ) std::cout << " obs=hit" << std::endl;
+            if( verbose ) cout << " obs=hit" << endl;
             bool was_sunk = cells_[index].is_sunk();
             int ship_id = cells_[index].ship_id();
             if( !cells_[index].is_hit() && (num_ship_segments_to_sink_[ship_id] > 0) ) {
-                //if( verbose ) std::cout << "hit: id=" << ship_id << std::endl;
+                //if( verbose ) cout << "hit: id=" << ship_id << endl;
                 if( --num_ship_segments_to_sink_[ship_id] == 0 ) {
                     for( unsigned i = 0; i < ship_segments_[ship_id].size(); ++i ) {
                         int s = ship_segments_[ship_id][i];
                         int sc = s % ncols_, sr = s / ncols_;
                         cells_[sr * ncols_ + sc].set_as_sunk();
                     }
-                    //if( verbose ) std::cout << "sunk: id=" << ship_id << std::endl;
+                    //if( verbose ) cout << "sunk: id=" << ship_id << endl;
                 }
             }
             cells_[index].set_as_hit();
 
             if( !was_sunk && cells_[index].is_sunk() ) {
                 if( --num_remaining_ships_ == 0 ) {
-                    std::cout << "Entire fleet sunk w/ #torpedos = " << num_fired_torpedos_ << std::endl;
+                    cout << "Entire fleet sunk w/ #torpedos = " << num_fired_torpedos_ << endl;
                 }
             }
             return 1;
         } else {
-            if( verbose ) std::cout << " obs=water" << std::endl;
+            if( verbose ) cout << " obs=water" << endl;
             return 0;
         }
     }
 
-    void print(std::ostream &os) const {
+    void print(ostream &os) const {
         os << "  ";
         for( int c = 0; c < ncols_; ++c )
             os << c;
-        os << std::endl;
+        os << endl;
         for( int r = 0; r < nrows_; ++r ) {
             os << r << " ";
             for( int c = 0; c < ncols_; ++c ) {
                 os << (cells_[r * ncols_ + c].is_ship_segment() ? "X" : " ");
             }
-            os << std::endl;
+            os << endl;
         }
     }
 };
 
 void usage(ostream &os) {
+    os << "usage: battleship"
+       << " [{-t|--ntrials} <int>]"
+       << " [{-r|--nrows} <int>]"
+       << " [{-c|--ncols} <int>]"
+       << " [{-s|--seed} <int>]"
+       << " [{-v|--verbose}]"
+       << " [{-S|--save-fields}]"
+       << " [{-p|--policy} <policy-description>]"
+       << " [{-w|--width} <int>]"
+       << " [{-d|--depth} <int>]"
+       << " [{-?|--help}]"
+       << endl;
 }
 
 int main(int argc, const char **argv) {
@@ -378,7 +390,7 @@ int main(int argc, const char **argv) {
 
     bool allow_adjacent_ships = false;
     char *inventory_str = strdup("2:1,3:1,4:1,5:1");
-    std::vector<int> ship_inventory;
+    vector<int> ship_inventory;
 
     --argc;
     ++argv;
@@ -424,8 +436,11 @@ int main(int argc, const char **argv) {
             depth = atoi(argv[1]);
             argc -= 2;
             argv += 2;
+        } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
+            usage(cout);
+            exit(-1);
         } else {
-            std::cout << "error: unexpected argument: " << argv[0] << std::endl;
+            cout << "error: unexpected argument: " << argv[0] << endl;
             --argc;
             ++argv;
         }
@@ -433,18 +448,18 @@ int main(int argc, const char **argv) {
 
     // parse ship inventory
     int max_ship_size = 0;
-    std::vector<std::pair<int,int> > ships;
+    vector<pair<int,int> > ships;
     char *ptr = strtok(inventory_str, ":");
     while( ptr != 0 ) {
         int ship_size = atoi(ptr);
         char *qptr = strtok(0, ",");
         int ship_qty = atoi(qptr);
-        ships.push_back(std::make_pair(ship_size, ship_qty));
+        ships.push_back(make_pair(ship_size, ship_qty));
         max_ship_size = ship_size > max_ship_size ? ship_size : max_ship_size;
         ptr = strtok(0, ":");
     }
     free(inventory_str);
-    ship_inventory = std::vector<int>(1 + max_ship_size, 0);
+    ship_inventory = vector<int>(1 + max_ship_size, 0);
     for( unsigned i = 0; i < ships.size(); ++i ) {
         ship_inventory[ships[i].first] = ships[i].second;
     }
@@ -455,7 +470,7 @@ int main(int argc, const char **argv) {
     seed48(seeds);
 
     // create empty battleship field
-    std::vector<field_t*> fields;
+    vector<field_t*> fields;
     if( save_fields ) {
         // if save_fields, generate all the battleship games before playing.
         // Used to recreate games for solving them with another algorithm.
@@ -489,8 +504,8 @@ int main(int argc, const char **argv) {
     int max_steps = nrows * ncols;
     int total_torpedos = 0;
     for( int trial = 0; trial < ntrials; ++trial ) {
-        std::cout << "TRIAL " << trial << ": " << std::flush;
-        if( verbose ) std::cout << std::endl;
+        cout << "TRIAL " << trial << ": " << flush;
+        if( verbose ) cout << endl;
 
         // get field
         field_t *field = 0;
@@ -500,7 +515,7 @@ int main(int argc, const char **argv) {
             field = fields[0];
             field->sample_new_field_2();
         }
-        if( verbose ) field->print(std::cout);
+        if( verbose ) field->print(cout);
 
         // play the game
         player.prepare_new_trial();
@@ -513,9 +528,9 @@ int main(int argc, const char **argv) {
         }
 
         if( field->num_remaining_ships() > 0 )
-            std::cout << "Max steps " << max_steps << " reached!" << std::endl;
+            cout << "Max steps " << max_steps << " reached!" << endl;
     }
-    std::cout << "avg. #torpedos=" << (float)total_torpedos / (float)ntrials << std::endl;
+    cout << "avg. #torpedos=" << (float)total_torpedos / (float)ntrials << endl;
 
     return 0;
 }

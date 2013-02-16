@@ -7,9 +7,12 @@ CXX=			clang++
 CXXEXT=			-std=c++0x
 CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) -DNDEBUG
 
-battleship:		main.cc
-			$(CXX) $(CFLAGS) -o battleship main.cc
+mines:			main.cc c_api.o
+			$(CXX) $(CFLAGS) -o mines main.cc c_api.o
+
+c_api.o:		c_api.cc c_api.h
+			$(CXX) $(CFLAGS) -c c_api.cc
 
 clean:
-			rm -f battleship *~
+			rm -f mines c_api.o *~
 
