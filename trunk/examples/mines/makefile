@@ -3,7 +3,7 @@ MDP_ENGINE_HOME=	../../../mdp-engine
 
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(MDP_ENGINE_HOME)/engine
 
-CXX=			clang++
+CXX=			g++
 CXXEXT=			-std=c++0x
 CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) -DNDEBUG
 
