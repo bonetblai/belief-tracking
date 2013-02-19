@@ -2,7 +2,9 @@ BELIEF_TRACKING_HOME=		../..
 MDP_ENGINE_HOME=		../../../mdp-engine
 WUMPUS_HOME=			$(BELIEF_TRACKING_HOME)/examples/wumpus
 
-JAVA_INCLUDES=			-I /usr/java/include -I /usr/java/include/solaris
+SOLARIS_JAVA=			-I /usr/java/include -I /usr/java/include/solaris
+MACOSX_JAVA=                    -I /System/Library/Frameworks/JavaVM.framework/Versions/A/Headers
+JAVA_INCLUDES=			$(SOLARIS_JAVA)
 
 INCLUDES=			-I $(BELIEF_TRACKING_HOME)/engine \
 				-I $(MDP_ENGINE_HOME)/engine \
