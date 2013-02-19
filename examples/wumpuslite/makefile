@@ -1,3 +1,9 @@
+# Mac users should change the compiler (CXX) to clang++ and
+# set the CLANG flags (for CC and LD) as the default flags.
+# Also, the java include directory should be changed by
+# replacing SOLARIS_JAVA with MACOSX java.
+
+
 BELIEF_TRACKING_HOME=		../..
 MDP_ENGINE_HOME=		../../../mdp-engine
 WUMPUS_HOME=			$(BELIEF_TRACKING_HOME)/examples/wumpus
