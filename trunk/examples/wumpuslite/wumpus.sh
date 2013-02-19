@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# If trials should be checked for exploration, the flag "-c" should
+# be passed to WorldApplication and the minisat SAT solved should
+# be available in the path.
+
 trials=$1
 dim=$2
 pits=$3
@@ -11,8 +15,6 @@ if [ "$seed" != "" ]; then
   random="-r $seed"
 fi
 
-#cd /home-users/nlipo/blai/Journal/wumpuslite
-#export PATH=/home-users/nlipo/blai/jre1.7.0_11/bin:$PATH:/home-users/nlipo/blai/minisat
 java WorldApplication -t $trials -d $dim -p $pits -w $wumpus $random
 
 exit 0

@@ -38,6 +38,7 @@ class WorldApplication {
 
         boolean moving = false;
         boolean verbose = false;
+        boolean checkExploration = false; // minisat should be in the path for this to work
         boolean randomAgentLoc = false;
         boolean userDefinedSeed = false;
 		
@@ -84,6 +85,11 @@ class WorldApplication {
             else if (arg.equals("-t") || arg.equals("--trials")) {
                 numTrials = Integer.parseInt(args[i+1]);
                 i++;
+            }
+
+            // if exploration status should be checked at the end of each trial
+            else if (arg.equals("-c") || arg.equals("--check-explored")) {
+                checkExploration = true;
             }
 
             // if the number of expansions is specified
@@ -158,7 +164,11 @@ class WorldApplication {
                 trialSteps[currTrial] = trial.getSteps();
                 deaths[currTrial] = trial.getDeath();
                 golds[currTrial] = trial.getGold();
-                explored[currTrial] = !golds[currTrial] && trial.getExplored();
+                if (checkExploration) {
+                    explored[currTrial] = !golds[currTrial] && trial.getExplored();
+                } else {
+                    explored[currTrial] = true;
+                }
                 unvisitedSafeCell[currTrial] = trial.getUnvisitedSafeCell();
                 elapsedTime[currTrial] = trial.getElapsedTime();
 
