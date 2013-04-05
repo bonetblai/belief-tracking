@@ -17,6 +17,14 @@
  */
 
 
+/*
+ * This type of beam contains a number of different variables, each
+ * with its own domain size.  This type of beam is used in Battleship
+ * and Diagonal Wumpus.
+ *
+ */
+
+
 #ifndef VAR_BEAM_H
 #define VAR_BEAM_H
 
@@ -141,7 +149,7 @@ class var_beam_t {
         os << "{";
         for( const_iterator it = begin(); it != end(); ++it ) {
             int particle = *it;
-#if 0
+#if 1
             os << "[p=" << particle << ":";
             for( int var = 0; var < nvars_; ++var ) {
                 int val = value(var, particle);
