@@ -17,6 +17,15 @@
  */
 
 
+/*
+ * This beam type is used to contain variables whose values refer
+ * to positions in a grid.  Valid valuations are those in which
+ * no two different variables have the same value.
+ *
+ * TODO; make the last condition optional with an extra parameter.
+ */
+
+
 #ifndef GRID_VAR_BEAM_H
 #define GRID_VAR_BEAM_H
 

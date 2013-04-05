@@ -17,6 +17,17 @@
  */
 
 
+/*
+ * This type of beam is used in grid problems where each cell in the
+ * grid is a boolean variable that denote the presence of an object,
+ * and the variables are pairwise independent a priori.  Each beam 
+ * consists of the valuations for the variables for the cell and the
+ * neighbouring cells, where the neighbourhood is determined by a
+ * subset of adjancet cells.
+ *
+ */
+
+
 #ifndef CELL_BEAM_H
 #define CELL_BEAM_H
 

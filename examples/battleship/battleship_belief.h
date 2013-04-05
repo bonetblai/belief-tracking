@@ -153,17 +153,16 @@ class belief_t : public base_belief_t {
     }
 
     void set_initial_configuration() {
-        // insert particles in beams. Two-pass method per beam: 1st pass calculate
+        // Insert particles in beams. Two-pass method per beam: 1st pass calculate
         // number of particles in each beam, 2nd pass allocates space and insert
         // particles.
         for( int cell = 0; cell < ncells_; ++cell ) {
             var_beam_t &beam = *beams_.domain(cell);
             beam.clear();
+            int col = cell % ncols_, cell / ncols_;
             int num_particles_in_beam = 0;
             for( int pass = 0; pass < 2; ++pass ) {
                 if( pass == 1 ) beam.reserve(num_particles_in_beam);
-                int col = cell % ncols_;
-                int row = cell / ncols_;
                 for( int p = 0; p < num_particles_; ++p ) {
                     if( consistent_particle(row, col, p) ) {
                         if( pass == 0 )
