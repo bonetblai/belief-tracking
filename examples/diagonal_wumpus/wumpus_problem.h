@@ -71,7 +71,7 @@ template<typename T> class template_problem_t : public Problem::problem_t<T> {
         return s.have_gold();
     }
     virtual bool dead_end(const T &s) const {
-        return s.dead() || (heuristic(s) >= 10000);
+        return (!s.terminal() && !s.in_cave()) || s.dead() || (heuristic(s) >= 10000);
     }
     virtual float cost(const T &s, Problem::action_t a) const {
         return (a == ActionExit) && !s.have_gold() ? 1e4 : 1;
