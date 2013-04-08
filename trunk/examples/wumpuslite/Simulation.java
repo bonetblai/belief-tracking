@@ -36,7 +36,7 @@ class Simulation {
     private Environment environment;
     private TransferPercept transferPercept;
 
-    public Simulation(Environment wumpusEnvironment, int maxSteps, boolean nonDeterministic, boolean verbose) {
+    public Simulation(Environment wumpusEnvironment, int maxSteps, boolean nonDeterministic, boolean diagonalWumpus, boolean verbose) {
         // start the simulator
         timing = new Timing();
         long startTime = timing.getCpuTime();
@@ -44,7 +44,7 @@ class Simulation {
 
         transferPercept = new TransferPercept(wumpusEnvironment);
         environment = wumpusEnvironment;
-        agent = new Agent(environment, transferPercept, nonDeterministic);
+        agent = new Agent(environment, transferPercept, nonDeterministic, diagonalWumpus);
         agent.prepareNewTrial();
 
         environment.placeAgent(agent);
