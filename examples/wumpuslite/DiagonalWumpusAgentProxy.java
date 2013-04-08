@@ -120,7 +120,6 @@ class DiagonalWumpusAgentProxy implements AgentProxy {
     }
 
     public int process(int[] location, char direction, TransferPercept tp) {
-        System.out.println("Current Pos = (" + location[0] + "," + location[1] + ")");
         // read in the current percepts
         boolean bump = tp.getBump();
         boolean glitter = tp.getGlitter();
@@ -135,13 +134,10 @@ class DiagonalWumpusAgentProxy implements AgentProxy {
         if( stench == true ) obs += 4;
 
         //  process observation
-        System.out.println("OBS=" + obs);
         update(obs);
 
         // while direction is not intendent, turn right
-        System.out.println("tdir=" + target_direction + ", dir=" + direction);
         if( (target_direction != 'U') && (target_direction != direction) ) {
-            System.out.println("Action=TURN-RIGHT");
             return actionTable[1];
         }
 
@@ -150,7 +146,6 @@ class DiagonalWumpusAgentProxy implements AgentProxy {
             apply(low_level_pending_action);
             int action = actionTable[pending_action];
             pending_action = -1;
-            System.out.println("ACTION=" + action);
             return action;
         }
 
@@ -165,7 +160,6 @@ class DiagonalWumpusAgentProxy implements AgentProxy {
             if( low_level_pending_action == 2 ) target_direction = 'S';
             if( low_level_pending_action == 3 ) target_direction = 'W';
         }
-        System.out.println("act=" + pending_action + ", low-act=" + low_level_pending_action + ", tdir=" + target_direction);
         return process(location, direction, tp);
     }
 
