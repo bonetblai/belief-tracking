@@ -33,8 +33,8 @@ class WorldApplication {
         int numPits = 2;
         int numWumpus = 2;
 
-        int numExpansions = 50;
-        int MDPHorizon = 50;
+        int numExpansions = -1;
+        int MDPHorizon = -1;
 
         boolean verbose = false;
         boolean checkExploration = false; // minisat should be in the path for this to work
@@ -166,7 +166,7 @@ class WorldApplication {
             long elapsedTime[] = new long[numTrials];
 
             for (int currTrial = 0; currTrial < numTrials; currTrial++) {
-                Simulation trial = new Simulation(wumpusEnvironment, maxSteps, movingWumpus, diagonalWumpus, verbose);
+                Simulation trial = new Simulation(wumpusEnvironment, maxSteps, movingWumpus, diagonalWumpus, numExpansions, MDPHorizon, verbose);
                 trialScores[currTrial] = trial.getScore();
                 trialSteps[currTrial] = trial.getSteps();
                 deaths[currTrial] = trial.getDeath();

@@ -39,3 +39,9 @@ Specifies that the wumpus moves non-deterministically.  Default is no.
 Parameter: -v  or  --verbose
 Specifies verbose output.  Default is no.
 
+Parameter: --diagonal
+Specifies that the diagonal version of the game should be used.
+In this version, for a N x N grid, N-2 wumpuses are located 
+around the main diagonal. The game has no pits, the agent starts
+at (0,0) and the gold is always in (N-1,N-1).
+
