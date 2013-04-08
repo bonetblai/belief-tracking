@@ -32,6 +32,9 @@
 
 //#define DEBUG
 
+
+namespace Wumpus {
+
 struct open_list_cmp {
     bool operator()(const std::pair<int, int> &p1, const std::pair<int, int> &p2) {
         return p1.second > p2.second;
@@ -215,6 +218,8 @@ template<typename T> struct shortest_distance_to_unvisited_cell_t : public Heuri
     virtual size_t size() const { return 0; }
     virtual void dump(std::ostream &os) const { }
     float operator()(const T &s) const { return value(s); }
+};
+
 };
 
 #undef DEBUG

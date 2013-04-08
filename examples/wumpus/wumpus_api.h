@@ -28,6 +28,9 @@
 
 #include <dispatcher.h>
 
+
+namespace Wumpus {
+
 struct abstract_api_t {
     int nrows_;
     int ncols_;
@@ -195,6 +198,8 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
 
 typedef template_wumpus_api_t<state_t> wumpus_api_t;
 typedef template_wumpus_api_t<moving_state_t> moving_wumpus_api_t;
+
+};
 
 #endif
 

@@ -19,6 +19,9 @@
 #ifndef WUMPUS_DEFS_H
 #define WUMPUS_DEFS_H
 
+
+namespace Wumpus {
+
 // actions
 enum { ActionMoveNorth = 0, ActionMoveEast = 1, ActionMoveSouth = 2, ActionMoveWest = 3 };
 enum { ActionMoveForward = 0, ActionTurnRight = 1, ActionTurnLeft = 2, ActionNoop = 3 };
@@ -121,6 +124,8 @@ inline int target_heading(int heading, int action) {
         return heading;
     }
 }
+
+};
 
 #endif
 

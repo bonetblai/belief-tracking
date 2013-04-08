@@ -128,19 +128,19 @@ struct exact_inference_t {
                 //std::cout << "Visit@(" << p/ncols_ << "," << p%ncols_ << ")" << std::endl;
                 os << -(offset_[Wumpus] + p) << " 0" << std::endl;
                 os << -(offset_[Pit] + p) << " 0" << std::endl;
-                if( !(sensed_info[p] & ::Breeze) && !(sensed_info[p] & ::Stench) ) {
+                if( !(sensed_info[p] & Wumpus::Breeze) && !(sensed_info[p] & Wumpus::Stench) ) {
                     os << -(offset_[Breeze] + p) << " 0" << std::endl;
                     os << -(offset_[Stench] + p) << " 0" << std::endl;
-                } else if( (sensed_info[p] & ::Breeze) && (sensed_info[p] & ::Stench) ) {
+                } else if( (sensed_info[p] & Wumpus::Breeze) && (sensed_info[p] & Wumpus::Stench) ) {
                     //std::cout << "Breeze@(" << p/ncols_ << "," << p%ncols_ << ")" << std::endl;
                     //std::cout << "Stench@(" << p/ncols_ << "," << p%ncols_ << ")" << std::endl;
                     os << (offset_[Breeze] + p) << " 0" << std::endl;
                     os << (offset_[Stench] + p) << " 0" << std::endl;
-                } else if( sensed_info[p] & ::Breeze ) {
+                } else if( sensed_info[p] & Wumpus::Breeze ) {
                     //std::cout << "Breeze@(" << p/ncols_ << "," << p%ncols_ << ")" << std::endl;
                     os << (offset_[Breeze] + p) << " 0" << std::endl;
                     os << -(offset_[Stench] + p) << " 0" << std::endl;
-                } else if( sensed_info[p] & ::Stench ) {
+                } else if( sensed_info[p] & Wumpus::Stench ) {
                     //std::cout << "Stench@(" << p/ncols_ << "," << p%ncols_ << ")" << std::endl;
                     os << -(offset_[Breeze] + p) << " 0" << std::endl;
                     os << (offset_[Stench] + p) << " 0" << std::endl;

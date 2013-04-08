@@ -26,6 +26,9 @@
 #include <iostream>
 #include <vector>
 
+
+namespace Wumpus {
+
 class grid_arc_consistency_t : public CSP::arc_consistency_t<cell_beam_t> {
     mutable int row_x_, row_y_, row_diff_;
     mutable int col_x_, col_y_, col_diff_;
@@ -222,6 +225,8 @@ void grid_arc_consistency_t::arc_reduce_preprocessing_0(int var_x, int var_y) {
 }
 
 std::vector<int> grid_arc_consistency_t::cells_to_revise_[25];
+
+};
 
 #endif
 
