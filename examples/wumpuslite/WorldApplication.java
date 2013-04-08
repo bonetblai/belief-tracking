@@ -36,11 +36,13 @@ class WorldApplication {
         int numExpansions = 50;
         int MDPHorizon = 50;
 
-        boolean moving = false;
         boolean verbose = false;
         boolean checkExploration = false; // minisat should be in the path for this to work
         boolean randomAgentLoc = false;
         boolean userDefinedSeed = false;
+
+        boolean movingWumpus = false;
+        boolean diagonalWumpus = false;
 		
         //String outFilename = "wumpus_out.txt";
 
@@ -123,9 +125,13 @@ class WorldApplication {
 
             // if the non-determinism is specified
             else if (arg.equals("-m") || arg.equals("--moving")) {
-                moving = true;
+                movingWumpus = true;
             }
 
+            // if diagonal version is to be used
+            else if (arg.equals("--diagonal")) {
+                diagonalWumpus = true;
+            }
             // if verbose is specified
             else if (arg.equals("-v") || arg.equals("--verbose")) {
                 verbose = true;
@@ -145,9 +151,10 @@ class WorldApplication {
             System.out.println("Number of trials: " + numTrials);
             System.out.println("Random Agent Location: " + randomAgentLoc);
             System.out.println("Random number seed: " + seed);
-            System.out.println("Non-Deterministic Behavior: " + moving + "\n");
+            System.out.println("Non-Deterministic Behavior: " + movingWumpus + "\n");
+            System.out.println("Diagonal Version: " + diagonalWumpus + "\n");
 
-            char[][][] wumpusWorld = generateRandomWumpusWorld(seed, worldSize, numPits, numWumpus, randomAgentLoc);
+            char[][][] wumpusWorld = generateRandomWumpusWorld(seed, worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);
             Environment wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, wumpusWorld);
 
             int trialScores[] = new int[numTrials];
@@ -159,7 +166,7 @@ class WorldApplication {
             long elapsedTime[] = new long[numTrials];
 
             for (int currTrial = 0; currTrial < numTrials; currTrial++) {
-                Simulation trial = new Simulation(wumpusEnvironment, maxSteps, moving, verbose);
+                Simulation trial = new Simulation(wumpusEnvironment, maxSteps, movingWumpus, diagonalWumpus, verbose);
                 trialScores[currTrial] = trial.getScore();
                 trialSteps[currTrial] = trial.getSteps();
                 deaths[currTrial] = trial.getDeath();
@@ -175,9 +182,9 @@ class WorldApplication {
                 if (verbose) System.out.println("\n\n___________________________________________\n");
 
                 if (userDefinedSeed == true) {
-                    wumpusWorld = generateRandomWumpusWorld(++seed, worldSize, numPits, numWumpus, randomAgentLoc);	
+                    wumpusWorld = generateRandomWumpusWorld(++seed, worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);	
                 } else {
-                    wumpusWorld = generateRandomWumpusWorld(rand.nextInt(), worldSize, numPits, numWumpus, randomAgentLoc);
+                    wumpusWorld = generateRandomWumpusWorld(rand.nextInt(), worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);
                 }
 
                 wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, wumpusWorld);
@@ -256,7 +263,7 @@ class WorldApplication {
         System.out.println("\nFinished.");	    
     }
 	
-    public static char[][][] generateRandomWumpusWorld(int seed, int size, int numPits, int numWumpus, boolean randomlyPlaceAgent) {
+    public static char[][][] generateRandomWumpusWorld(int seed, int size, int numPits, int numWumpus, boolean randomlyPlaceAgent, boolean diagonalWumpus) {
         char[][][] newWorld = new char[size][size][4];
         boolean[][] pit_occupied = new boolean[size][size];
         boolean[][] wumpus_occupied = new boolean[size][size];
@@ -278,58 +285,80 @@ class WorldApplication {
             }
         }
 
-        // default agent location and orientation
-        int agentXLoc = 0;
-        int agentYLoc = 0;
-        char agentIcon = 'A';
+        if (!diagonalWumpus) {
+            // default agent location and orientation
+            int agentXLoc = 0;
+            int agentYLoc = 0;
+            char agentIcon = 'A';
 
-        // randomly generate agent location and orientation
-        if (randomlyPlaceAgent == true) {
-            agentXLoc = randGen.nextInt(size);
-            agentYLoc = randGen.nextInt(size);
-            switch (randGen.nextInt(4)) {
-                case 0: agentIcon = 'A'; break;
-                case 1: agentIcon = '>'; break;
-                case 2: agentIcon = 'V'; break;
-                case 3: agentIcon = '<'; break;
+            // randomly generate agent location and orientation
+            if (randomlyPlaceAgent == true) {
+                agentXLoc = randGen.nextInt(size);
+                agentYLoc = randGen.nextInt(size);
+                switch (randGen.nextInt(4)) {
+                    case 0: agentIcon = 'A'; break;
+                    case 1: agentIcon = '>'; break;
+                    case 2: agentIcon = 'V'; break;
+                    case 3: agentIcon = '<'; break;
+                }
             }
-        }
 
-        // place agent in the world
-        newWorld[agentXLoc][agentYLoc][3] = agentIcon;
+            // place agent in the world
+            newWorld[agentXLoc][agentYLoc][3] = agentIcon;
 
-        // Pit generation
-        for (int i = 0; i < numPits; i++) {
+            // Pit generation
+            for (int i = 0; i < numPits; i++) {
+                int x = randGen.nextInt(size);
+                int y = randGen.nextInt(size);
+                while ((x == agentXLoc && y == agentYLoc) || pit_occupied[x][y] || ((x < 2) && (y < 2))) {
+                    x = randGen.nextInt(size);
+                    y = randGen.nextInt(size);    	   
+                }
+                pit_occupied[x][y] = true;
+                newWorld[x][y][0] = 'P';
+            }
+
+            // Wumpus Generation
+            for (int i = 0; i < numWumpus; i++) {
+                int x = randGen.nextInt(size);
+                int y = randGen.nextInt(size);
+                while ((x == agentXLoc && y == agentYLoc) || pit_occupied[x][y] || wumpus_occupied[x][y] || ((x < 2) && (y < 2))) {
+                    x = randGen.nextInt(size);
+                    y = randGen.nextInt(size);   
+                }
+                wumpus_occupied[x][y] = true;
+                newWorld[x][y][1] = 'W';
+            }
+
+            // Gold Generation
             int x = randGen.nextInt(size);
             int y = randGen.nextInt(size);
-            while ((x == agentXLoc && y == agentYLoc) || pit_occupied[x][y] || ((x < 2) && (y < 2))) {
-                x = randGen.nextInt(size);
-                y = randGen.nextInt(size);    	   
-            }
-            pit_occupied[x][y] = true;
-            newWorld[x][y][0] = 'P';
-        }
-
-        // Wumpus Generation
-        for (int i = 0; i < numWumpus; i++) {
-            int x = randGen.nextInt(size);
-            int y = randGen.nextInt(size);
-            while ((x == agentXLoc && y == agentYLoc) || pit_occupied[x][y] || wumpus_occupied[x][y] || ((x < 2) && (y < 2))) {
+            while ((x == agentXLoc && y == agentYLoc) || pit_occupied[x][y] || wumpus_occupied[x][y]) {
                 x = randGen.nextInt(size);
                 y = randGen.nextInt(size);   
             }
-            wumpus_occupied[x][y] = true;
-            newWorld[x][y][1] = 'W';
+            newWorld[x][y][2] = 'G';
+        } else {
+            // In diagonal version, the agent is at lowe-left corner, the gold
+            // is at upper-right corner, there are no pits, and there are n-2
+            // wumpus along the diagonal.
+
+            // Place agent
+            newWorld[0][0][3] = 'A';
+
+            // Place gold
+            newWorld[size - 1][size - 1][2] = 'G';
+
+            // Place wumpus
+            for (int i = 0; i < size - 2; ++i) {
+                int p = randGen.nextInt(2);
+                if (p == 0) { // place this wumpus above diagonal
+                    newWorld[1 + i][2 + i][1] = 'W';
+                } else {
+                    newWorld[2 + i][1 + i][1] = 'W';
+                }
+            }
         }
-		
-        // Gold Generation
-        int x = randGen.nextInt(size);
-        int y = randGen.nextInt(size);
-        while ((x == agentXLoc && y == agentYLoc) || pit_occupied[x][y] || wumpus_occupied[x][y]) {
-            x = randGen.nextInt(size);
-            y = randGen.nextInt(size);   
-        }
-        newWorld[x][y][2] = 'G';
         return newWorld;
     }
 }

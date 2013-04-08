@@ -23,7 +23,7 @@ import java.io.BufferedOutputStream;
 import java.net.URL;
 import java.io.IOException;
 
-class AgentFunctionProxy {
+class DiagonalWumpusAgentProxy implements AgentProxy {
 
     // Dynamic link the C++ code
     static {
@@ -44,7 +44,7 @@ class AgentFunctionProxy {
         // Loop through extensions, stopping after finding first one
         URL nativeLibraryUrl = null;
         for( String ext : allowedExtensions ) {
-            nativeLibraryUrl = AgentFunctionProxy.class.getResource(url.toString() + ext);
+            nativeLibraryUrl = DiagonalWumpusAgentProxy.class.getResource(url.toString() + ext);
             if( nativeLibraryUrl != null ) break;
         }
 
@@ -76,24 +76,24 @@ class AgentFunctionProxy {
 
     // Native (C++) methods
     private long agentPtr_;
-    private native void init_cpp_side(boolean moving, int nrows, int ncols, int npits, int nwumpus, int narrows, boolean nesw_movements);
+    private native void init_cpp_side(int dim);
     private native void set_policy_parameters(int num_expansions, int mdp_horizon);
     private native void prepare_new_trial();
     private native void update(int obs);
-    private native void apply_action_and_update(int action, int obs);
+    private native void apply(int action);
     private native int select_action();
-    private native int is_world_explored();
-    private native int is_there_a_safe_cell();
 
     // string to store the agent's name (do not remove this variable)
     private String agentName = "Agent Smith";
 
     private int[] actionTable;
-    private int last_action;
+    private int pending_action;
+    private int low_level_pending_action;
+    private char target_direction;
 
-    public AgentFunctionProxy(boolean moving, int size, int npits, int nwumpus, int narrows) {
+    public DiagonalWumpusAgentProxy(int size) {
         // Initialize the C++ side
-        init_cpp_side(moving, size, size, npits, nwumpus, 0, false);
+        init_cpp_side(size);
 
         // this integer array will store the agent actions
         actionTable = new int[7];
@@ -106,7 +106,9 @@ class AgentFunctionProxy {
         actionTable[6] = -1; // EXIT
 
         // initialize
-        last_action = -1;
+        pending_action = -1;
+        low_level_pending_action = -1;
+        target_direction = 'U';
     }
 
     public void prepareNewTrial() {
@@ -117,7 +119,8 @@ class AgentFunctionProxy {
         set_policy_parameters(numExpansions, MDPHorizon);
     }
 
-    public int process(TransferPercept tp) {
+    public int process(int[] location, char direction, TransferPercept tp) {
+        System.out.println("Current Pos = (" + location[0] + "," + location[1] + ")");
         // read in the current percepts
         boolean bump = tp.getBump();
         boolean glitter = tp.getGlitter();
@@ -131,22 +134,47 @@ class AgentFunctionProxy {
         if( breeze == true ) obs += 2;
         if( stench == true ) obs += 4;
 
-        // update agent and get next action
-        if( last_action == -1 ) {
-            update(obs);
-        } else {
-            apply_action_and_update(last_action, obs);
+        //  process observation
+        System.out.println("OBS=" + obs);
+        update(obs);
+
+        // while direction is not intendent, turn right
+        System.out.println("tdir=" + target_direction + ", dir=" + direction);
+        if( (target_direction != 'U') && (target_direction != direction) ) {
+            System.out.println("Action=TURN-RIGHT");
+            return actionTable[1];
         }
-        last_action = select_action();
-        return actionTable[last_action];
+
+        // if pending action, apply it
+        if( pending_action != -1 ) {
+            apply(low_level_pending_action);
+            int action = actionTable[pending_action];
+            pending_action = -1;
+            System.out.println("ACTION=" + action);
+            return action;
+        }
+
+        // obtain action and set target direction
+        low_level_pending_action = select_action();
+        pending_action = low_level_pending_action;
+        target_direction = direction;
+        if( low_level_pending_action < 4 ) {
+            pending_action = 0;
+            if( low_level_pending_action == 0 ) target_direction = 'N';
+            if( low_level_pending_action == 1 ) target_direction = 'E';
+            if( low_level_pending_action == 2 ) target_direction = 'S';
+            if( low_level_pending_action == 3 ) target_direction = 'W';
+        }
+        System.out.println("act=" + pending_action + ", low-act=" + low_level_pending_action + ", tdir=" + target_direction);
+        return process(location, direction, tp);
     }
 
     public boolean isWorldExplored() {
-        return is_world_explored() == 1;
+        return true;
     }
 
     public boolean isThereAnUnvisitedSafeCell() {
-        return is_there_a_safe_cell() == 1;
+        return false;
     }
 	
     // public method to return the agent's name (do not remove this method)

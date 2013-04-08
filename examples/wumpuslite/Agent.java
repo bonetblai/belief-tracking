@@ -31,9 +31,10 @@ class Agent {
 
     private Environment wumpusWorld;
     private TransferPercept percept;
-    private AgentFunctionProxy agentFunction;
+    //private AgentFunctionProxy agentFunction;
+    private AgentProxy agent;
 
-    public Agent(Environment world, TransferPercept perceptTrans, boolean nonDeterministic) {
+    public Agent(Environment world, TransferPercept perceptTrans, boolean nonDeterministic, boolean diagonalWumpus) {
         // set deterministic/non-deterministic
         nonDeterministicMode = nonDeterministic;
 
@@ -43,7 +44,11 @@ class Agent {
 
         wumpusWorld = world;
         worldSize = wumpusWorld.getWorldSize();
-        agentFunction = new AgentFunctionProxy(false, worldSize, world.getNumPits(), world.getNumWumpus(), world.getNumArrows());
+        if (!diagonalWumpus) {
+            agent = new WumpusAgentProxy(false, worldSize, world.getNumPits(), world.getNumWumpus(), world.getNumArrows());
+        } else {
+            agent = new DiagonalWumpusAgentProxy(worldSize);
+        }
         percept = perceptTrans;
 
         // initial location
@@ -53,11 +58,11 @@ class Agent {
     }
 
     public void prepareNewTrial() {
-        agentFunction.prepareNewTrial();
+        agent.prepareNewTrial();
     }
 
     public void setPolicyParameters(int numExpansions, int MDPHorizon) {
-        agentFunction.setPolicyParameters(numExpansions, MDPHorizon);
+        agent.setPolicyParameters(numExpansions, MDPHorizon);
     }
 
     public void setIsDead(boolean dead) {
@@ -77,19 +82,19 @@ class Agent {
     }
 
     public boolean getExplored() {
-        return agentFunction.isWorldExplored();
+        return agent.isWorldExplored();
     }
 
     public boolean getUnvisitedSafeCell() {
-        return agentFunction.isThereAnUnvisitedSafeCell();
+        return agent.isThereAnUnvisitedSafeCell();
     }
 
     public String getName() {
-        return agentFunction.getAgentName();
+        return agent.getAgentName();
     }
 
     public int chooseAction() {
-        return agentFunction.process(percept);
+        return agent.process(location, direction, percept);
     }
 
     public char getAgentIcon() {
