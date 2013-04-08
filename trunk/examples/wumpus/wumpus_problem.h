@@ -31,6 +31,9 @@
 #define GOAL_IS_HAVE_GOLD   0
 #define GOAL_IS_EXIT        1
 
+
+namespace Wumpus {
+
 template<typename T> class template_problem_t : public Problem::problem_t<T> {
   protected:
     int nrows_;
@@ -134,16 +137,19 @@ template<typename T> class template_problem_t : public Problem::problem_t<T> {
     virtual void print(std::ostream &os) const { }
 };
 
-template<typename T> inline std::ostream& operator<<(std::ostream &os, const template_problem_t<T> &p) {
-    p.print(os);
-    return os;
-}
-
 // template instantiation
 typedef template_problem_t<state_t> problem_t;
 typedef template_problem_t<moving_state_t> moving_problem_t;
 
+};
 
+template<typename T> inline std::ostream& operator<<(std::ostream &os, const Wumpus::template_problem_t<T> &p) {
+    p.print(os);
+    return os;
+}
+
+
+namespace Wumpus {
 
 void place_random_objects(std::vector<int> &state, int nrows, int ncols, int nobjs, std::set<int> &forbidden) {
     state = std::vector<int>(nrows * ncols, 0);
@@ -155,8 +161,6 @@ void place_random_objects(std::vector<int> &state, int nrows, int ncols, int nob
         state[cell] = 1;
     }
 }
-
-
 
 class hidden_state_t {
     int nrows_;
@@ -251,6 +255,8 @@ class hidden_state_t {
         assert((0 <= num) && (num < 9));
         return num;
     }
+};
+
 };
 
 #endif

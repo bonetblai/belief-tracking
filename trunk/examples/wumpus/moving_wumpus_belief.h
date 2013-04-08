@@ -29,6 +29,8 @@
 #include <list>
 #include <vector>
 
+namespace Wumpus {
+
 class moving_wumpus_belief_t : public grid_belief_t {
     static int nrows_;
     static int ncols_;
@@ -196,10 +198,10 @@ class moving_wumpus_belief_t : public grid_belief_t {
     }
 
     int target_cell(int action) const {
-        return ::target_cell(pos_, heading_, action, nrows_, ncols_, false);
+        return Wumpus::target_cell(pos_, heading_, action, nrows_, ncols_, false);
     }
     int target_heading(int action) const {
-        return ::target_heading(heading_, action);
+        return Wumpus::target_heading(heading_, action);
     }
 
     bool applicable(int action) const {
@@ -392,7 +394,9 @@ int moving_wumpus_belief_t::npits_ = 0;
 int moving_wumpus_belief_t::nwumpus_ = 0;
 std::list<moving_wumpus_belief_t*> moving_wumpus_belief_t::beliefs_;
 
-inline std::ostream& operator<<(std::ostream &os, const moving_wumpus_belief_t &bel) {
+};
+
+inline std::ostream& operator<<(std::ostream &os, const Wumpus::moving_wumpus_belief_t &bel) {
     bel.print(os);
     return os;
 }

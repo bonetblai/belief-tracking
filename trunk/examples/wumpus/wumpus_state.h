@@ -26,6 +26,9 @@
 #include <cassert>
 #include <iostream>
 
+
+namespace Wumpus {
+
 template<typename T> class template_state_t {
   protected:
     T *belief_;
@@ -106,15 +109,16 @@ template<typename T> int template_state_t<T>::nrows_ = 0;
 template<typename T> int template_state_t<T>::ncols_ = 0;
 template<typename T> int template_state_t<T>::ncells_ = 0;
 
-template<typename T> inline std::ostream& operator<<(std::ostream &os, const template_state_t<T> &state) {
-    state.print(os);
-    return os;
-}
-
-
 // template instantiation
 typedef template_state_t<wumpus_belief_t> state_t;
 typedef template_state_t<moving_wumpus_belief_t> moving_state_t;
+
+};
+
+template<typename T> inline std::ostream& operator<<(std::ostream &os, const Wumpus::template_state_t<T> &state) {
+    state.print(os);
+    return os;
+}
 
 #endif
 
