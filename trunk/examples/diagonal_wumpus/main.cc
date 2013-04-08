@@ -11,8 +11,9 @@ int main(int argc, const char **argv) {
     cout << "dim=" << dim << endl;
 
     Wumpus::Diagonal::wumpus_api_t api(dim);
-    api.set_policy_parameters(5000, 2 * dim, 0.5, 10);
-    api.select_policy("shortest_distance_to_unvisited_cell_heuristic", "aot/heuristic");
+    api.set_policy_parameters(50, 3 * dim, 0.5, 5);
+    //api.select_policy("shortest_distance_to_unvisited_cell_heuristic", "aot/heuristic");
+    api.select_policy("greedy_wrt_sduv-heuristic", "aot");
     api.prepare_new_trial(0);
 
     int action = api.select_action();
