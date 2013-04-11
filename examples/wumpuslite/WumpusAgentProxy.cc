@@ -6,6 +6,15 @@ using namespace std;
 
 static Wumpus::abstract_api_t *wumpus_agent = 0;
 
+//static const char *base = "shortest_distance_to_unvisited_cell_heuristic";
+static const char *base = "greedy_wrt_sduv-heuristic";
+//static const char *base = "random";
+
+static const char *policy = "direct";
+//static const char *policy = "aot/heuristic,random-ties";
+//static const char *policy = "aot/random-ties";
+//static const char *policy = "uct/random-ties";
+
 JNIEXPORT void JNICALL Java_WumpusAgentProxy_init_1cpp_1side
   (JNIEnv *env, jobject,
    jboolean moving, jint rows, jint cols, jint npits,
@@ -30,24 +39,17 @@ JNIEXPORT void JNICALL Java_WumpusAgentProxy_init_1cpp_1side
         wumpus_agent =
           new Wumpus::wumpus_api_t(rows, cols, npits, nwumpus, narrows, nesw_movements);
     }
-    //wumpus_agent->set_policy_parameters(50, 50, 0.5, 10);
-    //wumpus_agent->select_policy("shortest_distance_to_unvisited_cell_heuristic", "aot/heuristic,random-ties");
-    //wumpus_agent->select_policy("random", "direct");
-    wumpus_agent->select_policy("greedy_wrt_sduv-heuristic", "direct");
+    wumpus_agent->select_policy(base, policy);
 }
 
 JNIEXPORT void JNICALL Java_WumpusAgentProxy_set_1policy_1parameters
   (JNIEnv *env, jobject, jint num_expansions, jint mdp_horizon) {
-    //wumpus_agent->set_policy_parameters(num_expansions, mdp_horizon, 0.5, 10);
-    //wumpus_agent->select_policy("shortest_distance_to_unvisited_cell_heuristic", "aot/heuristic,random-ties");
-    //wumpus_agent->select_policy("random", "direct");
-    //wumpus_agent->select_policy("greedy_wrt_sduv-heuristic", "direct");
 }
 
 JNIEXPORT void JNICALL Java_WumpusAgentProxy_prepare_1new_1trial
-  (JNIEnv *env, jobject) {
+  (JNIEnv *env, jobject, jboolean diagonal) {
     //cout << "entry: prepare_new_trial" << endl;
-    wumpus_agent->prepare_new_trial(Wumpus::North);
+    wumpus_agent->prepare_new_trial(Wumpus::North, diagonal);
     //cout << "exit: prepare_new_trial" << endl;
 }
 

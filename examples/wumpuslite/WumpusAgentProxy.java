@@ -78,7 +78,7 @@ class WumpusAgentProxy implements AgentProxy {
     private long agentPtr_;
     private native void init_cpp_side(boolean moving, int nrows, int ncols, int npits, int nwumpus, int narrows, boolean nesw_movements);
     private native void set_policy_parameters(int num_expansions, int mdp_horizon);
-    private native void prepare_new_trial();
+    private native void prepare_new_trial(boolean diagonal);
     private native void update(int obs);
     private native void apply_action_and_update(int action, int obs);
     private native int select_action();
@@ -88,10 +88,11 @@ class WumpusAgentProxy implements AgentProxy {
     // string to store the agent's name (do not remove this variable)
     private String agentName = "Agent Smith";
 
+    private boolean diagonal;
     private int[] actionTable;
     private int last_action;
 
-    public WumpusAgentProxy(boolean moving, int size, int npits, int nwumpus, int narrows) {
+    public WumpusAgentProxy(boolean moving, int size, int npits, int nwumpus, int narrows, boolean diagonal) {
         // Initialize the C++ side
         init_cpp_side(moving, size, size, npits, nwumpus, 0, false);
 
@@ -106,11 +107,12 @@ class WumpusAgentProxy implements AgentProxy {
         actionTable[6] = -1; // EXIT
 
         // initialize
+        this.diagonal = diagonal;
         last_action = -1;
     }
 
     public void prepareNewTrial() {
-        prepare_new_trial();
+        prepare_new_trial(diagonal);
     }
 
     public void setPolicyParameters(int numExpansions, int MDPHorizon) {
