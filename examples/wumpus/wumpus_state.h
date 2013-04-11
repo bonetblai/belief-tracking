@@ -78,7 +78,7 @@ template<typename T> class template_state_t {
     bool possible_gold_at(int cell) const { return belief_->possible_gold_at(cell); }
     bool in_cave() const { return belief_->position() != OutsideCave; }
 
-    void set_initial_configuration() { belief_->set_initial_configuration(); }
+    void set_initial_configuration(bool diagonal = false) { belief_->set_initial_configuration(diagonal); }
     bool applicable(int action) const { return belief_->applicable(action); }
     void apply(int action) { belief_->progress(action); }
     void update(int action, int obs) { belief_->filter(action, obs); }
