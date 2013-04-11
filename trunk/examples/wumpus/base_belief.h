@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef GRID_BELIEF_H
-#define GRID_BELIEF_H
+#ifndef BASE_BELIEF_H
+#define BASE_BELIEF_H
 
 #include <cell_beam.h>
 #include <arc_consistency.h>
@@ -29,18 +29,18 @@
 
 namespace Wumpus {
 
-class grid_arc_consistency_t : public CSP::arc_consistency_t<cell_beam_t> {
+class arc_consistency_t : public CSP::arc_consistency_t<cell_beam_t> {
     mutable int row_x_, row_y_, row_diff_;
     mutable int col_x_, col_y_, col_diff_;
     static std::vector<int> cells_to_revise_[25];
 
     // disallow copy constructor
-    explicit grid_arc_consistency_t(const grid_arc_consistency_t &);
-    explicit grid_arc_consistency_t(grid_arc_consistency_t &&);
+    explicit arc_consistency_t(const arc_consistency_t &);
+    explicit arc_consistency_t(arc_consistency_t &&);
 
   public:
-    grid_arc_consistency_t();
-    virtual ~grid_arc_consistency_t() { }
+    arc_consistency_t();
+    virtual ~arc_consistency_t() { }
     static void initialize(int neighbourhood);
 
     virtual void arc_reduce_preprocessing_0(int var_x, int var_y);
@@ -50,6 +50,8 @@ class grid_arc_consistency_t : public CSP::arc_consistency_t<cell_beam_t> {
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const {
         int index = (row_diff_ + 2) * 5 + (col_diff_ + 2);
         assert((0 <= index) && (index < 25));
+
+        // assert that common variables agree on valuation
         for( int k = 0, ksz = cells_to_revise_[index].size(); k < ksz; ++k ) {
             int entry = cells_to_revise_[index][k];
             int i = entry / 9, j = entry % 9;
@@ -60,17 +62,17 @@ class grid_arc_consistency_t : public CSP::arc_consistency_t<cell_beam_t> {
         return true;
     }
 
-    const grid_arc_consistency_t& operator=(const grid_arc_consistency_t &arc) {
+    const arc_consistency_t& operator=(const arc_consistency_t &arc) {
         assert(0); // shouldn't be called
         return arc;
     }
-    bool operator==(const grid_arc_consistency_t &arc) {
+    bool operator==(const arc_consistency_t &arc) {
         assert(0); // shouldn't be called
         return false;
     }
 };
 
-class grid_belief_t {
+class base_belief_t {
   protected:
     static int rows_;
     static int cols_;
@@ -78,10 +80,12 @@ class grid_belief_t {
     static CSP::constraint_digraph_t cg_;
 
   public:
-    grid_belief_t() { }
-    grid_belief_t(const grid_belief_t &bel) { }
-    //grid_belief_t(grid_belief_t &&bel) { }
-    virtual ~grid_belief_t() { }
+    base_belief_t() { }
+    base_belief_t(const base_belief_t &bel) { }
+#if 0
+    base_belief_t(base_belief_t &&bel) { }
+#endif
+    virtual ~base_belief_t() { }
 
     enum { manhattan_neighbourhood = 186, octile_neighbourhood = 511 };
 
@@ -95,7 +99,7 @@ class grid_belief_t {
         initialized = true;
 
 #if 0
-        std::cout << "grid_belief_t: initialization: "
+        std::cout << "base_belief_t: initialization: "
                   << "rows=" << rows
                   << ", cols=" << cols
                   << ", neighbourhood=" << neighbourhood
@@ -120,7 +124,7 @@ class grid_belief_t {
 
         // constraint graph
         construct_constraint_graph(rows_, cols_, neighbourhood);
-        grid_arc_consistency_t::initialize(neighbourhood);
+        arc_consistency_t::initialize(neighbourhood);
     }
 
     static bool skip_cell(int cell, int i) {
@@ -141,17 +145,17 @@ class grid_belief_t {
         beams[cell]->filter(nobjs, at_least);
     }
 
-    virtual const grid_belief_t& operator=(const grid_belief_t &bel) {
+    virtual const base_belief_t& operator=(const base_belief_t &bel) {
         return *this;
     }
 
-    virtual bool operator==(const grid_belief_t &bel) const {
+    virtual bool operator==(const base_belief_t &bel) const {
         if( (rows_ != bel.rows_) || (cols_ != bel.cols_) )
             return false;
         else
             return true;
     }
-    virtual bool operator!=(const grid_belief_t &bel) const {
+    virtual bool operator!=(const base_belief_t &bel) const {
         return *this == bel ? false : true;
     }
 
@@ -187,16 +191,16 @@ class grid_belief_t {
 
 };
 
-int grid_belief_t::rows_ = 0;
-int grid_belief_t::cols_ = 0;
-int *grid_belief_t::types_ = 0;
-CSP::constraint_digraph_t grid_belief_t::cg_;
+int base_belief_t::rows_ = 0;
+int base_belief_t::cols_ = 0;
+int *base_belief_t::types_ = 0;
+CSP::constraint_digraph_t base_belief_t::cg_;
 
-grid_arc_consistency_t::grid_arc_consistency_t()
-  : CSP::arc_consistency_t<cell_beam_t>(grid_belief_t::cg()) {
+arc_consistency_t::arc_consistency_t()
+  : CSP::arc_consistency_t<cell_beam_t>(base_belief_t::cg()) {
 }
 
-void grid_arc_consistency_t::initialize(int neighbourhood) {
+void arc_consistency_t::initialize(int neighbourhood) {
     for( int k = 0; k < 25; ++k ) {
         cells_to_revise_[k].reserve(9);
         int row_diff = (k / 5) - 2, col_diff = (k % 5) - 2;
@@ -217,14 +221,16 @@ void grid_arc_consistency_t::initialize(int neighbourhood) {
     }
 }
 
-void grid_arc_consistency_t::arc_reduce_preprocessing_0(int var_x, int var_y) {
-    row_x_ = var_x / grid_belief_t::cols(), col_x_ = var_x % grid_belief_t::cols();
-    row_y_ = var_y / grid_belief_t::cols(), col_y_ = var_y % grid_belief_t::cols();
+void arc_consistency_t::arc_reduce_preprocessing_0(int var_x, int var_y) {
+    row_x_ = var_x / base_belief_t::cols();
+    col_x_ = var_x % base_belief_t::cols();
+    row_y_ = var_y / base_belief_t::cols();
+    col_y_ = var_y % base_belief_t::cols();
     row_diff_ = row_y_ - row_x_;
     col_diff_ = col_y_ - col_x_;
 }
 
-std::vector<int> grid_arc_consistency_t::cells_to_revise_[25];
+std::vector<int> arc_consistency_t::cells_to_revise_[25];
 
 };
 

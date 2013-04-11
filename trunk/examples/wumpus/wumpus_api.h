@@ -65,7 +65,7 @@ struct abstract_api_t {
     }
 
     virtual void select_policy(const std::string &base_name, const std::string &policy_type) = 0;
-    virtual void prepare_new_trial(int heading) = 0;
+    virtual void prepare_new_trial(int heading, bool diagonal = false) = 0;
     virtual int select_action() const = 0;
     virtual void update(int obs) = 0;
     virtual void apply_action_and_update(int action, int obs) = 0;
@@ -134,12 +134,11 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
         }
     }
 
-    virtual void prepare_new_trial(int heading) {
+    virtual void prepare_new_trial(int heading, bool diagonal = false) {
         memset(sensed_info_, 255, nrows_ * ncols_);
         if( state_ ) delete state_;
         state_ = new T(0, heading);
-        //state_->set_narrows(narrows_);
-        state_->set_initial_configuration();
+        state_->set_initial_configuration(diagonal);
         heuristic_->prepare_new_trial();
         heuristic_->mark_as_visited(0);
     }

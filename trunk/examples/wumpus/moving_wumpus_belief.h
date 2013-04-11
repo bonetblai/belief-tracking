@@ -19,7 +19,7 @@
 #ifndef MOVING_WUMPUS_BELIEF_H
 #define MOVING_WUMPUS_BELIEF_H
 
-#include "grid_belief.h"
+#include "base_belief.h"
 #include "defs.h"
 #include <grid_var_beam.h>
 
@@ -31,7 +31,7 @@
 
 namespace Wumpus {
 
-class moving_wumpus_belief_t : public grid_belief_t {
+class moving_wumpus_belief_t : public base_belief_t {
     static int nrows_;
     static int ncols_;
     static int npits_;
@@ -46,12 +46,12 @@ class moving_wumpus_belief_t : public grid_belief_t {
     bool dead_;
 
     grid_var_beam_t gold_;
-    grid_arc_consistency_t pits_;
+    arc_consistency_t pits_;
     grid_var_beam_t wumpus_;
 
   public:
     moving_wumpus_belief_t(int pos = 0, int heading = 0)
-      : grid_belief_t(), pos_(pos), heading_(heading), narrows_(0),
+      : base_belief_t(), pos_(pos), heading_(heading), narrows_(0),
         have_gold_(false), dead_(false),
         gold_(1), wumpus_(nwumpus_) {
         for( int r = 0; r < nrows_; ++r ) {
@@ -66,7 +66,7 @@ class moving_wumpus_belief_t : public grid_belief_t {
         }
     }
     explicit moving_wumpus_belief_t(const moving_wumpus_belief_t &bel)
-      : grid_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
+      : base_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
         have_gold_(bel.have_gold_), dead_(bel.dead_),
         gold_(bel.gold_), wumpus_(bel.wumpus_) {
         for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
@@ -75,7 +75,7 @@ class moving_wumpus_belief_t : public grid_belief_t {
     }
 #if 0
     moving_wumpus_belief_t(moving_wumpus_belief_t &&bel)
-      : grid_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
+      : base_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
         have_gold_(bel.have_gold_), dead_(bel.dead_),
         gold_(std::move(bel.gold_)), wumpus_(std::move(bel.wumpus_)) {
         for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
@@ -110,7 +110,7 @@ class moving_wumpus_belief_t : public grid_belief_t {
         nwumpus_ = nwumpus;
         cell_beam_t::initialize();
         grid_var_beam_t::initialize(nrows_, ncols_);
-        grid_belief_t::initialize(nrows_, ncols_, grid_belief_t::manhattan_neighbourhood);
+        base_belief_t::initialize(nrows_, ncols_, base_belief_t::manhattan_neighbourhood);
     }
 
     size_t hash() const { return 0; }
@@ -144,11 +144,12 @@ class moving_wumpus_belief_t : public grid_belief_t {
         }
     }
 
-    void set_initial_configuration() {
+    void set_initial_configuration(bool diagonal) {
+        assert(!diagonal);
         gold_.set_initial_configuration();
         wumpus_.set_initial_configuration();
         for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
-            pits_.domain(cell)->set_initial_configuration(grid_belief_t::manhattan_neighbourhood);
+            pits_.domain(cell)->set_initial_configuration(base_belief_t::manhattan_neighbourhood);
         }
     }
 
