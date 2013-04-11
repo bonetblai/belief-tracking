@@ -48,8 +48,9 @@ class Simulation {
         agent.prepareNewTrial();
 
         // set policy agent's parameters (if different from default)
-        if ((numExpansions != -1) && (MDPHorizon != -1))
+        if ((numExpansions != -1) && (MDPHorizon != -1)) {
             agent.setPolicyParameters(numExpansions, MDPHorizon);
+        }
 
         environment.placeAgent(agent);
         if (verbose) environment.printEnvironment();

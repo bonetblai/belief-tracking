@@ -44,11 +44,7 @@ class Agent {
 
         wumpusWorld = world;
         worldSize = wumpusWorld.getWorldSize();
-        if (!diagonalWumpus) {
-            agent = new WumpusAgentProxy(false, worldSize, world.getNumPits(), world.getNumWumpus(), world.getNumArrows());
-        } else {
-            agent = new DiagonalWumpusAgentProxy(worldSize);
-        }
+        agent = new WumpusAgentProxy(false, worldSize, world.getNumPits(), world.getNumWumpus(), world.getNumArrows(), diagonalWumpus);
         percept = perceptTrans;
 
         // initial location
