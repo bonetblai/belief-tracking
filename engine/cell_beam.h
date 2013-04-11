@@ -175,6 +175,16 @@ class cell_beam_t {
         }
         beam_.erase_ordered_indices(indices_to_erase);
     }
+    void remove_obj_at_cell() {
+        static std::vector<int> indices_to_erase;
+        indices_to_erase.clear();
+        indices_to_erase.reserve(beam_.size());
+        for( ordered_vector_t::const_iterator it = beam_.begin(); it != beam_.end(); ++it ) {
+            int p = *it;
+            if( p & 0x10 ) indices_to_erase.push_back(it.index());
+        }
+        beam_.erase_ordered_indices(indices_to_erase);
+    }
 
     bool operator==(const cell_beam_t &beam) const {
         return (row_ == beam.row_) && (col_ == beam.col_) && (beam_ == beam.beam_);
