@@ -159,7 +159,7 @@ class belief_t : public base_belief_t {
         for( int cell = 0; cell < ncells_; ++cell ) {
             var_beam_t &beam = *beams_.domain(cell);
             beam.clear();
-            int col = cell % ncols_, cell / ncols_;
+            int col = cell % ncols_, row = cell / ncols_;
             int num_particles_in_beam = 0;
             for( int pass = 0; pass < 2; ++pass ) {
                 if( pass == 1 ) beam.reserve(num_particles_in_beam);
