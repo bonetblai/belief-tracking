@@ -29,6 +29,8 @@
 #include <vector>
 #include <math.h>
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 //#define DEBUG
 
 namespace Battleship {
