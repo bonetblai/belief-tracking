@@ -138,25 +138,41 @@ struct field_t {
 };
 
 void usage(ostream &os) {
-    os << "usage: mines"
-       << " [{-t|--ntrials} <int>]"
-       << " [{-r|--nrows} <int>]"
-       << " [{-c|--ncols} <int>]"
-       << " [{-m|--nmines} <int>]"
-       << " [{-s|--seed} <int>]"
-       << " [{-v|--verbose}]"
-       << " [{-p|--policy} <policy-description>]"
-       << " [{-w|--width} <int>]"
-       << " [{-d|--depth} <int>]"
-       << " [{-?|--help}]"
+    os << endl
+       << "Usage: mines [{-t | --ntrials} <ntrials>]" << endl
+       << "             [{-r | --nrows} <nrows>]" << endl
+       << "             [{-c | --ncols} <ncols>]" << endl
+       << "             [{-m | --nmines} <nmines>]" << endl
+       << "             [{-s | --seed} <seed>]" << endl
+       << "             [{-v | --verbose}]" << endl
+       << "             [{-p | --policy} <policy>]" << endl
+       << "             [{-w | --width} <width>]" << endl
+       << "             [{-d | --depth} <depth>]" << endl
+       << "             [{-? | --help}]" << endl
+       << endl
+       << "where <ntrials> is a non-negative integer telling the number of games to" << endl
+       << "play (default is 1), <nrows> and <ncols> are positive integers telling" << endl
+       << "the dimensions of the minefield (default is 16x16), <nmines> is a positive" << endl
+       << "integer telling the number of hidden mines in the minefield (default is 40)," << endl
+       << "<seed> is an integer for setting the seed of the random number generator" << endl
+       << "(default is 0), <policy> is a string describing the policy to use (default" << endl
+       << "is \"base-policy:direct\"), and <width> and <depth> are parameters for the" << endl
+       << "policy (the default policy is parameter-free)." << endl
+       << endl
+       << "For example," << endl
+       << endl
+       << "  ./mines -r 16 -c 16 -m 40 -t 100" << endl
+       << endl
+       << "performs an experiment consisting of 100 trials on a 16x16 minefield" << endl
+       << "with 40 mines." << endl
        << endl;
 }
 
 int main(int argc, const char **argv) {
     int ntrials = 1;
-    int nrows = 10;
-    int ncols = 10;
-    int nmines = 10;
+    int nrows = 16;
+    int ncols = 16;
+    int nmines = 40;
     int seed = 0;
     bool verbose = false;
 
