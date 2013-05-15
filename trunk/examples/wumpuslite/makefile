@@ -25,12 +25,12 @@ CXX_FLAGS=			$(GNU_CC_FLAGS)
 LD_FLAGS=			$(GNU_LD_FLAGS)
 
 CXX=				g++
-CFLAGS=				-Wall -O3 -fPIC $(CXX_FLAGS) $(INCLUDES) -DNDEBUG
+CFLAGS=				-Wall -Werror -O3 -fPIC $(CXX_FLAGS) $(INCLUDES) -DNDEBUG
 
 all:				wumpus.jar
 
 clean:
-				rm -f core platform/* WumpusAgentProxy.{h,o} *.class *~
+				rm -f core platform/* WumpusAgentProxy.{h,o} *.class wumpus.jar *~
 
 WorldApplication.class:
 				javac WorldApplication.java
