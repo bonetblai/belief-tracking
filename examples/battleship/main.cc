@@ -362,17 +362,40 @@ struct field_t {
 };
 
 void usage(ostream &os) {
-    os << "usage: battleship"
-       << " [{-t|--ntrials} <int>]"
-       << " [{-r|--nrows} <int>]"
-       << " [{-c|--ncols} <int>]"
-       << " [{-s|--seed} <int>]"
-       << " [{-v|--verbose}]"
-       << " [{-S|--save-fields}]"
-       << " [{-p|--policy} <policy-description>]"
-       << " [{-w|--width} <int>]"
-       << " [{-d|--depth} <int>]"
-       << " [{-?|--help}]"
+    os << endl
+       << "Usage: battleship [{-t | --ntrials} <ntrials>]" << endl
+       << "                  [{-r | --nrows} <nrows>]" << endl
+       << "                  [{-c | --ncols} <ncols>]" << endl
+       << "                  [{-i | --inventory} <inventory>]" << endl
+       << "                  [{-s | --seed} <seed>]" << endl
+       << "                  [{-v | --verbose}]" << endl
+       << "                  [{-S | --store-fields}]" << endl
+       << "                  [{-p | --policy} <policy>]" << endl
+       << "                  [{-w | --width} <width>]" << endl
+       << "                  [{-d | --depth} <depth>]" << endl
+       << "                  [{-? | --help}]" << endl
+       << endl
+       << "where <ntrials> is a non-negative integer telling the number of games to" << endl
+       << "play (default is 1), <nrows> and <ncols> are positive integers telling" << endl
+       << "the dimensions of the battlefield (default is 10x10), <inventory> is a" << endl
+       << "string telling the number and size of ships to be randomly located in the" << endl
+       << "battlefield (default is \"2:1,3:1,4:1,5:1\"), <seed> is an integer for" << endl
+       << "setting the seed of the random number generator (default is 0), <policy>" << endl
+       << "is a string describing the policy to use (default is \"base-policy:direct\")," << endl
+       << "and <width> and <depth> are parameters for the policy (the default policy" << endl
+       << "is parameter-free)." << endl
+       << endl
+       << "For example," << endl
+       << endl
+       << "  ./battleship -r 10 -c 10 -i 2:1,3:1,4:1,5:1 -t 100" << endl
+       << endl
+       << "performs an experiment consisting of 100 trials on a 10x10 battlefield" << endl
+       << "with 4 ships of sizes 2, 3, 4 and 5 (one of each size)." << endl
+       << endl
+       << "If \"store-fields\" is enabled, all the <ntrials> instances of the game" << endl
+       << "are generated and store before solving anyone. This is useful when comparing" << endl
+       << "different (randomized) policies across the exactly the same collection of" << endl
+       << "instances." << endl
        << endl;
 }
 
@@ -382,7 +405,7 @@ int main(int argc, const char **argv) {
     int ncols = 10;
     int seed = 0;
     bool verbose = false;
-    bool save_fields = false;
+    bool store_fields = false;
 
     string policy = "base-policy:direct";
     int width = 100;
@@ -420,8 +443,8 @@ int main(int argc, const char **argv) {
             verbose = true;
             --argc;
             ++argv;
-        } else if( !strcmp(argv[0], "-S") || !strcmp(argv[0], "--save-fields") ) {
-            save_fields = true;
+        } else if( !strcmp(argv[0], "-S") || !strcmp(argv[0], "--store-fields") ) {
+            store_fields = true;
             --argc;
             ++argv;
         } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
@@ -471,8 +494,8 @@ int main(int argc, const char **argv) {
 
     // create empty battleship field
     vector<field_t*> fields;
-    if( save_fields ) {
-        // if save_fields, generate all the battleship games before playing.
+    if( store_fields ) {
+        // if store_fields, generate all the battleship games before playing.
         // Used to recreate games for solving them with another algorithm.
         fields.reserve(ntrials);
         for( int trial = 0; trial < ntrials; ++trial ) {
@@ -509,7 +532,7 @@ int main(int argc, const char **argv) {
 
         // get field
         field_t *field = 0;
-        if( save_fields ) {
+        if( store_fields ) {
             field = fields[trial];
         } else {
             field = fields[0];
