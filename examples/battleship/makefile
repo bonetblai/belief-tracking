@@ -7,7 +7,7 @@ CXX=			g++
 CXXEXT=			-std=c++0x
 CFLAGS=			-Wall -Werror -O3 $(CXXEXT) $(INCLUDES) -DNDEBUG
 
-battleship:		main.cc
+battleship:		main.cc battleship_api.h battleship_belief.h battleship_wrapper_belief.h base_belief.h lookahead.h
 			$(CXX) $(CFLAGS) -o battleship main.cc
 
 clean:

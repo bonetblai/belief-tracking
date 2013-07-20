@@ -58,6 +58,7 @@ struct placement_t {
     static void initialize(int max_ship_size) {
         max_ship_size_ = max_ship_size;
     }
+    static void finalize() { }
 
     int encode() const {
         int p = nhits_;
@@ -179,6 +180,9 @@ class base_belief_t {
                   << " effective-max-ship-size = " << effective_max_ship_size_
                   << ", num-particles = " << num_particles_
                   << std::endl;
+    }
+    static void finalize() {
+        placement_t::finalize();
     }
 
     int nrows() const { return nrows_; }
