@@ -555,6 +555,10 @@ int main(int argc, const char **argv) {
     }
     cout << "avg. #torpedos=" << (float)total_torpedos / (float)ntrials << endl;
 
+    // release memory
+    for( size_t i = 0; i < fields.size(); ++i )
+        delete fields[i];
+
     return 0;
 }
 

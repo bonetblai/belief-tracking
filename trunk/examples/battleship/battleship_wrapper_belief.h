@@ -86,6 +86,9 @@ class wrapper_belief_t {
             num_segments += i * ship_inventory[i];
         prior_water_at_cell_ = 1.0 - ((float)num_segments / (nrows * ncols));
     }
+    static void finalize() {
+        belief_t::finalize();
+    }
 
     size_t hash() const {
         return belief_->hash();

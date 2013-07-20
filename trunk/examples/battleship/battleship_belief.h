@@ -86,6 +86,10 @@ class belief_t : public base_belief_t {
             beliefs_.push_front(belief);
         }
     }
+    static void release_memory() {
+        for( std::list<belief_t*>::const_iterator it = beliefs_.begin(); it != beliefs_.end(); ++it )
+            delete *it;
+    }
 
     static void initialize(int nrows,
                            int ncols,
@@ -103,6 +107,12 @@ class belief_t : public base_belief_t {
         ship_inventory_ = new int[1 + max_ship_size_];
         cell_probabilities_ = new float[1 + max_ship_size_];
         memcpy(ship_inventory_, ship_inventory, (1 + max_ship_size_) * sizeof(int));
+    }
+    static void finalize() {
+        release_memory();
+        delete[] cell_probabilities_;
+        delete[] ship_inventory_;
+        base_belief_t::finalize();
     }
 
     static bool consistent_particle(int row, int col, int particle) {

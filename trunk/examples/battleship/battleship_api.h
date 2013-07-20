@@ -79,6 +79,7 @@ class api_t {
 
         problem_ = new problem_t(nrows_, ncols_, num_ship_segments_);
         belief_ = new wrapper_belief_t();
+        policy_ = 0;
 
         // construct heuristic
         admissible_heuristic_t *h = new admissible_heuristic_t(num_ship_segments_);
@@ -94,13 +95,18 @@ class api_t {
         bases_.push_back(std::make_pair(greedy.clone(), "random-greedy-policy"));
     }
     virtual ~api_t() {
+        delete policy_;
         for( size_t i = 0; i < bases_.size(); ++i )
             delete bases_[i].first;
+        for( size_t i = 0; i < heuristics_.size(); ++i )
+            delete heuristics_[i].first;
         delete belief_;
         delete problem_;
+        wrapper_belief_t::finalize();
     }
 
     void select_policy(const std::string &base_name, const std::string &policy_type) {
+        delete policy_;
         std::pair<const Online::Policy::policy_t<wrapper_belief_t>*, std::string> p =
           Online::Evaluation::select_policy(*problem_, base_name, policy_type, bases_, heuristics_, eval_pars_);
         policy_ = p.first;
