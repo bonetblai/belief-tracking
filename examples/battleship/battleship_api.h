@@ -29,6 +29,11 @@
 #include <iostream>
 #include <vector>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wunused-private-field"
+#endif
+
+
 namespace Battleship {
 
 class api_t {
