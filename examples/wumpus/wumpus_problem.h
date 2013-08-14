@@ -31,6 +31,10 @@
 #define GOAL_IS_HAVE_GOLD   0
 #define GOAL_IS_EXIT        1
 
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wunused-private-field"
+#endif
+
 
 namespace Wumpus {
 
