@@ -197,6 +197,7 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
 
 typedef template_wumpus_api_t<state_t> wumpus_api_t;
 typedef template_wumpus_api_t<moving_state_t> moving_wumpus_api_t;
+typedef template_wumpus_api_t<moving2_state_t> moving2_wumpus_api_t;
 
 };
 
