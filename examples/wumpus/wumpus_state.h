@@ -21,6 +21,7 @@
 
 #include "wumpus_belief.h"
 #include "moving_wumpus_belief.h"
+#include "moving2_wumpus_belief.h"
 #include "defs.h"
 
 #include <cassert>
@@ -112,6 +113,7 @@ template<typename T> int template_state_t<T>::ncells_ = 0;
 // template instantiation
 typedef template_state_t<wumpus_belief_t> state_t;
 typedef template_state_t<moving_wumpus_belief_t> moving_state_t;
+typedef template_state_t<moving2_wumpus_belief_t> moving2_state_t;
 
 };
 
