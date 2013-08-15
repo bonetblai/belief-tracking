@@ -34,10 +34,10 @@ JNIEXPORT void JNICALL Java_WumpusAgentProxy_init_1cpp_1side
 
     if( moving ) {
         wumpus_agent =
-          new Wumpus::moving_wumpus_api_t(rows, cols, npits, nwumpus, narrows, nesw_movements);
+          new Wumpus::moving_wumpus_api_t(rows, cols, npits, nwumpus, narrows, nesw_movements, moving);
     } else {
         wumpus_agent =
-          new Wumpus::wumpus_api_t(rows, cols, npits, nwumpus, narrows, nesw_movements);
+          new Wumpus::wumpus_api_t(rows, cols, npits, nwumpus, narrows, nesw_movements, moving);
     }
     wumpus_agent->select_policy(base, policy);
 }
