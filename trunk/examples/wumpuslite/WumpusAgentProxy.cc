@@ -7,10 +7,10 @@ using namespace std;
 static Wumpus::abstract_api_t *wumpus_agent = 0;
 
 //static const char *base = "shortest_distance_to_unvisited_cell_heuristic";
-static const char *base = "greedy_wrt_sduv-heuristic";
+//static const char *base = "greedy_wrt_sduv-heuristic";
 //static const char *base = "random";
 
-static const char *policy = "direct";
+//static const char *policy = "direct";
 //static const char *policy = "aot/heuristic,random-ties";
 //static const char *policy = "aot/random-ties";
 //static const char *policy = "uct/random-ties";
@@ -20,7 +20,7 @@ JNIEXPORT void JNICALL Java_WumpusAgentProxy_init_1cpp_1side
    jboolean moving, jint rows, jint cols, jint npits,
    jint nwumpus, jint narrows, jboolean nesw_movements) {
 
-#if 1
+#if 0
     cout << "Proxy:"
          << " moving=" << (moving ? 1 : 0)
          << ", rows=" << rows
@@ -39,7 +39,13 @@ JNIEXPORT void JNICALL Java_WumpusAgentProxy_init_1cpp_1side
         wumpus_agent =
           new Wumpus::wumpus_api_t(rows, cols, npits, nwumpus, narrows, nesw_movements, moving);
     }
-    wumpus_agent->select_policy(base, policy);
+
+    if( wumpus_agent->is_moving() ) {
+        wumpus_agent->set_policy_parameters(50, 10, .5, 5);
+        wumpus_agent->select_policy("shortest_distance_to_unvisited_cell_heuristic", "aot/heuristic");
+    } else {
+        wumpus_agent->select_policy("greedy_wrt_sduv-heuristic", "direct");
+    }
 }
 
 JNIEXPORT void JNICALL Java_WumpusAgentProxy_set_1policy_1parameters

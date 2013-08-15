@@ -35,16 +35,18 @@ class Simulation {
     private Agent agent;
     private Environment environment;
     private TransferPercept transferPercept;
+    private boolean movingWumpus;
 
-    public Simulation(Environment wumpusEnvironment, int maxSteps, boolean nonDeterministic, boolean diagonalWumpus, int numExpansions, int MDPHorizon, boolean verbose) {
+    public Simulation(Environment wumpusEnvironment, int maxSteps, boolean movingWumpus, boolean diagonalWumpus, int numExpansions, int MDPHorizon, boolean verbose) {
         // start the simulator
         timing = new Timing();
         long startTime = timing.getCpuTime();
         simulationRunning = true;
 
+        this.movingWumpus = movingWumpus;
         transferPercept = new TransferPercept(wumpusEnvironment);
         environment = wumpusEnvironment;
-        agent = new Agent(environment, transferPercept, nonDeterministic, diagonalWumpus);
+        agent = new Agent(environment, transferPercept, movingWumpus, diagonalWumpus);
         agent.prepareNewTrial();
 
         // set policy agent's parameters (if different from default)
@@ -53,6 +55,8 @@ class Simulation {
         }
 
         environment.placeAgent(agent);
+        environment.updatePrevLocations();
+        updateWumpusSeenAt();
         if (verbose) environment.printEnvironment();
         if (verbose) printCurrentPerceptSequence();
 
@@ -64,7 +68,7 @@ class Simulation {
 
                 ++steps;
                 handleAction(agent.chooseAction());
-                wumpusEnvironment.placeAgent(agent);
+                environment.updatePrevLocations();
 
                 if (verbose) environment.printEnvironment();								
                 if (verbose) printCurrentPerceptSequence();
@@ -194,6 +198,24 @@ class Simulation {
             }
         } catch (Exception e) {
             System.out.println("An exception was thrown: " + e);
+        }
+
+        updateWumpusSeenAt();
+    }
+
+    public void updateWumpusSeenAt() {
+        // update percept for wumpus if moving version
+        if (movingWumpus) {
+            int wpos = -1;
+            int [] agentLoc = environment.getAgentLocation();
+            int [] wumpusLoc = environment.getWumpusLocation();
+            if ((Math.abs(agentLoc[0] - wumpusLoc[0]) <= 2) && (Math.abs(agentLoc[1] - wumpusLoc[1]) <= 2)) {
+                wpos = (wumpusLoc[0] - agentLoc[0] + 2) * 5 + (wumpusLoc[1] - agentLoc[1] + 2);
+            }
+            environment.setWumpusSeenAt(wpos);
+            //System.out.println("AgentLoc = (" + agentLoc[1] + "," + agentLoc[0] + ")");
+            //System.out.println("WumpusLoc = (" + wumpusLoc[1] + "," + wumpusLoc[0] + ")");
+            //System.out.println("Wpos = " + wpos);
         }
     }
 

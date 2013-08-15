@@ -88,6 +88,7 @@ class WumpusAgentProxy implements AgentProxy {
     // string to store the agent's name (do not remove this variable)
     private String agentName = "Agent Smith";
 
+    private boolean moving;
     private boolean diagonal;
     private int[] actionTable;
     private int last_action;
@@ -107,6 +108,7 @@ class WumpusAgentProxy implements AgentProxy {
         actionTable[6] = -1; // EXIT
 
         // initialize
+        this.moving = moving;
         this.diagonal = diagonal;
         last_action = -1;
     }
@@ -126,14 +128,18 @@ class WumpusAgentProxy implements AgentProxy {
         boolean breeze = tp.getBreeze();
         boolean stench = tp.getStench();
         boolean scream = tp.getScream();
+        int wumpusSeenAt = tp.getWumpusSeenAt();
 
         // build observation
         int obs = 0;
-        if( glitter == true ) obs += 1;
-        if( breeze == true ) obs += 2;
-        if( stench == true ) obs += 4;
+        if( glitter ) obs += 1;
+        if( breeze ) obs += 2;
+        if( !moving && stench ) obs += 4;
 
-
+        if( moving ) {
+            obs = obs + 4 * (1 + wumpusSeenAt);
+            //System.out.println("wpos = " + wumpusSeenAt);
+        }
 
         // update agent and get next action
         if( last_action == -1 ) {

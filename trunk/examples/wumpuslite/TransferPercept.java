@@ -42,5 +42,9 @@ class TransferPercept {
     public boolean getScream() {
         return environment.getScream();
     }
+
+    public int getWumpusSeenAt() {
+        return environment.getWumpusSeenAt();
+    }
 }
 
