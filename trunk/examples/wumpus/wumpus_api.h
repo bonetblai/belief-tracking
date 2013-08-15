@@ -38,15 +38,16 @@ struct abstract_api_t {
     int nwumpus_;
     int narrows_;
     bool nesw_movements_;
+    bool moving_;
     int seed_;
 
     std::string policy_name_;
     Online::Evaluation::parameters_t eval_pars_;
 
   public:
-    abstract_api_t(int nrows, int ncols, int npits, int nwumpus, int narrows, bool nesw_movements)
+    abstract_api_t(int nrows, int ncols, int npits, int nwumpus, int narrows, bool nesw_movements, bool moving)
       : nrows_(nrows), ncols_(ncols), npits_(npits), nwumpus_(nwumpus), narrows_(narrows),
-        nesw_movements_(nesw_movements), seed_(0) {
+        nesw_movements_(nesw_movements), moving_(moving), seed_(0) {
         Random::set_seed(seed_);
     }
     virtual ~abstract_api_t() { }
@@ -63,6 +64,8 @@ struct abstract_api_t {
         eval_pars_.par1_ = par1;
         eval_pars_.par2_ = par2;
     }
+
+    bool is_moving() const { return moving_; }
 
     virtual void select_policy(const std::string &base_name, const std::string &policy_type) = 0;
     virtual void prepare_new_trial(int heading, bool diagonal = false) = 0;
@@ -88,8 +91,8 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
     const Online::Policy::policy_t<T> *policy_;
 
   public:
-    template_wumpus_api_t(int nrows, int ncols, int npits, int nwumpus, int narrows, bool nesw_movements)
-      : abstract_api_t(nrows, ncols, npits, nwumpus, narrows, nesw_movements),
+    template_wumpus_api_t(int nrows, int ncols, int npits, int nwumpus, int narrows, bool nesw_movements, bool moving)
+      : abstract_api_t(nrows, ncols, npits, nwumpus, narrows, nesw_movements, moving),
         problem_(0), state_(0), heuristic_(0), policy_(0) {
         sensed_info_ = new char[nrows_ * ncols_];
 

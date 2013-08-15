@@ -191,26 +191,32 @@ template<typename T> struct shortest_distance_to_unvisited_cell_t : public Heuri
     }
 
     virtual float value(const T &s) const {
-        if( s.dead() ) return 1e6;
-        if( s.have_gold() ) return 0;
-        if( s.in_gold_cell() ) return 1;
+        float val = 0;
+        if( s.dead() ) {
+            val = 1e6;
+        } else if( s.have_gold() ) {
+            val = 0;
+        } else if( s.in_gold_cell() ) {
+            val = 1;
+        } else {
+            distances_.compute_distances(s, true, s.heading() + (s.position() << 2));
+            //distances_.print(std::cout);
 
-        distances_.compute_distances(s, true, s.heading() + (s.position() << 2));
-        //distances_.print(std::cout);
-
-        int min_value = INT_MAX;
-        for( int cell = 0; cell < ncells_; ++cell ) {
-            if( !visited_cells_[cell] ) {
-                for( int h = 0; h < 4; ++h ) {
-                    int n = (cell << 2) + h;
-                    if( distances_[n] < min_value ) {
-                        min_value = distances_[n];
+            int min_value = INT_MAX;
+            for( int cell = 0; cell < ncells_; ++cell ) {
+                if( !visited_cells_[cell] ) {
+                    for( int h = 0; h < 4; ++h ) {
+                        int n = (cell << 2) + h;
+                        if( distances_[n] < min_value ) {
+                            min_value = distances_[n];
+                        }
                     }
                 }
             }
+            assert(min_value >= 0);
+            val = min_value == INT_MAX ? 1e4 : 1 + min_value;
         }
-        assert(min_value >= 0);
-        return min_value == INT_MAX ? 1e4 : 1 + min_value;
+        return val;
     }
     virtual void reset_stats() const { }
     virtual float setup_time() const { return 0; }
