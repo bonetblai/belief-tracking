@@ -126,11 +126,13 @@ class WorldApplication {
             // if the non-determinism is specified
             else if (arg.equals("-m") || arg.equals("--moving")) {
                 movingWumpus = true;
+                diagonalWumpus = false;
             }
 
             // if diagonal version is to be used
             else if (arg.equals("--diagonal")) {
                 diagonalWumpus = true;
+                movingWumpus = false;
             }
             // if verbose is specified
             else if (arg.equals("-v") || arg.equals("--verbose")) {
@@ -151,11 +153,11 @@ class WorldApplication {
             System.out.println("Number of trials: " + numTrials);
             System.out.println("Random Agent Location: " + randomAgentLoc);
             System.out.println("Random number seed: " + seed);
-            System.out.println("Non-Deterministic Behavior: " + movingWumpus + "\n");
+            System.out.println("Moving Wumpus: " + movingWumpus + "\n");
             System.out.println("Diagonal Version: " + diagonalWumpus + "\n");
 
             char[][][] wumpusWorld = generateRandomWumpusWorld(seed, worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);
-            Environment wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, wumpusWorld);
+            Environment wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, movingWumpus, wumpusWorld);
 
             int trialScores[] = new int[numTrials];
             int trialSteps[] = new int[numTrials];
@@ -187,7 +189,7 @@ class WorldApplication {
                     wumpusWorld = generateRandomWumpusWorld(rand.nextInt(), worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);
                 }
 
-                wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, wumpusWorld);
+                wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, movingWumpus, wumpusWorld);
                 System.runFinalization();
                 if (!verbose) {
                     System.out.println("Trial " + (currTrial+1) + ":" +

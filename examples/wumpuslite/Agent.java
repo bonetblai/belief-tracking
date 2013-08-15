@@ -18,7 +18,9 @@
 import java.util.Random;
 
 class Agent {
-    private boolean nonDeterministicMode;
+    private boolean movingWumpus;
+    private int[] wumpusLocation;
+
     private int[] location;
     private char direction;
     private char agentIcon;
@@ -34,9 +36,9 @@ class Agent {
     //private AgentFunctionProxy agentFunction;
     private AgentProxy agent;
 
-    public Agent(Environment world, TransferPercept perceptTrans, boolean nonDeterministic, boolean diagonalWumpus) {
+    public Agent(Environment world, TransferPercept perceptTrans, boolean movingWumpus, boolean diagonalWumpus) {
         // set deterministic/non-deterministic
-        nonDeterministicMode = nonDeterministic;
+        this.movingWumpus = movingWumpus;
 
         // initial conditions
         isDead = false;
@@ -44,12 +46,13 @@ class Agent {
 
         wumpusWorld = world;
         worldSize = wumpusWorld.getWorldSize();
-        agent = new WumpusAgentProxy(false, worldSize, world.getNumPits(), world.getNumWumpus(), world.getNumArrows(), diagonalWumpus);
+        agent = new WumpusAgentProxy(movingWumpus, worldSize, world.getNumPits(), world.getNumWumpus(), world.getNumArrows(), diagonalWumpus);
         percept = perceptTrans;
 
         // initial location
         location = wumpusWorld.getAgentLocation();
         direction = wumpusWorld.getAgentDirection();
+        if (movingWumpus) wumpusLocation = wumpusWorld.getWumpusLocation();
         setDirection(direction);
     }
 
@@ -98,86 +101,37 @@ class Agent {
     }
 
     public void goForward() {
-        if (nonDeterministicMode == false) {
-            if (direction == 'N') {
-                if (location[0]+1 < worldSize) location[0] += 1;
-                else wumpusWorld.setBump(true);
-            } else if (direction == 'E') {
-                if (location[1]+1 < worldSize) location[1] += 1;
-                else wumpusWorld.setBump(true);
-            } else if (direction == 'S') {
-                if (location[0]-1 >= 0) location[0] -= 1;
-                else wumpusWorld.setBump(true);
-            } else if (direction == 'W') {
-                if (location[1]-1 >= 0) location[1] -= 1;
-                else wumpusWorld.setBump(true);
-            }
-        } else {
-            char moveDirection = nonDeterministicMove();
-            if (direction == 'N') {
-                if (moveDirection == 'F') {
-                    if (location[0]+1 < worldSize) location[0] += 1;
-                    else wumpusWorld.setBump(true);					
-                } else if (moveDirection == 'L') {
-                    if (location[1]-1 >= 0) location[1] -= 1;
-                    else wumpusWorld.setBump(true);
-                } else if (moveDirection == 'R') {
-                    if (location[1]+1 < worldSize) location[1] += 1;
-                    else wumpusWorld.setBump(true);
-                }
-            } else if (direction == 'E') {
-                if (moveDirection == 'F') {
-                    if (location[1]+1 < worldSize) location[1] += 1;
-                    else wumpusWorld.setBump(true);	
-                } else if (moveDirection == 'L') {
-                    if (location[0]+1 < worldSize) location[0] += 1;
-                    else wumpusWorld.setBump(true);
-                } else if (moveDirection == 'R') {
-                    if (location[0]-1 >= 0) location[0] -= 1;
-                    else wumpusWorld.setBump(true);
-                }
-            } else if (direction == 'S') {
-                if (moveDirection == 'F') {
-                    if (location[0]-1 >= 0) location[0] -= 1;
-                    else wumpusWorld.setBump(true);					
-                } else if (moveDirection == 'L') {
-                    if (location[1]+1 < worldSize) location[1] += 1;
-                    else wumpusWorld.setBump(true);
-                } else if (moveDirection == 'R') {
-                    if (location[1]-1 >= 0) location[1] -= 1;
-                    else wumpusWorld.setBump(true);
-                }
-            } else if (direction == 'W') {
-                if (moveDirection == 'F') {
-                    if (location[1]-1 >= 0) location[1] -= 1;
-                    else wumpusWorld.setBump(true);					
-                } else if (moveDirection == 'L') {
-                    if (location[0]-1 >= 0) location[0] -= 1;
-                    else wumpusWorld.setBump(true);
-                } else if (moveDirection == 'R') {
-                    if (location[0]+1 < worldSize) location[0] += 1;
-                    else wumpusWorld.setBump(true);
-                }
-            }
+        if (direction == 'N') {
+            if (location[0]+1 < worldSize) location[0] += 1;
+            else wumpusWorld.setBump(true);
+        } else if (direction == 'E') {
+            if (location[1]+1 < worldSize) location[1] += 1;
+            else wumpusWorld.setBump(true);
+        } else if (direction == 'S') {
+            if (location[0]-1 >= 0) location[0] -= 1;
+            else wumpusWorld.setBump(true);
+        } else if (direction == 'W') {
+            if (location[1]-1 >= 0) location[1] -= 1;
+            else wumpusWorld.setBump(true);
         }
-    }
 
-    private char nonDeterministicMove() {
-        Random rand = new Random();
-        char moveDir = 'F';
-        switch (rand.nextInt(10)) {
-            case 0: moveDir = 'F'; break;
-            case 1: moveDir = 'F'; break;
-            case 2: moveDir = 'F'; break;
-            case 3: moveDir = 'F'; break;
-            case 4: moveDir = 'F'; break;
-            case 5: moveDir = 'F'; break;
-            case 6: moveDir = 'F'; break;
-            case 7: moveDir = 'F'; break;
-            case 8: moveDir = 'L'; break;
-            case 9: moveDir = 'R'; break;
+        if (movingWumpus) {
+            Random rand = new Random();
+            switch (rand.nextInt(4)) {
+                case 0:
+                    if (wumpusLocation[0]+1 < worldSize) wumpusLocation[0] += 1;
+                    break;
+                case 1:
+                    if (wumpusLocation[1]+1 < worldSize) wumpusLocation[1] += 1;
+                    break;
+                case 2:
+                    if (wumpusLocation[0]-1 >= 0) wumpusLocation[0] -= 1;
+                    break;
+                case 3:
+                    if (wumpusLocation[1]-1 >= 0) wumpusLocation[1] -= 1;
+                    break;
+            }
         }
-        return moveDir;		
     }
 
     public boolean shootArrow() {
@@ -222,6 +176,10 @@ class Agent {
 
     public int[] getLocation() {
         return location;
+    }
+
+    public int[] getWumpusLocation() {
+        return wumpusLocation;
     }
 }
 

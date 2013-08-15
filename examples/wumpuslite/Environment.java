@@ -25,18 +25,24 @@ class Environment {
 
     private Agent agent;
 
-    private int[] prevAgentPosition;
+    private int[] prevAgentLocation;
     private boolean bump;
     private boolean scream;
 
-    public Environment(int worldSize, int numPits, int numWumpus, char[][][] world) {
+    private boolean movingWumpus;
+    private int[] prevWumpusLocation;
+    private int wumpusSeenAt;
+
+    public Environment(int worldSize, int numPits, int numWumpus, boolean movingWumpus, char[][][] world) {
         this.worldSize = worldSize;
         this.numPits = numPits;
         this.numWumpus = numWumpus;
+        this.movingWumpus = movingWumpus;
 
         wumpusWorld = new char[worldSize][worldSize][4];
         percepts = new char[worldSize][worldSize][4];
-        prevAgentPosition = getAgentLocation();
+        prevAgentLocation = getAgentLocation();
+        if (movingWumpus) prevWumpusLocation = getWumpusLocation();
 
         bump = false;
         scream = false;
@@ -111,12 +117,46 @@ class Environment {
         return agentPos;		
     }
 
+    public int[] getWumpusLocation() {
+        int[] wumpusPos = new int[2];
+        for (int i = 0; i < worldSize; i++) {
+            for (int j = 0; j < worldSize; j++) {
+                if (wumpusWorld[i][j][1] == 'W') {
+                    wumpusPos[0] = i;
+                    wumpusPos[1] = j;
+                }
+            }
+        }
+        return wumpusPos;		
+    }
+
     public void placeAgent(Agent theAgent) {
-        wumpusWorld[prevAgentPosition[0]][prevAgentPosition[1]][3] = ' ';
         agent = theAgent;		
-        wumpusWorld[agent.getLocation()[0]][agent.getLocation()[1]][3] = agent.getAgentIcon();
-        prevAgentPosition[0] = agent.getLocation()[0];
-        prevAgentPosition[1] = agent.getLocation()[1];
+        int [] agentLoc = agent.getLocation();
+        wumpusWorld[prevAgentLocation[0]][prevAgentLocation[1]][3] = ' ';
+        wumpusWorld[agentLoc[0]][agentLoc[1]][3] = agent.getAgentIcon();
+        //prevAgentLocation[0] = agentLoc[0];
+        //prevAgentLocation[1] = agentLoc[1];
+
+        if (movingWumpus) {
+            int [] wumpusLoc = agent.getWumpusLocation();
+            wumpusWorld[prevWumpusLocation[0]][prevWumpusLocation[1]][1] = ' ';
+            wumpusWorld[wumpusLoc[0]][wumpusLoc[1]][1] = 'W';
+            //prevWumpusLocation[0] = wumpusLoc[0];
+            //prevWumpusLocation[1] = wumpusLoc[1];
+        }
+    }
+
+    public void updatePrevLocations() {
+        int [] agentLoc = agent.getLocation();
+        prevAgentLocation[0] = agentLoc[0];
+        prevAgentLocation[1] = agentLoc[1];
+
+        if (movingWumpus) {
+            int [] wumpusLoc = agent.getWumpusLocation();
+            prevWumpusLocation[0] = wumpusLoc[0];
+            prevWumpusLocation[1] = wumpusLoc[1];
+        }
     }
 
     public void setBump(boolean bumped) {
@@ -143,7 +183,7 @@ class Environment {
     }
 
     public boolean getStench() {
-        if (percepts[agent.getLocation()[0]][agent.getLocation()[1]][1] == 'S')
+        if (!movingWumpus && (percepts[agent.getLocation()[0]][agent.getLocation()[1]][1] == 'S'))
             return true;
         else
             return false;
@@ -156,6 +196,14 @@ class Environment {
             return false;
     }
 
+    public void setWumpusSeenAt(int pos) {
+        this.wumpusSeenAt = pos;
+    }
+
+    public int getWumpusSeenAt() {
+        return wumpusSeenAt;
+    }
+
     public boolean grabGold() {
         if (percepts[agent.getLocation()[0]][agent.getLocation()[1]][2] == 'G') {
             percepts[agent.getLocation()[0]][agent.getLocation()[1]][2] = ' ';
@@ -166,10 +214,17 @@ class Environment {
     }
 
     public boolean checkDeath() {
-        if (wumpusWorld[agent.getLocation()[0]][agent.getLocation()[1]][0] == 'P')
+        int [] agentLoc = agent.getLocation();
+        if (wumpusWorld[agentLoc[0]][agentLoc[1]][0] == 'P')
             return true;
-        else if (wumpusWorld[agent.getLocation()[0]][agent.getLocation()[1]][1] == 'W')
+        else if (wumpusWorld[agentLoc[0]][agentLoc[1]][1] == 'W')
             return true;
+        else if (movingWumpus) {
+            int [] wumpusLoc = agent.getWumpusLocation();
+            if ((agentLoc[0] == prevWumpusLocation[0]) && (agentLoc[1] == prevWumpusLocation[1]) &&
+                (wumpusLoc[0] == prevAgentLocation[0]) && (wumpusLoc[1] == prevAgentLocation[1]))
+                return true;
+        }
         return false;
     }
 
