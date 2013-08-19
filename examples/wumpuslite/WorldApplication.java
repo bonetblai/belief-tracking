@@ -42,6 +42,7 @@ class WorldApplication {
         boolean userDefinedSeed = false;
 
         boolean movingWumpus = false;
+        boolean checkCrossing = false;
         boolean diagonalWumpus = false;
 		
         //String outFilename = "wumpus_out.txt";
@@ -129,6 +130,12 @@ class WorldApplication {
                 diagonalWumpus = false;
             }
 
+            // if crossing between agent and moving agent should be checked
+            else if (arg.equals("-x") || arg.equals("--check-crossing")) {
+                checkCrossing = true;
+            }
+
+
             // if diagonal version is to be used
             else if (arg.equals("--diagonal")) {
                 diagonalWumpus = true;
@@ -157,7 +164,7 @@ class WorldApplication {
             System.out.println("Diagonal Version: " + diagonalWumpus + "\n");
 
             char[][][] wumpusWorld = generateRandomWumpusWorld(seed, worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);
-            Environment wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, movingWumpus, wumpusWorld);
+            Environment wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, movingWumpus, checkCrossing, wumpusWorld);
 
             int trialScores[] = new int[numTrials];
             int trialSteps[] = new int[numTrials];
@@ -189,7 +196,7 @@ class WorldApplication {
                     wumpusWorld = generateRandomWumpusWorld(rand.nextInt(), worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);
                 }
 
-                wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, movingWumpus, wumpusWorld);
+                wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, movingWumpus, checkCrossing, wumpusWorld);
                 System.runFinalization();
                 if (!verbose) {
                     System.out.println("Trial " + (currTrial+1) + ":" +
