@@ -29,15 +29,17 @@ class Environment {
     private boolean bump;
     private boolean scream;
 
+    private boolean checkCrossing;
     private boolean movingWumpus;
     private int[] prevWumpusLocation;
     private int wumpusSeenAt;
 
-    public Environment(int worldSize, int numPits, int numWumpus, boolean movingWumpus, char[][][] world) {
+    public Environment(int worldSize, int numPits, int numWumpus, boolean movingWumpus, boolean checkCrossing, char[][][] world) {
         this.worldSize = worldSize;
         this.numPits = numPits;
         this.numWumpus = numWumpus;
         this.movingWumpus = movingWumpus;
+        this.checkCrossing = checkCrossing;
 
         wumpusWorld = new char[worldSize][worldSize][4];
         percepts = new char[worldSize][worldSize][4];
@@ -221,7 +223,8 @@ class Environment {
             return true;
         else if (movingWumpus) {
             int [] wumpusLoc = agent.getWumpusLocation();
-            if ((agentLoc[0] == prevWumpusLocation[0]) && (agentLoc[1] == prevWumpusLocation[1]) &&
+            if (checkCrossing &&
+                (agentLoc[0] == prevWumpusLocation[0]) && (agentLoc[1] == prevWumpusLocation[1]) &&
                 (wumpusLoc[0] == prevAgentLocation[0]) && (wumpusLoc[1] == prevAgentLocation[1]))
                 return true;
         }
