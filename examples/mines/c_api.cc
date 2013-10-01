@@ -65,6 +65,10 @@ int agent_get_cell(int action) {
     return flag ? action : action - agent_state->ncells();
 }
 
+int agent_get_nguesses() {
+    return nguesses;
+}
+
 void agent_update_state(int flag, int cell, int obs) {
     if( agent_state != 0 ) {
         agent_state->apply(flag == 1, cell);
@@ -83,16 +87,16 @@ void print_stats(ostream &os) {
        << endl;
 }
 
-void agent_declare_win() {
+void agent_declare_win(bool output) {
     playing = false;
     ++nwins;
     elapsed_time += read_time_in_seconds() - start_time;
-    print_stats(std::cout);
+    if( output ) print_stats(std::cout);
 }
 
-void agent_declare_lose() {
+void agent_declare_lose(bool output) {
     playing = false;
     elapsed_time += read_time_in_seconds() - start_time;
-    print_stats(std::cout);
+    if( output ) print_stats(std::cout);
 }
 

@@ -132,7 +132,7 @@ struct field_t {
                 else
                     os << " " << cells_[cell].nmines_;
             }
-            os << endl;
+            //os << endl;
         }
     }
 };
@@ -148,6 +148,7 @@ void usage(ostream &os) {
        << "             [{-p | --policy} <policy>]" << endl
        << "             [{-w | --width} <width>]" << endl
        << "             [{-d | --depth} <depth>]" << endl
+       << "             [{-P | --print-deterministic-execution} <n>]" << endl
        << "             [{-? | --help}]" << endl
        << endl
        << "where <ntrials> is a non-negative integer telling the number of games to" << endl
@@ -175,6 +176,8 @@ int main(int argc, const char **argv) {
     int nmines = 40;
     int seed = 0;
     bool verbose = false;
+    bool print_deterministic_executions = false;
+    int executions_to_print = 0;
 
     string policy = "base-policy:direct";
     int width = 100;
@@ -219,6 +222,11 @@ int main(int argc, const char **argv) {
             depth = atoi(argv[1]);
             argc -= 2;
             argv += 2;
+        } else if( !strcmp(argv[0], "-P") || !strcmp(argv[0], "--print-deterministic-executions") ) {
+            print_deterministic_executions = true;
+            executions_to_print = atoi(argv[1]);
+            argc -= 2;
+            argv += 2;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
             usage(cout);
             exit(-1);
@@ -235,13 +243,16 @@ int main(int argc, const char **argv) {
     seed48(seeds);
 
     // run for the specified number of trials
-    for( int trial = 0; trial < ntrials; ++trial ) {
+    if( print_deterministic_executions ) ntrials = executions_to_print;
+    for( int trial = 0; trial < ntrials; ) {
         field_t field(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
         bool win = true;
-        for( int plays = 0; plays < nrows * ncols; ++plays ) {
+        int previous_nguesses = agent_get_nguesses();
+        vector<pair<int,int> > execution(nrows * ncols);
+        for( int play = 0; play < nrows * ncols; ++play ) {
             int action = agent_get_action();
-            if( plays == 0 ) {
+            if( play == 0 ) {
                 assert(!agent_is_flag_action(action));
                 int cell = agent_get_cell(action);
                 field.sample_field(cell);
@@ -253,11 +264,27 @@ int main(int argc, const char **argv) {
                 break;
             }
             agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
+            execution[play] = make_pair(action, obs);
         }
-        if( win )
-            agent_declare_win();
-        else
-            agent_declare_lose();
+        if( win ) {
+            agent_declare_win(!print_deterministic_executions);
+            if( print_deterministic_executions && (agent_get_nguesses() == 1 + previous_nguesses) ) {
+                ++trial;
+                cout << "field:";
+                field.print(cout);
+                cout << endl << "execution: ";
+                for( int i = 0; i < nrows * ncols; ++i ) {
+                    int action = execution[i].first, obs = execution[i].second;
+                    int cell = agent_get_cell(action), row = cell / ncols, col = cell % ncols;
+                    cout << (agent_is_flag_action(action) ?  "flag " : "open ")
+                         << row << " " << col << " obs " << obs << " ";
+                }
+                cout << endl;
+            }
+        } else {
+            agent_declare_lose(!print_deterministic_executions);
+        }
+        if( !print_deterministic_executions ) ++trial;
     }
     return 0;
 }
