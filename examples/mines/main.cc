@@ -36,7 +36,7 @@ struct cell_t {
     cell_t() : mine_(false), nmines_(0) { }
 };
 
-struct field_t {
+struct minefield_t {
     int nrows_;
     int ncols_;
     int ncells_;
@@ -45,13 +45,13 @@ struct field_t {
 
     vector<cell_t> cells_;
 
-    field_t(int nrows, int ncols, int nmines)
+    minefield_t(int nrows, int ncols, int nmines)
       : nrows_(nrows), ncols_(ncols), ncells_(nrows_ * ncols_), nmines_(nmines) {
     }
 
     int num_remaining_mines() const { return num_remaining_mines_; }
 
-    void sample_field(int initial_cell) {
+    void sample(int initial_cell) {
         vector<int> available_cells(ncells_, 0);
         for( int i = 0; i < ncells_; ++i )
             available_cells[i] = i;
@@ -245,7 +245,7 @@ int main(int argc, const char **argv) {
     // run for the specified number of trials
     if( print_deterministic_executions ) ntrials = executions_to_print;
     for( int trial = 0; trial < ntrials; ) {
-        field_t field(nrows, ncols, nmines);
+        minefield_t minefield(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
         bool win = true;
         int previous_nguesses = agent_get_nguesses();
@@ -255,10 +255,10 @@ int main(int argc, const char **argv) {
             if( play == 0 ) {
                 assert(!agent_is_flag_action(action));
                 int cell = agent_get_cell(action);
-                field.sample_field(cell);
-                assert(!field.cells_[cell].mine_);
+                minefield.sample(cell);
+                assert(!minefield.cells_[cell].mine_);
             }
-            int obs = field.apply_action(action, verbose);
+            int obs = minefield.apply_action(action, verbose);
             if( obs == 9 ) {
                 win = false;
                 break;
@@ -270,8 +270,8 @@ int main(int argc, const char **argv) {
             agent_declare_win(!print_deterministic_executions);
             if( print_deterministic_executions && (agent_get_nguesses() == 1 + previous_nguesses) ) {
                 ++trial;
-                cout << "field:";
-                field.print(cout);
+                cout << "minefield:";
+                minefield.print(cout);
                 cout << endl << "execution: ";
                 for( int i = 0; i < nrows * ncols; ++i ) {
                     int action = execution[i].first, obs = execution[i].second;
