@@ -188,7 +188,7 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
 
     virtual bool is_there_an_unvisited_safe_cell() const {
         for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
-            if( sensed_info_[cell] == 255 ) {
+            if( sensed_info_[cell] == (char)255 ) {
                 // this cell is unvisited
                 if( state_->no_hazard_at(cell) )
                     return true;
