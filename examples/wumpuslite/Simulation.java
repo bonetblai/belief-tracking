@@ -15,6 +15,8 @@
  * 
  */
 
+import java.util.Random;
+
 class Simulation {
     private boolean death = false;
     private boolean gold = false;
@@ -37,7 +39,7 @@ class Simulation {
     private TransferPercept transferPercept;
     private boolean movingWumpus;
 
-    public Simulation(Environment wumpusEnvironment, int maxSteps, boolean movingWumpus, boolean diagonalWumpus, int numExpansions, int MDPHorizon, boolean verbose) {
+    public Simulation(Random randomGenerator, Environment wumpusEnvironment, int maxSteps, boolean movingWumpus, boolean diagonalWumpus, int numExpansions, int MDPHorizon, boolean verbose) {
         // start the simulator
         timing = new Timing();
         long startTime = timing.getCpuTime();
@@ -46,7 +48,7 @@ class Simulation {
         this.movingWumpus = movingWumpus;
         transferPercept = new TransferPercept(wumpusEnvironment);
         environment = wumpusEnvironment;
-        agent = new Agent(environment, transferPercept, movingWumpus, diagonalWumpus);
+        agent = new Agent(randomGenerator, environment, transferPercept, movingWumpus, diagonalWumpus);
         agent.prepareNewTrial();
 
         // set policy agent's parameters (if different from default)
@@ -82,10 +84,10 @@ class Simulation {
                 }
 
                 if (agent.getHasGold() == true) {
-                    if (verbose) System.out.println("\n" + agent.getName() + " found the GOLD!!");
+                    //if (verbose) System.out.println("\n" + agent.getName() + " found the GOLD!!");
                 }
                 if (agent.getIsDead() == true) {
-                    if (verbose) System.out.println("\n" + agent.getName() + " is DEAD!!");
+                    //if (verbose) System.out.println("\n" + agent.getName() + " is DEAD!!");
                 }
             }
         } catch (Exception e) {
@@ -143,6 +145,7 @@ class Simulation {
             if (action == Action.GO_FORWARD) {
                 if (environment.getBump() == true) environment.setBump(false);
                 agent.goForward();
+                if( movingWumpus ) agent.moveWumpusNonDeterministically();
                 environment.placeAgent(agent);
                 if (environment.checkDeath() == true) {
                     currScore += deathCost;
@@ -190,16 +193,16 @@ class Simulation {
                 environment.placeAgent(agent);
                 if (environment.getBump() == true) environment.setBump(false);
                 lastAction = Action.SHOOT;
-            } else if (action == Action.NO_OP) {
+            } else if (action == Action.NOOP) {
+                if( movingWumpus ) agent.moveWumpusNonDeterministically();
                 environment.placeAgent(agent);
                 if (environment.getBump() == true) environment.setBump(false);
                 if (environment.getScream() == true) environment.setScream(false);
-                lastAction = Action.NO_OP;
+                lastAction = Action.NOOP;
             }
         } catch (Exception e) {
             System.out.println("An exception was thrown: " + e);
         }
-
         updateWumpusSeenAt();
     }
 

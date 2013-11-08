@@ -27,10 +27,15 @@ LD_FLAGS=			$(GNU_LD_FLAGS)
 CXX=				g++
 CFLAGS=				-Wall -Werror -O3 -fPIC $(CXX_FLAGS) $(INCLUDES) -DNDEBUG
 
-all:				wumpus.jar
+all:				platform/libagent.so  wumpus.jar
 
-clean:
-				rm -f core platform/* WumpusAgentProxy.{h,o} *.class wumpus.jar *~
+clean:				clean-java clean-jni
+
+clean-java:
+				rm -f *.class wumpus.jar core *~
+
+clean-jni:
+				rm -f platform/* WumpusAgentProxy.{h,o} core *~
 
 WorldApplication.class:
 				javac WorldApplication.java
@@ -48,7 +53,7 @@ platform/libagent.so:
 				$(CXX) $(LD_FLAGS)
 
 wumpus.jar:
-				jar cmf Manifest.txt wumpus.jar *.class platform/*
+				jar cmf Manifest.txt wumpus.jar *.class platform/libagent.so
 
 
 wumpus.jar:			WorldApplication.class platform/libagent.so

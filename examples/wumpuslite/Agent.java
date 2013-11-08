@@ -18,6 +18,7 @@
 import java.util.Random;
 
 class Agent {
+    private Random randomGenerator;
     private boolean movingWumpus;
     private int[] wumpusLocation;
 
@@ -36,7 +37,10 @@ class Agent {
     //private AgentFunctionProxy agentFunction;
     private AgentProxy agent;
 
-    public Agent(Environment world, TransferPercept perceptTrans, boolean movingWumpus, boolean diagonalWumpus) {
+    public Agent(Random randomGenerator, Environment world, TransferPercept perceptTrans, boolean movingWumpus, boolean diagonalWumpus) {
+        // save global random generator
+        this.randomGenerator = randomGenerator;
+
         // set deterministic/non-deterministic
         this.movingWumpus = movingWumpus;
 
@@ -114,23 +118,22 @@ class Agent {
             if (location[1]-1 >= 0) location[1] -= 1;
             else wumpusWorld.setBump(true);
         }
+    }
 
-        if (movingWumpus) {
-            Random rand = new Random();
-            switch (rand.nextInt(4)) {
-                case 0:
-                    if (wumpusLocation[0]+1 < worldSize) wumpusLocation[0] += 1;
-                    break;
-                case 1:
-                    if (wumpusLocation[1]+1 < worldSize) wumpusLocation[1] += 1;
-                    break;
-                case 2:
-                    if (wumpusLocation[0]-1 >= 0) wumpusLocation[0] -= 1;
-                    break;
-                case 3:
-                    if (wumpusLocation[1]-1 >= 0) wumpusLocation[1] -= 1;
-                    break;
-            }
+    public void moveWumpusNonDeterministically() {
+        switch (randomGenerator.nextInt(4)) {
+            case 0:
+                if (wumpusLocation[0]+1 < worldSize) wumpusLocation[0] += 1;
+                break;
+            case 1:
+                if (wumpusLocation[1]+1 < worldSize) wumpusLocation[1] += 1;
+                break;
+            case 2:
+                if (wumpusLocation[0]-1 >= 0) wumpusLocation[0] -= 1;
+                break;
+            case 3:
+                if (wumpusLocation[1]-1 >= 0) wumpusLocation[1] -= 1;
+                break;
         }
     }
 
