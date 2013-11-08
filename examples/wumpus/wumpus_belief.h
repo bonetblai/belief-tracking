@@ -69,10 +69,9 @@ class wumpus_belief_t : public base_belief_t {
             wumpus_.set_domain(cell, new cell_beam_t(*bel.wumpus_.domain(cell)));
         }
     }
-#if 0
     wumpus_belief_t(wumpus_belief_t &&bel)
       : base_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
-        have_gold_(bel.have_gold_), dead_(bel.dead_), gold_(std::move(bel.gold_)) {
+        have_gold_(bel.have_gold_), dead_(bel.dead_), gold_(bel.gold_) {
         for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
             pits_.set_domain(cell, bel.pits_.domain(cell));
             bel.pits_.set_domain(cell, 0);
@@ -80,7 +79,6 @@ class wumpus_belief_t : public base_belief_t {
             bel.wumpus_.set_domain(cell, 0);
         }
     }
-#endif
     virtual ~wumpus_belief_t() { }
 
     static wumpus_belief_t* allocate() {

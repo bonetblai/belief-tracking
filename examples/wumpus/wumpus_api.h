@@ -100,7 +100,7 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
         wumpus_belief_t::initialize(nrows_, ncols_, npits_, nwumpus_);
         moving_wumpus_belief_t::initialize(nrows_, ncols_, npits_, nwumpus_);
 
-        problem_ = new template_problem_t<T>(nrows_, ncols_, npits_, nwumpus_, narrows_, GOAL_IS_HAVE_GOLD, 1e5);
+        problem_ = new template_problem_t<T>(nrows_, ncols_, npits_, nwumpus_, narrows_, GOAL_IS_HAVE_GOLD, 1e7);
 
         // set heuristic
         heuristic_ = new shortest_distance_to_unvisited_cell_t<T>(*problem_, nesw_movements_);
