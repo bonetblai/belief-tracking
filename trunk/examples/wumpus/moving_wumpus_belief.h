@@ -73,17 +73,15 @@ class moving_wumpus_belief_t : public base_belief_t {
             pits_.set_domain(cell, new cell_beam_t(*bel.pits_.domain(cell)));
         }
     }
-#if 0
     moving_wumpus_belief_t(moving_wumpus_belief_t &&bel)
       : base_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
         have_gold_(bel.have_gold_), dead_(bel.dead_),
-        gold_(std::move(bel.gold_)), wumpus_(std::move(bel.wumpus_)) {
+        gold_(bel.gold_), wumpus_(bel.wumpus_) {
         for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
             pits_.set_domain(cell, bel.pits_.domain(cell));
             bel.pits_.set_domain(cell, 0);
         }
     }
-#endif
     virtual ~moving_wumpus_belief_t() { }
 
     static moving_wumpus_belief_t* allocate() {
@@ -186,9 +184,9 @@ class moving_wumpus_belief_t : public base_belief_t {
            << ", have-gold=" << (have_gold_ ? "true" : "false")
            << ", dead=" << (dead_ ? "true" : "false")
            << std::endl;
-        os << "gold=" << gold_ << std::endl;
+        //os << "gold=" << gold_ << std::endl;
         os << "wumpus=" << wumpus_ << std::endl;
-#if 1
+#if 0
         for( int r = 0; r < nrows_; ++r ) {
             for( int c = 0; c < ncols_; ++c ) {
                 int cell = r * ncols_ + c;
@@ -234,20 +232,20 @@ class moving_wumpus_belief_t : public base_belief_t {
     }
 
     bool is_dead_obs(int obs) const {
-        // wumpus at cell (52 = 4 * 13) or fell into pit (104)
-        return (obs == 52) || (obs == 104);
+        // wumpus at cell (between 52 = 4 * 13 && 55 = 52 + 3), or
+        // fell into pit (104)
+        return ((obs >= 52) && (obs < 56)) || (obs == 104);
     }
 
     void filter(int action, int obs) {
-        grid_var_beam_t before(wumpus_);
+        //grid_var_beam_t before(wumpus_);
         if( is_dead_obs(obs) ) {
             dead_ = true;
-        } else {
-            if( pos_ != OutsideCave ) {
-                filter_gold(action, obs);
-                filter_pits(action, obs);
-                filter_wumpus(action, obs);
-            }
+        }
+        if( pos_ != OutsideCave ) {
+            filter_gold(action, obs);
+            filter_pits(action, obs);
+            filter_wumpus(action, obs);
         }
         assert(consistent());
     }
@@ -267,7 +265,9 @@ class moving_wumpus_belief_t : public base_belief_t {
 
   private:
     bool applicable_for_position(int action) const {
-        if( dead_ || (pos_ == OutsideCave) || (action == ActionNoop) ) {
+        if( action == ActionNoop ) {
+            return true;
+        } else if( dead_ || (pos_ == OutsideCave) || (action == ActionNoop) ) {
             return false;
         } else if( action == ActionShoot ) {
             return narrows_ > 0;
@@ -342,15 +342,16 @@ class moving_wumpus_belief_t : public base_belief_t {
     }
     void progress_wumpus(int action) {
         //if( action < ActionGrab ) {
-        if( action == ActionMoveForward ) {
+        //if( action == ActionMoveForward ) {
+        if( (action == ActionMoveForward) || (action == ActionNoop) ) {
             // this is a move action, the wumpuses move non-det in the grid
             wumpus_.move_non_det();
         }
     }
     bool possible_obs_for_wumpus(int action, int obs) const {
-        assert((obs >= 0) && (obs < 104));
         int wumpus_obs = obs >> 2;
         if( wumpus_obs == 0 ) {
+            // No wumpus seen in current visibility area
             return wumpus_.possible_no_obj_adjacent_to(pos_, grid_var_beam_t::octile_neighbourhood, 2);
         } else {
             --wumpus_obs;
@@ -366,9 +367,9 @@ class moving_wumpus_belief_t : public base_belief_t {
         }
     }
     void filter_wumpus(int action, int obs) {
-        assert((obs >= 0) && (obs < 104));
         int wumpus_obs = obs >> 2;
         if( wumpus_obs == 0 ) {
+            // No wumpus seen in current visibility area
             return wumpus_.filter_no_obj_adjacent_to(pos_, grid_var_beam_t::octile_neighbourhood, 2);
         } else {
             --wumpus_obs;

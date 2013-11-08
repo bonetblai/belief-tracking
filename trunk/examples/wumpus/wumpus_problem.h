@@ -101,16 +101,29 @@ template<typename T> class template_problem_t : public Problem::problem_t<T> {
         next_a.apply(a);
         //std::cout << "next_state=" << next_a;
 
-        // 105 is max possible number of obs because we limit number
-        // of wumpus to 1. The general formula for n wumpus is
-        // max_nobs = 1 + 4 * \sum_{k = 0} ^ n \binom{25}{k}.
+        // 105 is max possible number of obs in moving wumpus
+        // because there is just one such wumpus:
+        //
+        // obs in {0..3}       iff     no wumpus seen + status <glitter,breeze>
+        // obs in {4..8}       iff     wumpus at rpos=(-2,-2) (lower left-corner)  + status <glitter,breeze>
+        // ...
+        // obs in {20..23}     iff     wumpus at rpos=( 2, 2) (lower right-corner) + status <glitter,breeze>
+        // ...
+        // obs in {84..87}     iff     wumpus at rpos=(-2, 2) (upper left-corner)  + status <glitter,breeze>
+        // ...
+        // obs in {100..1003}  iff     wumpus at rpos=( 2, 2) (uooer right-corner) + status <glitter,breeze>
+        // obs = 104           iff     Fell in Pit (dead)
+
+        //if( debug ) std::cout << "Possible obs =";
         int possible_obs[105], nobs = 0;
         for( int obs = 0; obs < 105; ++obs ) {
             if( next_a.possible_obs(a, obs) ) {
                 possible_obs[nobs++] = obs;
+                //if( debug ) std::cout << " " << obs;
             }
         }
         assert(nobs > 0);
+        //if( debug ) std::cout << std::endl;
 
         outcomes.clear();
         outcomes.reserve(nobs);
