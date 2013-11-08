@@ -53,27 +53,31 @@ struct minefield_t {
 
     void sample(int initial_cell) {
         vector<int> available_cells(ncells_, 0);
-        for( int i = 0; i < ncells_; ++i )
-            available_cells[i] = i;
-
-        // do not place a mine at the initial cell or surrounding cells
         set<int> forbidden;
-        int r = initial_cell / ncols_, c = initial_cell % ncols_;
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nr = r + dr;
-            if( (nr < 0) || (nr >= nrows_) ) continue;
-            for( int dc = -1; dc < 2; ++dc ) {
-                int nc = c + dc;
-                int cell = nr * ncols_ + nc;
-                if( (nc < 0) || (nc >= ncols_) ) continue;
-                forbidden.insert(-cell);
+        // do not place a mine at the initial cell or surrounding cells
+        do {
+            forbidden.clear();
+            available_cells = vector<int>(ncells_, 0);
+            for( int i = 0; i < ncells_; ++i )
+                available_cells[i] = i;
+
+            int r = initial_cell / ncols_, c = initial_cell % ncols_;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nr = r + dr;
+                if( (nr < 0) || (nr >= nrows_) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int nc = c + dc;
+                    int cell = nr * ncols_ + nc;
+                    if( (nc < 0) || (nc >= ncols_) ) continue;
+                    forbidden.insert(-cell);
+                }
             }
-        }
-        for( set<int>::iterator it = forbidden.begin(); it != forbidden.end(); ++it ) {
-            int pos = -(*it);
-            available_cells[pos] = available_cells.back();
-            available_cells.pop_back();
-        }
+            for( set<int>::iterator it = forbidden.begin(); it != forbidden.end(); ++it ) {
+                int pos = -(*it);
+                available_cells[pos] = available_cells.back();
+                available_cells.pop_back();
+            }
+        } while( (int)available_cells.size() < nmines_ );
 
         // place random mines in other cells
         cells_ = vector<cell_t>(ncells_);
