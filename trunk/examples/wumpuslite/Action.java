@@ -22,7 +22,7 @@ class Action {
     public static int TURN_LEFT = 3;
     public static int GRAB = 4;
     public static int SHOOT = 5;
-    public static int NO_OP = 6;
+    public static int NOOP = 6;
     public static int END_TRIAL = 7;
 	
     public Action() {
@@ -36,7 +36,7 @@ class Action {
         else if (action == 3) return "TURN_LEFT";
         else if (action == 4) return "GRAB";
         else if (action == 5) return "SHOOT";
-        else if (action == 6) return "NO_OP";
+        else if (action == 6) return "NOOP";
         else return "END_TRIAL";
     }
 }

@@ -102,7 +102,7 @@ class WumpusAgentProxy implements AgentProxy {
         actionTable[0] = Action.GO_FORWARD;
         actionTable[1] = Action.TURN_RIGHT;
         actionTable[2] = Action.TURN_LEFT;
-        actionTable[3] = -1; // Noop
+        actionTable[3] = Action.NOOP;
         actionTable[4] = Action.SHOOT;
         actionTable[5] = Action.GRAB;
         actionTable[6] = -1; // EXIT
@@ -123,21 +123,23 @@ class WumpusAgentProxy implements AgentProxy {
 
     public int process(int[] location, char direction, TransferPercept tp) {
         // read in the current percepts
-        boolean bump = tp.getBump();
+        //boolean bump = tp.getBump(); // NOT USED
         boolean glitter = tp.getGlitter();
         boolean breeze = tp.getBreeze();
         boolean stench = tp.getStench();
-        boolean scream = tp.getScream();
+        //boolean scream = tp.getScream(); // NOT USED
         int wumpusSeenAt = tp.getWumpusSeenAt();
 
         // build observation
         int obs = 0;
-        if( glitter ) obs += 1;
-        if( breeze ) obs += 2;
-        if( !moving && stench ) obs += 4;
-
-        if( moving ) {
-            obs = obs + 4 * (1 + wumpusSeenAt);
+        if( !moving ) {
+            if( glitter ) obs += 1;
+            if( breeze ) obs += 2;
+            if( stench ) obs += 4;
+        } else {
+            obs = 4 * (1 + wumpusSeenAt);
+            if( glitter ) obs += 1;
+            if( breeze ) obs += 2;
             //System.out.println("wpos = " + wumpusSeenAt);
         }
 
