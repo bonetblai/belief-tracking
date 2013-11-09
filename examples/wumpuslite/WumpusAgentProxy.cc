@@ -41,7 +41,7 @@ JNIEXPORT void JNICALL Java_WumpusAgentProxy_init_1cpp_1side
     }
 
     if( wumpus_agent->is_moving() ) {
-        wumpus_agent->set_policy_parameters(100, 50, .5, 5);
+        wumpus_agent->set_policy_parameters(50, 25, .5, 5);
         wumpus_agent->select_policy("shortest_distance_to_unvisited_cell_heuristic", "aot/heuristic");
     } else {
         wumpus_agent->select_policy("greedy_wrt_sduv-heuristic", "direct");
