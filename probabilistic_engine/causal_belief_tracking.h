@@ -54,7 +54,7 @@ template<typename T> class beam_t : public joint_distribution_t<T> {
         inverse_variable_map_ = inverse_variable_map;
         variables_.clear();
         variable_map_.clear();
-        for( size_t k = 0; k < inverse_variable_map_.size(); ++k ) {
+        for( int k = 0; k < (int)inverse_variable_map_.size(); ++k ) {
             variables_.insert(inverse_variable_map_[k]);
             variable_map_[inverse_variable_map_[k]] = k;
             std::cout << k << "->" << inverse_variable_map[k] << ",";
@@ -68,11 +68,11 @@ template<typename T> class beam_t : public joint_distribution_t<T> {
     }
     int inverse_map_variable(int varid) const { return inverse_variable_map_[varid]; }
     void remap_event(BeliefTracking::event_t &event) const {
-        for( size_t k = 0; k < event.size(); ++k )
+        for( int k = 0; k < (int)event.size(); ++k )
             event[k].first = map_variable(event[k].first);
     }
     bool contains_event_variables(const BeliefTracking::event_t &event) const {
-        for( size_t k = 0; k < event.size(); ++k ) {
+        for( int k = 0; k < (int)event.size(); ++k ) {
             if( variables_.find(event[k].first) == variables_.end() )
                 return false;
         }
@@ -111,7 +111,7 @@ template<typename T> class beam_t : public joint_distribution_t<T> {
             os << *it << ",";
         os << "}" << std::endl;
         os << "beam: inv-map={";
-        for( int k = 0; k < inverse_variable_map_.size(); ++k )
+        for( int k = 0; k < (int)inverse_variable_map_.size(); ++k )
             os << k << "->" << inverse_variable_map_[k] << ",";
         os << "}" << std::endl;
         joint_distribution_t<T>::print(os, prec, decode);
@@ -315,12 +315,12 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
 
         void advance_until_valid() {
             assert(valuation_ != 0);
-            while( (index_ < max_index_) && !is_consistent_valuation(*valuation_, *joint_) )
+            while( (index_ < max_index_) && !is_consistent_valuation(*valuation_) )
                 advance_one_step();
         }
 
         void clear_valuation(BeliefTracking::valuation_t &valuation, int nvars) const {
-            assert(valuation.size() >= nvars);
+            assert((int)valuation.size() >= nvars);
             for( int k = 0; k < nvars; ++k )
                 valuation[k] = -1;
         }
@@ -334,9 +334,8 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
             }
         }
 
-        bool is_consistent_valuation(const BeliefTracking::valuation_t &valuation, const joint_distribution_t<T> &joint) const {
+        bool is_consistent_valuation(const BeliefTracking::valuation_t &valuation) const {
             assert((cbt_ != 0) && (aux_valuation_ != 0));
-            //std::cout << "BEGIN: is_consistent_valuation: val=" << valuation << std::endl;
             T prob = 1;
             clear_valuation(*aux_valuation_, cbt_->nvars());
             for( int k = 0; k < cbt_->nbeams(); ++k ) {
@@ -361,7 +360,6 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
                             (*aux_valuation_)[varid] = valuation[varid];
                         }
                         prob = prob * beam.xprobability(beam_index) / beam.probability(separator);
-                        //std::cout << "Beam=" << beam.beam_string() << ", sep=" << separator << std::flush << ", p=" << beam.probability(separator) << std::endl;
                     }
                 }
                 if( inconsistent_with_beam ) return false;
@@ -369,8 +367,44 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
             //std::cout << "CONSISTENT: probability=" << prob << std::endl;
             //std::cout << "val=" << valuation << ", p=" << prob << std::endl;
             const_cast<T&>(probability_) = prob;
-            if( prob != joint.probability(valuation) ) {
-                std::cout << "XXXXXX: index=" << index_ << ", val=" << valuation << ", p=" << prob << ", joint=" << joint.probability(valuation) << std::endl;
+            if( (joint_ != 0) && (prob != joint_->probability(valuation)) ) {
+                std::cout << "XXXXXX: index=" << index_
+                          << ", val=" << valuation
+                          << ", p=" << prob
+                          << ", joint=" << joint_->probability(valuation)
+                          << std::endl;
+
+                prob = 1;
+                clear_valuation(*aux_valuation_, cbt_->nvars());
+                for( int k = 0; k < cbt_->nbeams(); ++k ) {
+                    std::cout << "k=" << k << std::endl;
+                    const beam_t<T> &beam = cbt_->beam(k);
+                    bool inconsistent_with_beam = true;
+                    for( int beam_index = 0; inconsistent_with_beam && (beam_index < beam.nvaluations()); ++beam_index ) {
+                        if( beam.table()[beam_index] == 0 ) continue;
+                        beam.decode_index(beam_index);
+                        inconsistent_with_beam = !beam.is_consistent_with_beam_valuation(valuation);
+                        if( !inconsistent_with_beam ) {
+                            BeliefTracking::event_t separator;
+                            separator.reserve(beam.nvars());
+                            for( int i = 0; i < beam.nvars(); ++i ) {
+                                int varid = beam.inverse_map_variable(i);
+                                if( (*aux_valuation_)[varid] != -1 ) {
+                                    assert((*aux_valuation_)[varid] == valuation[varid]);
+                                    separator.push_back(std::make_pair(i, valuation[varid]));
+                                }
+                                (*aux_valuation_)[varid] = valuation[varid];
+                            }
+                            prob = prob * beam.xprobability(beam_index) / beam.probability(separator);
+                            std::cout << "sep-sz=" << separator.size() << std::flush;
+                            std::cout << ", sep=" << separator << std::flush;
+                            std::cout << ", beam-index=" << beam_index << std::flush;
+                            std::cout << ", normalizer=" << beam.normalizer() << std::endl;
+                            std::cout << ", p=" << beam.probability(beam_index) << std::flush; // beam.probability(separator) << std::flush;
+                            std::cout << ", prob=" << prob << std::endl;
+                        }
+                    }
+                }
             }
             return true;
         }
@@ -383,8 +417,7 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
     int max_num_valuations_;
 
   public:
-    const joint_distribution_t<T> *joint_;
-    causal_belief_tracking_t(int nbeams = 0, const joint_distribution_t<T> *joint = 0) : beams_(nbeams), joint_(joint) { }
+    causal_belief_tracking_t(int nbeams = 0) : beams_(nbeams) { }
     virtual ~causal_belief_tracking_t() { }
 
     int nvars() const { return variables_.size(); }
@@ -396,13 +429,13 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
 
     void calculate_variables() {
         variables_.clear();
-        for( int k = 0; k < beams_.size(); ++k ) {
+        for( int k = 0; k < (int)beams_.size(); ++k ) {
             const std::set<int> &beam_vars = beams_[k].variables();
             variables_.insert(beam_vars.begin(), beam_vars.end());
         }
 
         domains_ = std::vector<int>(variables_.size(), -1);
-        for( int k = 0; k < beams_.size(); ++k ) {
+        for( int k = 0; k < (int)beams_.size(); ++k ) {
             const std::set<int> &beam_vars = beams_[k].variables();
             for( std::set<int>::const_iterator it = beam_vars.begin(); it != beam_vars.end(); ++it ) {
                 int varid = beams_[k].map_variable(*it);
@@ -413,12 +446,12 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
         }
 
         max_num_valuations_ = 1;
-        for( int k = 0; k < domains_.size(); ++k )
+        for( int k = 0; k < (int)domains_.size(); ++k )
             max_num_valuations_ *= domains_[k];
     }
 
     static void clear(std::vector<beam_t<T> > &beams) {
-        for( size_t k = 0; k < beams.size(); ++k )
+        for( size_t k = 0; k < (int)beams.size(); ++k )
             beams[k].clear();
     }
     void clear() { clear(beams_); }
@@ -435,18 +468,16 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
     }
     void normalize() { normalize(beams_); }
 
-    const_join_iterator_type2 begin_join(const joint_distribution_t<T> *joint) const {
-        //return const_join_iterator_type1(this, beams_.size());
+    const_join_iterator_type2 begin_join(const joint_distribution_t<T> *joint = 0) const {
         return const_join_iterator_type2(this, 0, joint);
     }
     const_join_iterator_type2 end_join() const {
-        //return const_join_iterator_type1(0, 0, true);
         return const_join_iterator_type2(this, -1);
     }
 
     void project(const BeliefTracking::valuation_t &valuation, float p, std::vector<beam_t<T> > &nbeams) const {
         if( p > 0 ) {
-            for( int k = 0; k < beams_.size(); ++k )
+            for( int k = 0; k < (int)beams_.size(); ++k )
                 nbeams[k].project(valuation, p);
         }
     }
@@ -456,7 +487,7 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
         // find the beam for the event. Then, the probability of the
         // event is the probability assigned by the beam.
         int beam_index = -1;
-        for( int k = 0; k < beams_.size(); ++k ) {
+        for( int k = 0; k < (int)beams_.size(); ++k ) {
             if( beams_[k].contains_event_variables(event) ) {
                 beam_index = k;
                 break;
@@ -469,26 +500,22 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
         return beams_[beam_index].probability(remapped_event);
     }
 
-    void my_verify_join(const joint_distribution_t<T> *joint) const {
-        std::cout << "verify_joint: joint=" << joint << std::endl;
+    void verify_join(const joint_distribution_t<T> *joint) const {
         for( const_join_iterator_type2 it = begin_join(joint); it != end_join(); ++it );
-        std::cout << "verify_joint: END" << std::endl;
     }
 
     virtual void progress_and_filter(int action, int obs,
                                      BeliefTracking::belief_tracking_t::det_progress_func_t progress,
                                      BeliefTracking::belief_tracking_t::filter_func_t filter)
     {
-        my_verify_join(joint_);
-
         BeliefTracking::valuation_t valuation(variables_.size(), 0);
         std::vector<beam_t<T> > nbeams(beams_);
         clear(nbeams);
         std::cout << "about to iterate over join" << std::endl;
         //int n = 0;
-        for( const_join_iterator_type2 it = begin_join(joint_); it != end_join(); ++it ) {
+        for( const_join_iterator_type2 it = begin_join(); it != end_join(); ++it ) {
             //++n;
-            std::cout << "valid valuation in join: index=" << it.get_index() << ", val=" << it.get_valuation() << std::endl;
+            //std::cout << "valid valuation in join: index=" << it.get_index() << ", val=" << it.get_valuation() << std::endl;
             assert(it.get_probability() > 0);
             valuation = it.get_valuation();
             (this->*progress)(action, valuation);
@@ -502,7 +529,7 @@ template<typename T> class causal_belief_tracking_t : public probabilistic_belie
     }
 
     static void print(std::ostream &os, const std::vector<beam_t<T> > &beams) {
-        for( int k = 0; k < beams.size(); ++k )
+        for( int k = 0; k < (int)beams.size(); ++k )
             beams[k].print(os);
     }
 

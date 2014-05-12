@@ -241,9 +241,9 @@ struct ms_fjt_t : public ms_bt_t, public ProbabilisticBeliefTracking::full_joint
 };
 
 struct ms_cbt_t : public ms_bt_t, public ProbabilisticBeliefTracking::causal_belief_tracking_t<float> {
-    ms_cbt_t(int nrows, int ncols, const ms_fjt_t *fjt)
+    ms_cbt_t(int nrows, int ncols)
       : ms_bt_t(nrows, ncols),
-        ProbabilisticBeliefTracking::causal_belief_tracking_t<float>(nrows * ncols, fjt) {
+        ProbabilisticBeliefTracking::causal_belief_tracking_t<float>(nrows * ncols) {
         for( int c = 0; c < ncols_; ++c ) {
             for( int r = 0; r < nrows_; ++r ) {
                 int beam_index = r * ncols_ + c, nvars = 0;
@@ -317,7 +317,6 @@ struct ms_cbt_t : public ms_bt_t, public ProbabilisticBeliefTracking::causal_bel
             BeliefTracking::belief_tracking_t::filter_func_t filter = 0;
             progress = static_cast<BeliefTracking::belief_tracking_t::det_progress_func_t>(&ms_cbt_t::progress);
             filter = static_cast<BeliefTracking::belief_tracking_t::filter_func_t>(&ms_cbt_t::filter);
-            cout << "BLAI=" << verify_join2(*joint_, 0.0001) << endl;
             progress_and_filter(cell, obs, progress, filter);
         }
     }
@@ -335,32 +334,18 @@ struct ms_cbt_t : public ms_bt_t, public ProbabilisticBeliefTracking::causal_bel
         os << setprecision(old_prec);
     }
 
-    bool verify_join(const ms_fjt_t &fjt, float epsilon) const {
-        for( ProbabilisticBeliefTracking::causal_belief_tracking_t<float>::const_join_iterator_type2 it = begin_join(&fjt); it != end_join(); ++it ) {
+    void verify_join(const ms_fjt_t *fjt, float epsilon) const {
+        for( ProbabilisticBeliefTracking::causal_belief_tracking_t<float>::const_join_iterator_type2 it = begin_join(); it != end_join(); ++it ) {
             int index = it.get_index();
             float p = it.get_probability();
-            if( fabs(p - fjt.xprobability(index)) > epsilon ) {
-                cout << "join: val=" << it.get_valuation() << ", index=" << index << ", cbt=" << p << ", fjt=" << fjt.xprobability(index) << endl;
-                return false;
+            if( fabs(p - fjt->xprobability(index)) > epsilon ) {
+                cout << "join: val=" << it.get_valuation()
+                     << ", index=" << index
+                     << ", cbt=" << p
+                     << ", fjt=" << fjt->xprobability(index)
+                     << endl;
             }
         }
-        return true;
-    }
-
-    bool verify_join2(const ProbabilisticBeliefTracking::joint_distribution_t<float> &fjt, float epsilon) const {
-        cout << "vj2: joint=" << &fjt << endl;
-        for( ProbabilisticBeliefTracking::causal_belief_tracking_t<float>::const_join_iterator_type2 it = begin_join(&fjt); it != end_join(); ++it ) {
-            int index = it.get_index();
-            float p = it.get_probability();
-            if( fabs(p - fjt.xprobability(index)) > epsilon ) {
-                cout << "join: val=" << it.get_valuation() << ", index=" << index << ", cbt=" << p << ", fjt=" << fjt.xprobability(index) << endl;
-                return false;
-            }
-            if( fabs(p - fjt.probability(it.get_valuation())) > epsilon ) {
-                cout << "ZZZZZZZZ" << endl;
-            }
-        }
-        return true;
     }
 
     bool verify_beams(const ms_fjt_t &fjt, float epsilon) const {
@@ -494,7 +479,7 @@ int main(int argc, const char **argv) {
 
     // create distributions
     ms_fjt_t fjt(nrows, ncols);
-    ms_cbt_t cbt(nrows, ncols, &fjt);
+    ms_cbt_t cbt(nrows, ncols);
 
     // run for the specified number of trials
     if( print_deterministic_executions ) ntrials = executions_to_print;
@@ -523,10 +508,11 @@ int main(int argc, const char **argv) {
             agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
             execution[play] = make_pair(action, obs);
 
-            cout << "verify join1=" << flush << cbt.verify_join(fjt, 0.0001) << endl;
-            cout << "verify beams=" << flush << cbt.verify_beams(fjt, 0.0001) << endl;
-            cout << "verify join2=" << flush << cbt.verify_join2(*cbt.joint_, 0.0001) << endl;
-            cout << "verify join3" << endl; cbt.my_verify_join(&fjt);
+            cout << "VERIFY JOIN-1" << endl;
+            cbt.verify_join(&fjt, 0.0001);
+            //cout << "verify beams=" << flush << cbt.verify_beams(fjt, 0.0001) << endl;
+            cout << "VERIFY JOIN-2" << endl;
+            static_cast<ProbabilisticBeliefTracking::causal_belief_tracking_t<float>*>(&cbt)->verify_join(&fjt);
 
             cout << "ABOUT TO UPDATE" << endl;
             cbt.update(agent_is_flag_action(action), agent_get_cell(action), obs);

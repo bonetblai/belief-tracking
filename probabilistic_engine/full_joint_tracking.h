@@ -23,6 +23,7 @@
 #include <iomanip>
 #include <cassert>
 #include <vector>
+#include <strings.h>
 
 #include "probabilistic_belief_tracking.h"
 #include "joint_distribution.h"
