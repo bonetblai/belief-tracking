@@ -23,6 +23,7 @@
 #include <iomanip>
 #include <cassert>
 #include <vector>
+#include <strings.h>
 
 //#define DEBUG
 
@@ -41,7 +42,8 @@ template<typename T> class joint_distribution_t {
     mutable BeliefTracking::valuation_t valuation_;
 
   public:
-    joint_distribution_t(const joint_distribution_t &jd) : nvars_(0), nvaluations_(0), normalizer_(1), table_(0) {
+    joint_distribution_t(const joint_distribution_t &jd)
+      : nvars_(0), nvaluations_(0), normalizer_(1), table_(0) {
        *this = jd;
     }
     joint_distribution_t() : nvars_(0), nvaluations_(0), normalizer_(1), table_(0) { }
@@ -63,8 +65,8 @@ template<typename T> class joint_distribution_t {
     void allocate(int nvars, const std::vector<int> &domains) {
         nvars_ = nvars;
         domains_ = domains;
-        assert(domains_.size() >= nvars_);
-        while( domains_.size() > nvars_ ) domains_.pop_back();
+        assert((int)domains_.size() >= nvars_);
+        while( (int)domains_.size() > nvars_ ) domains_.pop_back();
         nvaluations_ = 1;
         for( int i = 0; i < nvars_; ++i ) nvaluations_ *= domains_[i];
         delete[] table_;
@@ -105,6 +107,7 @@ template<typename T> class joint_distribution_t {
     }
 
     void decode_index(int index, BeliefTracking::valuation_t &valuation) const {
+        assert((int)valuation.size() >= nvars_);
         bzero(&valuation[0], nvars_ * sizeof(int));
         for( int var = nvars_ - 1; var >= 0; --var ) {
             valuation[var] = index % domains_[var];
@@ -114,6 +117,8 @@ template<typename T> class joint_distribution_t {
     }
     void decode_index(int index) const { decode_index(index, valuation_); }
     int encode_valuation(const BeliefTracking::valuation_t &valuation) const {
+        if( (int)valuation.size() < nvars_ ) std::cout << "ZZZZ: sz=" << valuation.size() << ", nvars=" << nvars_ << std::endl;
+        assert((int)valuation.size() >= nvars_);
         int index = 0;
         for( int var = 0; var < nvars_; ++var )
             index = index * domains_[var] + valuation[var];
@@ -122,7 +127,7 @@ template<typename T> class joint_distribution_t {
 
     bool is_event_instance(int index, const BeliefTracking::event_t &event) const {
         decode_index(index);
-        for( size_t k = 0; k < event.size(); ++k ) {
+        for( size_t k = 0; k < (int)event.size(); ++k ) {
             if( valuation_[event[k].first] != event[k].second )
                 return false;
         }
@@ -130,7 +135,7 @@ template<typename T> class joint_distribution_t {
     }
 
     T& operator[](int index) { return table_[index]; }
-    T xprobability(int index) const { return table_[index] / normalizer_; } // NEED TO FIX: compiler seems to be flawed
+    T xprobability(int index) const { return table_[index] / normalizer_; }
     T probability(const BeliefTracking::event_t &event) const {
         T mass = 0;
         for( int k = 0; k < nvaluations_; ++k ) {
@@ -139,12 +144,14 @@ template<typename T> class joint_distribution_t {
         return mass / normalizer_;
     }
     T probability(const BeliefTracking::valuation_t &valuation) const {
+        std::cout << "call1" << std::endl;
         int index = encode_valuation(valuation);
         return xprobability(index);
     }
 
     void add_valuation(const BeliefTracking::valuation_t &valuation, T p) {
         assert(p > 0);
+        std::cout << "call2" << std::endl;
         int index = encode_valuation(valuation);
         if( table_[index] == 0 ) ++non_zero_entries_;
         table_[index] += p;
