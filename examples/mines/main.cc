@@ -19,10 +19,15 @@
 #include <cassert>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <string.h>
 #include <set>
 #include <vector>
 #include <stdlib.h>
+#include <math.h>
+
+#include "full_joint_tracking.h"
+#include "causal_belief_tracking.h"
 
 extern "C" {
 #include "c_api.h"
@@ -141,6 +146,247 @@ struct minefield_t {
     }
 };
 
+struct ms_bt_t {
+    int nrows_;
+    int ncols_;
+
+    ms_bt_t(int nrows, int ncols) : nrows_(nrows), ncols_(ncols) { }
+    virtual ~ms_bt_t() { }
+
+    virtual void reset() = 0;
+    virtual float marginal(int cell) const = 0;
+    virtual void update(bool flag_action, int cell, int obs) = 0;
+    virtual void print_marginals(ostream &os, int prec = 2) = 0;
+
+    bool compare_marginals(const ms_bt_t &bt, float epsilon) const {
+        for( int c = 0; c < ncols_; ++c ) {
+            for( int r = 0; r < nrows_; ++r ) {
+                int cell = r * ncols_ + c;
+                if( fabs(marginal(cell) - bt.marginal(cell)) > epsilon )
+                    return false;
+            }
+        }
+        return true;
+    }
+};
+
+struct ms_fjt_t : public ms_bt_t, public ProbabilisticBeliefTracking::full_joint_tracking_t<float> {
+    ms_fjt_t(int nrows, int ncols)
+      : ms_bt_t(nrows, ncols),
+        ProbabilisticBeliefTracking::full_joint_tracking_t<float>(nrows * ncols, 2) {
+        set_uniform_distribution();
+    }
+    virtual ~ms_fjt_t() { }
+
+    int sum_of_mines_around_cell(int cell, const BeliefTracking::valuation_t &valuation) {
+        int r = cell / ncols_, c = cell % ncols_;
+        int sum = 0;
+        for( int dr = -1; dr < 2; ++dr ) {
+            if( (r + dr < 0) || (r + dr >= nrows_) ) continue;
+            for( int dc = -1; dc < 2; ++dc ) {
+                if( (c + dc < 0) || (c + dc >= ncols_) ) continue;
+                if( true || (dr != 0) || (dc != 0) ) sum += valuation[(r + dr) * ncols_ + (c + dc)];
+            }
+        }
+        return sum;
+    }
+
+    void progress(int action, BeliefTracking::valuation_t &valuation) {
+    }
+
+    float filter(int obs, int cell, const BeliefTracking::valuation_t &valuation) {
+        return sum_of_mines_around_cell(cell, valuation) != obs ? 0 : 1;
+    }
+
+    virtual void reset() {
+        set_uniform_distribution();
+    }
+
+    virtual float marginal(int cell) const {
+        BeliefTracking::event_t event;
+        event.push_back(make_pair(cell, 1));
+        return probability(event);
+    }
+
+    virtual void update(bool flag_action, int cell, int obs) {
+        int row = cell / ncols_, col = cell % ncols_;
+        cout << "fjt: flag=" << flag_action << ", cell=" << cell << ":(" << col << "," << row << "), obs=" << obs << ", #non-zero-entries=" << non_zero_entries() << endl;
+        if( !flag_action ) {
+            BeliefTracking::belief_tracking_t::det_progress_func_t progress = 0;
+            BeliefTracking::belief_tracking_t::filter_func_t filter = 0;
+            progress = static_cast<BeliefTracking::belief_tracking_t::det_progress_func_t>(&ms_fjt_t::progress);
+            filter = static_cast<BeliefTracking::belief_tracking_t::filter_func_t>(&ms_fjt_t::filter);
+            progress_and_filter(cell, obs, progress, filter);
+        } else {
+            for( int k = 0; k < nvaluations(); ++k ) {
+                if( xprobability(k) == 0 ) continue;
+                decode_index(k);
+                assert(valuation_[cell] == 1);
+            }
+        }
+    }
+
+    virtual void print_marginals(ostream &os, int prec = 2) {
+        int old_prec = os.precision();
+        os << setprecision(prec);
+        for( int c = 0; c < ncols_; ++c ) {
+            for( int r = 0; r < nrows_; ++r ) {
+                int cell = r*ncols_ + c;
+                float p = marginal(cell);
+                os << "fjt: mar(" << c << "," << r << ")=" << p << endl;
+            }
+        }
+        os << setprecision(old_prec);
+    }
+};
+
+struct ms_cbt_t : public ms_bt_t, public ProbabilisticBeliefTracking::causal_belief_tracking_t<float> {
+    ms_cbt_t(int nrows, int ncols, const ms_fjt_t *fjt)
+      : ms_bt_t(nrows, ncols),
+        ProbabilisticBeliefTracking::causal_belief_tracking_t<float>(nrows * ncols, fjt) {
+        for( int c = 0; c < ncols_; ++c ) {
+            for( int r = 0; r < nrows_; ++r ) {
+                int beam_index = r * ncols_ + c, nvars = 0;
+
+                // set string for beam
+                stringstream ss;
+                ss << beam_index << ":cell(" << c << "," << r << ")";
+                beams_[beam_index].set_string(ss.str());
+
+                // calculate number of variables in beam
+                if( (c == 0) || (c == ncols_ - 1) )
+                    nvars = (r == 0) || (r == nrows_ - 1) ? 4 : 6;
+                else
+                    nvars = (r == 0) || (r == nrows_ - 1) ? 6 : 9;
+                beams_[beam_index].allocate(nvars, 2);
+
+                // calculate inverse map for beam
+                std::vector<int> inverse_variable_map;
+                inverse_variable_map.reserve(nvars);
+                for( int dc = -1; dc < 2; ++dc ) {
+                    if( (c + dc < 0) || (c + dc >= ncols_) ) continue;
+                    for( int dr = -1; dr < 2; ++dr ) {
+                        if( (r + dr < 0) || (r + dr >= nrows_) ) continue;
+                        int nc = c + dc, nr = r + dr;
+                        inverse_variable_map.push_back(nr * ncols_ + nc);
+                    }
+                }
+                beams_[beam_index].set_variables(inverse_variable_map);
+            }
+        }
+        calculate_variables();
+        reset();
+    }
+    virtual ~ms_cbt_t() { }
+
+    int sum_of_mines_around_cell(int cell, const BeliefTracking::valuation_t &valuation) {
+        int r = cell / ncols_, c = cell % ncols_;
+        int sum = 0;
+        for( int dr = -1; dr < 2; ++dr ) {
+            if( (r + dr < 0) || (r + dr >= nrows_) ) continue;
+            for( int dc = -1; dc < 2; ++dc ) {
+                if( (c + dc < 0) || (c + dc >= ncols_) ) continue;
+                if( true || (dr != 0) || (dc != 0) ) sum += valuation[(r + dr) * ncols_ + (c + dc)];
+            }
+        }
+        return sum;
+    }
+
+    void progress(int action, BeliefTracking::valuation_t &valuation) {
+    }
+
+    float filter(int obs, int cell, const BeliefTracking::valuation_t &valuation) {
+        return sum_of_mines_around_cell(cell, valuation) != obs ? 0 : 1;
+    }
+
+    virtual void reset() {
+        set_uniform_distribution();
+    }
+
+    virtual float marginal(int cell) const {
+        BeliefTracking::event_t event;
+        event.push_back(make_pair(cell, 1));
+        return probability(event);
+    }
+
+    virtual void update(bool flag_action, int cell, int obs) {
+        int row = cell / ncols_, col = cell % ncols_;
+        cout << "cbt: flag=" << flag_action << ", cell=" << cell << ":(" << col << "," << row << "), obs=" << obs << endl;
+        if( !flag_action ) {
+            BeliefTracking::belief_tracking_t::det_progress_func_t progress = 0;
+            BeliefTracking::belief_tracking_t::filter_func_t filter = 0;
+            progress = static_cast<BeliefTracking::belief_tracking_t::det_progress_func_t>(&ms_cbt_t::progress);
+            filter = static_cast<BeliefTracking::belief_tracking_t::filter_func_t>(&ms_cbt_t::filter);
+            cout << "BLAI=" << verify_join2(*joint_, 0.0001) << endl;
+            progress_and_filter(cell, obs, progress, filter);
+        }
+    }
+
+    virtual void print_marginals(ostream &os, int prec = 2) {
+        int old_prec = os.precision();
+        os << setprecision(prec);
+        for( int c = 0; c < ncols_; ++c ) {
+            for( int r = 0; r < nrows_; ++r ) {
+                int cell = r*ncols_ + c;
+                float p = marginal(cell);
+                os << "cbt: mar(" << c << "," << r << ")=" << p << endl;
+            }
+        }
+        os << setprecision(old_prec);
+    }
+
+    bool verify_join(const ms_fjt_t &fjt, float epsilon) const {
+        for( ProbabilisticBeliefTracking::causal_belief_tracking_t<float>::const_join_iterator_type2 it = begin_join(&fjt); it != end_join(); ++it ) {
+            int index = it.get_index();
+            float p = it.get_probability();
+            if( fabs(p - fjt.xprobability(index)) > epsilon ) {
+                cout << "join: val=" << it.get_valuation() << ", index=" << index << ", cbt=" << p << ", fjt=" << fjt.xprobability(index) << endl;
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool verify_join2(const ProbabilisticBeliefTracking::joint_distribution_t<float> &fjt, float epsilon) const {
+        cout << "vj2: joint=" << &fjt << endl;
+        for( ProbabilisticBeliefTracking::causal_belief_tracking_t<float>::const_join_iterator_type2 it = begin_join(&fjt); it != end_join(); ++it ) {
+            int index = it.get_index();
+            float p = it.get_probability();
+            if( fabs(p - fjt.xprobability(index)) > epsilon ) {
+                cout << "join: val=" << it.get_valuation() << ", index=" << index << ", cbt=" << p << ", fjt=" << fjt.xprobability(index) << endl;
+                return false;
+            }
+            if( fabs(p - fjt.probability(it.get_valuation())) > epsilon ) {
+                cout << "ZZZZZZZZ" << endl;
+            }
+        }
+        return true;
+    }
+
+    bool verify_beams(const ms_fjt_t &fjt, float epsilon) const {
+        for( int k = 0; k < nbeams(); ++k ) {
+            const ProbabilisticBeliefTracking::beam_t<float> &beam = beams_[k];
+            for( int index = 0; index < beam.nvaluations(); ++index ) {
+                BeliefTracking::valuation_t valuation(beam.nvars(), 0);
+                beam.decode_index(index, valuation);
+                BeliefTracking::event_t event;
+                for( int i = 0; i < beam.nvars(); ++i )
+                    event.push_back(make_pair(beam.inverse_map_variable(i), valuation[i]));
+                if( fabs(beam.xprobability(index) - fjt.probability(event)) > epsilon ) {
+                    cout << "beam=" << beam.beam_string()
+                         << ", event=" << event
+                         << ", cbt=" << beam.xprobability(index)
+                         << ", fjt=" << fjt.probability(event)
+                         << endl;
+                    beam.print(cout);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+};
+
 void usage(ostream &os) {
     os << endl
        << "Usage: mines [{-t | --ntrials} <ntrials>]" << endl
@@ -246,11 +492,18 @@ int main(int argc, const char **argv) {
     seeds[0] = seeds[1] = seeds[2] = seed;
     seed48(seeds);
 
+    // create distributions
+    ms_fjt_t fjt(nrows, ncols);
+    ms_cbt_t cbt(nrows, ncols, &fjt);
+
     // run for the specified number of trials
     if( print_deterministic_executions ) ntrials = executions_to_print;
     for( int trial = 0; trial < ntrials; ) {
         minefield_t minefield(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
+        fjt.reset();
+        cbt.reset();
+
         bool win = true;
         int previous_nguesses = agent_get_nguesses();
         vector<pair<int,int> > execution(nrows * ncols);
@@ -269,6 +522,24 @@ int main(int argc, const char **argv) {
             }
             agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
             execution[play] = make_pair(action, obs);
+
+            cout << "verify join1=" << flush << cbt.verify_join(fjt, 0.0001) << endl;
+            cout << "verify beams=" << flush << cbt.verify_beams(fjt, 0.0001) << endl;
+            cout << "verify join2=" << flush << cbt.verify_join2(*cbt.joint_, 0.0001) << endl;
+            cout << "verify join3" << endl; cbt.my_verify_join(&fjt);
+
+            cout << "ABOUT TO UPDATE" << endl;
+            cbt.update(agent_is_flag_action(action), agent_get_cell(action), obs);
+            cbt.print_marginals(cout);
+            fjt.update(agent_is_flag_action(action), agent_get_cell(action), obs);
+            fjt.print_marginals(cout);
+            cout << "DONE W/  UPDATE" << endl;
+            bool comp = fjt.compare_marginals(cbt, 0.0001);
+            if( false && !comp ) {
+                fjt.print_marginals(cout);
+                cbt.print_marginals(cout);
+            }
+            //cbt.print(cout);
         }
         if( win ) {
             agent_declare_win(!print_deterministic_executions);

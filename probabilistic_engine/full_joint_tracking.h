@@ -72,8 +72,7 @@ template<typename T> class full_joint_tracking_t : public joint_distribution_t<T
 };
 
 
-
-
+#if 0
 template<typename T> class xfull_joint_tracking_t : public probabilistic_belief_tracking_t {
   protected:
     int nvars_;
@@ -239,6 +238,7 @@ template<typename T> class xfull_joint_tracking_t : public probabilistic_belief_
     virtual void print(std::ostream &os) const { print(os, 2, false); }
 
 };
+#endif
 
 }; // end of namespace ProbabilisticBeliefTracking
 

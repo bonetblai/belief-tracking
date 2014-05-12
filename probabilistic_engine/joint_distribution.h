@@ -41,6 +41,9 @@ template<typename T> class joint_distribution_t {
     mutable BeliefTracking::valuation_t valuation_;
 
   public:
+    joint_distribution_t(const joint_distribution_t &jd) : nvars_(0), nvaluations_(0), normalizer_(1), table_(0) {
+       *this = jd;
+    }
     joint_distribution_t() : nvars_(0), nvaluations_(0), normalizer_(1), table_(0) { }
     joint_distribution_t(int nvars, const std::vector<int> &domains) : table_(0) {
         normalizer_ = 1;
@@ -83,6 +86,7 @@ template<typename T> class joint_distribution_t {
     T normalizer() const { return normalizer_; }
     const T* table() const { return table_; }
     const BeliefTracking::valuation_t& valuation() const { return valuation_; }
+    const std::vector<int>& domains() const { return domains_; }
 
     void normalize() {
         normalizer_ = 0;
@@ -109,7 +113,7 @@ template<typename T> class joint_distribution_t {
         assert(index == 0);
     }
     void decode_index(int index) const { decode_index(index, valuation_); }
-    int encode_valuation(const BeliefTracking::valuation_t &valuation) {
+    int encode_valuation(const BeliefTracking::valuation_t &valuation) const {
         int index = 0;
         for( int var = 0; var < nvars_; ++var )
             index = index * domains_[var] + valuation[var];
@@ -125,37 +129,62 @@ template<typename T> class joint_distribution_t {
         return true;
     }
 
-    T& probability(int index) { return table_[index]; }
-    T probability(int index) const { return table_[index] / normalizer_; }
-    float probability(const BeliefTracking::event_t &event) const {
+    T& operator[](int index) { return table_[index]; }
+    T xprobability(int index) const { return table_[index] / normalizer_; } // NEED TO FIX: compiler seems to be flawed
+    T probability(const BeliefTracking::event_t &event) const {
         T mass = 0;
         for( int k = 0; k < nvaluations_; ++k ) {
             if( is_event_instance(k, event) ) mass += table_[k];
         }
         return mass / normalizer_;
     }
+    T probability(const BeliefTracking::valuation_t &valuation) const {
+        int index = encode_valuation(valuation);
+        return xprobability(index);
+    }
 
-    T& operator[](int index) { return probability(index); }
-    T operator[](int index) const { return probability(index); }
-    T operator[](const BeliefTracking::event_t &event) const { return probability(event); }
+    void add_valuation(const BeliefTracking::valuation_t &valuation, T p) {
+        assert(p > 0);
+        int index = encode_valuation(valuation);
+        if( table_[index] == 0 ) ++non_zero_entries_;
+        table_[index] += p;
+    }
+
+    const joint_distribution_t& operator=(const joint_distribution_t &jd) {
+        if( (table_ != 0) && (nvaluations_ < jd.nvaluations_) ) {
+            delete[] table_;
+            table_ = 0;
+        }
+        if( jd.nvaluations_ > 0 ) {
+            if( table_ == 0 ) table_ = new T[jd.nvaluations_];
+            bcopy(jd.table_, table_, jd.nvaluations_ * sizeof(T));
+        }
+        nvars_ = jd.nvars_;
+        nvaluations_ = jd.nvaluations_;
+        non_zero_entries_ = jd.non_zero_entries_;
+        normalizer_ = jd.normalizer_;
+        domains_ = jd.domains_;
+        valuation_ = BeliefTracking::valuation_t(nvars_);
+        return *this;
+    }
 
     void print(std::ostream &os, int prec, bool decode) const {
         int old_prec = os.precision();
-        os << std::setprecision(prec)
-           << "distribution-table:" << std::endl;
+        os << std::setprecision(prec);
+        os << "dt: normalizer=" << normalizer_ << std::endl
+           << "dt: #non-zero-entries=" << non_zero_entries_ << std::endl
+           << "dt: table=" << table_ << std::endl;
         for( int k = 0; k < nvaluations_; ++k ) {
             if( table_[k] != 0 ) {
-                os << "  " << k;
+                os << "dt: entry " << k << std::flush;
                 if( decode ) {
                     decode_index(k);
-                    os << ":" << valuation_;
+                    os << "::" << valuation_;
                 }
                 os << "=" << table_[k] << std::endl;
             }
         }
-        os << "normalizer=" << normalizer_ << std::endl
-           << "#non-zero-entries=" << non_zero_entries_ << std::endl
-           << std::setprecision(old_prec);
+        os << std::setprecision(old_prec);
     }
 };
 
