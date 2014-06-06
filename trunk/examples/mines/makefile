@@ -5,7 +5,7 @@ INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabil
 
 CXX=			g++
 CXXEXT=			-std=c++0x
-CFLAGS=			-Wall -Werror -g $(CXXEXT) $(INCLUDES) #-DNDEBUG
+CFLAGS=			-Wall -Werror -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
 
 mines:			main.cc c_api.o
 			$(CXX) $(CFLAGS) -o mines main.cc c_api.o
