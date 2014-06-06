@@ -241,7 +241,6 @@ class WorldApplication {
 
             for (int currTrial = 0; currTrial < numTrials; currTrial++) {
                 char[][][] wumpusWorld = generateRandomWumpusWorld(randomGenerator, worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);	
-                //String stringRepWumpusWorld = getStringRepresentation(worldSize, wumpusWorld);
                 Environment wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, movingWumpus, checkCrossing, wumpusWorld);
                 Simulation trial = new Simulation(randomGenerator, wumpusEnvironment, maxSteps, movingWumpus, diagonalWumpus, numExpansions, MDPHorizon, verbose);
                 trialScores[currTrial] = trial.getScore();
@@ -257,8 +256,6 @@ class WorldApplication {
                 elapsedTime[currTrial] = trial.getElapsedTime();
 
                 if (verbose) System.out.println("\n\n___________________________________________\n");
-
-                //if (golds[currTrial]) System.out.println("Repr.: " + stringRepWumpusWorld);
 
                 //char[][][] wumpusWorld = generateRandomWumpusWorld(randomGenerator, worldSize, numPits, numWumpus, randomAgentLoc, diagonalWumpus);	
                 //Environment wumpusEnvironment = new Environment(worldSize, numPits, numWumpus, movingWumpus, checkCrossing, wumpusWorld);

@@ -1,4 +1,5 @@
 void agent_initialize(int rows, int cols, int nmines);
+void agent_finalize();
 int agent_get_action();
 int agent_is_flag_action(int action);
 int agent_get_cell(int action);

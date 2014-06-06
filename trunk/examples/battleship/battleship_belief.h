@@ -89,6 +89,7 @@ class belief_t : public base_belief_t {
     static void release_memory() {
         for( std::list<belief_t*>::const_iterator it = beliefs_.begin(); it != beliefs_.end(); ++it )
             delete *it;
+        beliefs_.clear();
     }
 
     static void initialize(int nrows,

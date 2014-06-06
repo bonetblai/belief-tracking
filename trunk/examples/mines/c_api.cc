@@ -46,6 +46,14 @@ void agent_initialize(int nrows, int ncols, int nmines) {
     start_time = read_time_in_seconds();
 }
 
+void agent_finalize() {
+    delete agent_state;
+    delete agent_policy;
+    agent_state = 0;
+    agent_policy = 0;
+    state_t::finalize();
+}
+
 int agent_get_action() {
     assert(agent_policy != NULL);
     ++ndecisions;
