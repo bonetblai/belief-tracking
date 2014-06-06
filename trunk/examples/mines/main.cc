@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define TESTING
+//#define TESTING
 #ifdef TESTING
 #include "full_joint_tracking.h"
 #include "causal_belief_tracking.h"
