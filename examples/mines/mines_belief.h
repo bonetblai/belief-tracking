@@ -73,11 +73,16 @@ class mines_belief_t {
             return belief;
         }
     }
-
     static void deallocate(mines_belief_t *belief) {
         if( belief != 0 ) {
             beliefs_.push_front(belief);
         }
+    }
+    static void release_memory() {
+        for( std::list<mines_belief_t*>::const_iterator it = beliefs_.begin(); it != beliefs_.end(); ++it ) {
+            delete *it;
+        }
+        beliefs_.clear();
     }
 
     static void initialize(int nrows, int ncols, int nmines) {
@@ -87,6 +92,11 @@ class mines_belief_t {
         nmines_ = nmines;
         cell_beam_t::initialize();
         grid_belief_t::initialize(nrows_, ncols_, grid_belief_t::octile_neighbourhood);
+    }
+    static void finalize() {
+        release_memory();
+        grid_belief_t::finalize();
+        cell_beam_t::finalize();
     }
 
     static int nrows() { return nrows_; }

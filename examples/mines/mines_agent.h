@@ -29,6 +29,9 @@ class state_t {
     static void initialize(int nrows, int ncols, int nmines) {
         mines_belief_t::initialize(nrows, ncols, nmines);
     }
+    static void finalize() {
+        mines_belief_t::finalize();
+    }
 
     size_t hash() const { return belief_->hash(); }
 

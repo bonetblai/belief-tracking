@@ -21,6 +21,7 @@ class grid_arc_consistency_t : public CSP::arc_consistency_t<cell_beam_t> {
     grid_arc_consistency_t();
     virtual ~grid_arc_consistency_t() { }
     static void initialize(int neighbourhood);
+    static void finalize() { }
 
     virtual void arc_reduce_preprocessing_0(int var_x, int var_y);
     virtual void arc_reduce_preprocessing_1(int var_x, int val_x) { }
@@ -55,6 +56,7 @@ class grid_belief_t {
     static int ncols_;
     static int ncells_;
     static int *types_;
+    static bool initialized_;
     static CSP::constraint_digraph_t cg_;
 
   protected:
@@ -101,9 +103,8 @@ class grid_belief_t {
     // the value 511 for octile neighbourboods, and the value
     // 186 for 'manhattan' neighbourhoods.
     static void initialize(int nrows, int ncols, int neighbourhood) {
-        static bool initialized = false;
-        if( initialized && (nrows_ == nrows) && (ncols_ == ncols) ) return;
-        initialized = true;
+        if( initialized_ && (nrows_ == nrows) && (ncols_ == ncols) ) return;
+        initialized_ = true;
 
         std::cout << "grid_belief_t: initialization: "
                   << "nrows=" << nrows
@@ -131,6 +132,11 @@ class grid_belief_t {
         // constraint graph
         construct_constraint_graph(nrows_, ncols_, neighbourhood);
         grid_arc_consistency_t::initialize(neighbourhood);
+    }
+    static void finalize() {
+        delete[] types_;
+        grid_arc_consistency_t::finalize();
+        initialized_ = false;
     }
 
     static bool skip_cell(int cell, int i) {
@@ -269,6 +275,7 @@ int grid_belief_t::nrows_ = 0;
 int grid_belief_t::ncols_ = 0;
 int grid_belief_t::ncells_ = 0;
 int *grid_belief_t::types_ = 0;
+bool grid_belief_t::initialized_ = false;
 CSP::constraint_digraph_t grid_belief_t::cg_;
 
 grid_arc_consistency_t::grid_arc_consistency_t()

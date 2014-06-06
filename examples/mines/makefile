@@ -10,7 +10,7 @@ CFLAGS=			-Wall -Werror -g $(CXXEXT) $(INCLUDES) #-DNDEBUG
 mines:			main.cc c_api.o
 			$(CXX) $(CFLAGS) -o mines main.cc c_api.o
 
-c_api.o:		c_api.cc c_api.h
+c_api.o:		c_api.cc c_api.h mines_agent.h mines_belief.h mines_grid_belief.h
 			$(CXX) $(CFLAGS) -c c_api.cc
 
 clean:

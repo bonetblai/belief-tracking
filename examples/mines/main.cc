@@ -26,8 +26,11 @@
 #include <stdlib.h>
 #include <math.h>
 
+#define TESTING
+#ifdef TESTING
 #include "full_joint_tracking.h"
 #include "causal_belief_tracking.h"
+#endif
 
 extern "C" {
 #include "c_api.h"
@@ -146,6 +149,7 @@ struct minefield_t {
     }
 };
 
+#ifdef TESTING
 struct ms_bt_t {
     int nrows_;
     int ncols_;
@@ -371,6 +375,7 @@ struct ms_cbt_t : public ms_bt_t, public ProbabilisticBeliefTracking::causal_bel
         return true;
     }
 };
+#endif
 
 void usage(ostream &os) {
     os << endl
@@ -477,17 +482,21 @@ int main(int argc, const char **argv) {
     seeds[0] = seeds[1] = seeds[2] = seed;
     seed48(seeds);
 
+#ifdef TESTING
     // create distributions
     ms_fjt_t fjt(nrows, ncols);
     ms_cbt_t cbt(nrows, ncols);
+#endif
 
     // run for the specified number of trials
     if( print_deterministic_executions ) ntrials = executions_to_print;
     for( int trial = 0; trial < ntrials; ) {
         minefield_t minefield(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
+#ifdef TESTING
         fjt.reset();
         cbt.reset();
+#endif
 
         bool win = true;
         int previous_nguesses = agent_get_nguesses();
@@ -508,6 +517,7 @@ int main(int argc, const char **argv) {
             agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
             execution[play] = make_pair(action, obs);
 
+#ifdef TESTING
             cout << "VERIFY JOIN-1" << endl;
             cbt.verify_join(&fjt, 0.0001);
             //cout << "verify beams=" << flush << cbt.verify_beams(fjt, 0.0001) << endl;
@@ -526,6 +536,7 @@ int main(int argc, const char **argv) {
                 cbt.print_marginals(cout);
             }
             //cbt.print(cout);
+#endif
         }
         if( win ) {
             agent_declare_win(!print_deterministic_executions);
@@ -547,6 +558,7 @@ int main(int argc, const char **argv) {
         }
         if( !print_deterministic_executions ) ++trial;
     }
+    agent_finalize();
     return 0;
 }
 
