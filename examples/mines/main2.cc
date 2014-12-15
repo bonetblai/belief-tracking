@@ -185,8 +185,8 @@ struct ms_cbt_t {
     mutable dai::Factor joint_;
     mutable dai::FactorGraph jt_fg_;
     mutable dai::JTree jt_;
-    mutable dai::FactorGraph bp_fg_;
-    mutable dai::BP bp_;
+    mutable dai::FactorGraph approx_inference_fg_;
+    mutable dai::InfAlg *approx_inference_algorithm_;
 
     ms_cbt_t(int nrows, int ncols) : nrows_(nrows), ncols_(ncols) {
         variables_ = vector<dai::Var>(nrows_ * ncols_);
@@ -259,7 +259,7 @@ struct ms_cbt_t {
     void apply_junction_tree() const {
         dai::PropertySet opts;
         jt_fg_ = dai::FactorGraph(factors_);
-        size_t maxstates = 10000000;
+        size_t maxstates = 1e8;
         dai::boundTreewidth(jt_fg_, &dai::eliminationCost_MinFill, maxstates);
         jt_ = dai::JTree(jt_fg_, opts("updates", string("HUGIN")));
         jt_.init();
@@ -275,21 +275,24 @@ struct ms_cbt_t {
         return make_pair(float(jt_.belief(jt_fg_.var(cell))[0]), float(jt_.belief(jt_fg_.var(cell))[1]));
     }
 
-    void apply_belief_propagation() const {
+    void apply_approx_inference() const {
         dai::PropertySet opts;
-        bp_fg_ = dai::FactorGraph(factors_);
-        bp_ = dai::BP(bp_fg_, opts("updates", string("SEQRND"))("logdomain", true)("tol", 1e-9)("maxiter", (size_t)100));
-        bp_.init();
-        bp_.run();
+        approx_inference_fg_ = dai::FactorGraph(factors_);
+        //approx_inference_algorithm_ = new dai::BP(approx_inference_fg_, opts("updates", string("SEQFIX"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
+        //approx_inference_algorithm_ = new dai::Gibbs(approx_inference_fg_, opts("maxiter", (size_t)10000)("burnin", (size_t)100)("restart", (size_t)10000));
+        approx_inference_algorithm_ = new dai::HAK(approx_inference_fg_, opts("doubleloop", true)("clusters", string("BETHE"))("maxiter", (size_t)10000)("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)100)("maxtime", double(2)));
+        approx_inference_algorithm_->init();
+        approx_inference_algorithm_->run();
     }
-    void apply_belief_propagation(vector<float> &P) const {
+    void apply_approx_inference(vector<float> &P) const {
         P.clear();
-        apply_belief_propagation();
+        apply_approx_inference();
         for( int i = 0; i < nrows_ * ncols_; ++i )
-            P.push_back(bp_.belief(bp_fg_.var(i))[0]);
+            P.push_back(approx_inference_algorithm_->belief(approx_inference_fg_.var(i))[0]);
     }
-    pair<float, float> bp_marginal(int cell) const {
-        return make_pair(float(bp_.belief(bp_fg_.var(cell))[0]), float(bp_.belief(bp_fg_.var(cell))[1]));
+    pair<float, float> approx_inference_marginal(int cell) const {
+        return make_pair(float(approx_inference_algorithm_->belief(approx_inference_fg_.var(cell))[0]),
+                         float(approx_inference_algorithm_->belief(approx_inference_fg_.var(cell))[1]));
     }
 
     void print_marginals(ostream &os, pair<float, float> (ms_cbt_t::*marginal)(int) const, int prec = 2) {
@@ -712,9 +715,9 @@ int main(int argc, const char **argv) {
 
             // approximate and print marginals
             vector<float> Q;
-            cout << "Marginals (approx: belief propagation):" << endl;
-            cbt.apply_belief_propagation(Q);
-            cbt.print_marginals(cout, &ms_cbt_t::bp_marginal);
+            cout << "Marginals (approx. inference):" << endl;
+            cbt.apply_approx_inference(Q);
+            cbt.print_marginals(cout, &ms_cbt_t::approx_inference_marginal);
 
             // calculate KL-divergence
             pair<float, bool> kl1 = kl_divergence(P, Q);
