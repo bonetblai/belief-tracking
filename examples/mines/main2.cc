@@ -150,12 +150,37 @@ struct minefield_t {
 };
 
 #ifdef LIBDAI
+pair<float, bool> kl_divergence(const vector<float> &P, const vector<float> &Q) {
+    assert(P.size() == Q.size());
+    float kl = 0;
+    for( size_t i = 0; i < P.size(); ++i ) {
+        float p = P[i];
+        float q = Q[i];
+        if( (q == 0) && (p != 0) ) return make_pair(kl, false);
+        if( p == 0 ) continue;
+        kl += p * (log(p) - log(q));
+    }
+    return make_pair(kl, true);
+}
+
+pair<float, bool> js_divergence(const vector<float> &P, const vector<float> &Q) {
+    assert(P.size() == Q.size());
+    vector<float> M(P.size(), 0);
+    for( size_t i = 0; i < M.size(); ++i )
+        M[i] = (P[i] + Q[i]) / 2;
+    pair<float, bool> kl1 = kl_divergence(P, M);
+    pair<float, bool> kl2 = kl_divergence(Q, M);
+    assert(kl1.second && kl2.second);
+    return make_pair((kl1.first + kl2.first) / 2, true);
+}
+
 struct ms_cbt_t {
     int nrows_;
     int ncols_;
 
     vector<dai::Var> variables_;
     vector<dai::Factor> factors_;
+    vector<int> centers_;
 
     mutable dai::Factor joint_;
     mutable dai::FactorGraph jt_fg_;
@@ -167,6 +192,7 @@ struct ms_cbt_t {
         variables_ = vector<dai::Var>(nrows_ * ncols_);
         for( int i = 0; i < nrows_ * ncols_; ++i )
             variables_[i] = dai::Var(i, 2);
+        centers_ = vector<int>(nrows_ * ncols_);
         factors_ = vector<dai::Factor>(nrows_ * ncols_);
         for( int i = 0; i < nrows_ * ncols_; ++i ) {
             int row = i / ncols_, col = i % ncols_;
@@ -177,6 +203,7 @@ struct ms_cbt_t {
                 for( int dc = -1; dc < 2; ++dc ) {
                     int nc = col + dc;
                     if( (nc < 0) || (nc >= ncols_) ) continue;
+                    if( (dr == 0) && (dc == 0) ) centers_[i] = vars.size();
                     vars.push_back(variables_[nr * ncols_ + nc]);
                 }
             }
@@ -206,12 +233,15 @@ struct ms_cbt_t {
              << ", cell=" << cell << ":(" << col << "," << row << ")"
              << ", obs=" << obs << endl;
         if( !flag_action ) {
+            int center = centers_[cell];
+            //cout << "center=" << center << ", var=" << factors_[cell].vars().var(center) << endl;
             dai::Factor &factor = factors_[cell];
             const dai::VarSet &vars = factor.vars();
             for( int j = 0; j < (1 << vars.size()); ++j ) {
                 int popcount = __builtin_popcount(j);
                 //cout << "j=" << j << ", pop=" << popcount << endl;
                 if( popcount != obs ) factor.set(j, 0);
+                if( (j & (1 << center)) != 0 ) factor.set(j, 0);
             }
         }
     }
@@ -222,49 +252,57 @@ struct ms_cbt_t {
             joint_ *= factors_[i];
         joint_.normalize();
     }
-    float joint_marginal(int cell) const {
-        return joint_.marginal(dai::VarSet(variables_[cell]))[0];
+    pair<float, float> joint_marginal(int cell) const {
+        return make_pair(float(joint_.marginal(dai::VarSet(variables_[cell]))[0]), float(joint_.marginal(dai::VarSet(variables_[cell]))[1]));
     }
 
     void apply_junction_tree() const {
         dai::PropertySet opts;
         jt_fg_ = dai::FactorGraph(factors_);
-        size_t maxstates = 1000000;
+        size_t maxstates = 10000000;
         dai::boundTreewidth(jt_fg_, &dai::eliminationCost_MinFill, maxstates);
         jt_ = dai::JTree(jt_fg_, opts("updates", string("HUGIN")));
         jt_.init();
         jt_.run();
     }
-    float jt_marginal(int cell) const {
-        return jt_.belief(jt_fg_.var(cell))[0];
+    void apply_junction_tree(vector<float> &P) const {
+        P.clear();
+        apply_junction_tree();
+        for( int i = 0; i < nrows_ * ncols_; ++i )
+            P.push_back(jt_.belief(jt_fg_.var(i))[0]);
+    }
+    pair<float, float> jt_marginal(int cell) const {
+        return make_pair(float(jt_.belief(jt_fg_.var(cell))[0]), float(jt_.belief(jt_fg_.var(cell))[1]));
     }
 
     void apply_belief_propagation() const {
         dai::PropertySet opts;
         bp_fg_ = dai::FactorGraph(factors_);
-        bp_ = dai::BP(bp_fg_, opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)100));
+        bp_ = dai::BP(bp_fg_, opts("updates", string("SEQRND"))("logdomain", true)("tol", 1e-9)("maxiter", (size_t)100));
         bp_.init();
         bp_.run();
     }
-    float bp_marginal(int cell) const {
-        return bp_.belief(bp_fg_.var(cell))[0];
+    void apply_belief_propagation(vector<float> &P) const {
+        P.clear();
+        apply_belief_propagation();
+        for( int i = 0; i < nrows_ * ncols_; ++i )
+            P.push_back(bp_.belief(bp_fg_.var(i))[0]);
+    }
+    pair<float, float> bp_marginal(int cell) const {
+        return make_pair(float(bp_.belief(bp_fg_.var(cell))[0]), float(bp_.belief(bp_fg_.var(cell))[1]));
     }
 
-    void approximate_marginals() const {
-    }
-    float approximate_marginal(int cell) const {
-        return 0;
-    }
-
-    void print_marginals(ostream &os, float (ms_cbt_t::*marginal)(int) const, int prec = 2) {
+    void print_marginals(ostream &os, pair<float, float> (ms_cbt_t::*marginal)(int) const, int prec = 2) {
         int old_prec = os.precision();
         os << setprecision(prec);
         for( int row = 0; row < nrows_; ++row ) {
             for( int col = 0; col < ncols_; ++col ) {
                 int cell = row * ncols_ + col;
                 //float p = joint_marginal(cell);
-                float p = (this->*marginal)(cell);
-                os << "cbt: mar(" << col << "," << row << ")=" << p << endl;
+                pair<float, float> p = (this->*marginal)(cell);
+                os << "cbt: P[ (" << col << "," << row << ")=0 ] = " << p.first
+                   << (p.second == 0.0 ? "*" : (p.first == 0.0 ? "-" : ""))
+                   << endl;
             }
         }
         os << setprecision(old_prec);
@@ -625,7 +663,8 @@ int main(int argc, const char **argv) {
         int previous_nguesses = agent_get_nguesses();
         vector<pair<int,int> > execution(nrows * ncols);
         for( int play = 0; play < nrows * ncols; ++play ) {
-            int action = agent_get_action();
+            int is_guess;
+            int action = agent_get_action(&is_guess);
             if( play == 0 ) {
                 assert(!agent_is_flag_action(action));
                 int cell = agent_get_cell(action);
@@ -645,14 +684,17 @@ int main(int argc, const char **argv) {
                  << " play=" << play
                  << ", action=" << action
                  << ", obs=" << obs
+                 << ", is-guess=" << is_guess
                  << endl;
 
+#if 0
             if( (play > 0) && !agent_is_flag_action(action) && (cbt.joint_marginal(agent_get_cell(action)) != 1.0) ) {
                 cout << "cbt: INSECURE ACTION: open cell ("
                      << agent_get_cell(action) / ncols << ","
                      << agent_get_cell(action) % ncols << ")"
                      << endl;
             }
+#endif
 
             // update factors
             cbt.update(agent_is_flag_action(action), agent_get_cell(action), obs);
@@ -663,14 +705,22 @@ int main(int argc, const char **argv) {
             //cbt.print_marginals(cout, &ms_cbt_t::joint_marginal);
 
             // compute and print exact marginals via junction tree
+            vector<float> P;
             cout << "Marginals (exact: junction tree):" << endl;
-            cbt.apply_junction_tree();
+            cbt.apply_junction_tree(P);
             cbt.print_marginals(cout, &ms_cbt_t::jt_marginal);
 
             // approximate and print marginals
+            vector<float> Q;
             cout << "Marginals (approx: belief propagation):" << endl;
-            cbt.apply_belief_propagation();
+            cbt.apply_belief_propagation(Q);
             cbt.print_marginals(cout, &ms_cbt_t::bp_marginal);
+
+            // calculate KL-divergence
+            pair<float, bool> kl1 = kl_divergence(P, Q);
+            pair<float, bool> kl2 = kl_divergence(Q, P);
+            pair<float, bool> js = js_divergence(P, Q);
+            cout << "KL-divergence: v1=" << kl1.first << ", s1=" << kl1.second << ", v2=" << kl2.first << ", s2=" << kl2.second << ", R=" << (kl1.first * kl2.first) / (kl1.first + kl2.first) << ", J=" << js.first << endl;
 
 #if 0
             cout << "VERIFY JOIN-1" << endl;

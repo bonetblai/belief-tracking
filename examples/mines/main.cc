@@ -502,7 +502,8 @@ int main(int argc, const char **argv) {
         int previous_nguesses = agent_get_nguesses();
         vector<pair<int,int> > execution(nrows * ncols);
         for( int play = 0; play < nrows * ncols; ++play ) {
-            int action = agent_get_action();
+            int is_guess;
+            int action = agent_get_action(&is_guess);
             if( play == 0 ) {
                 assert(!agent_is_flag_action(action));
                 int cell = agent_get_cell(action);

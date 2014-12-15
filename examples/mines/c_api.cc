@@ -54,11 +54,12 @@ void agent_finalize() {
     state_t::finalize();
 }
 
-int agent_get_action() {
+int agent_get_action(int *is_guess) {
     assert(agent_policy != NULL);
     ++ndecisions;
     pair<int, bool> p = (*agent_policy)(*agent_state);
     nguesses += p.second ? 1 : 0;
+    if( is_guess != 0 ) *is_guess = p.second ? 1 : 0;
     return p.first;
 }
 
