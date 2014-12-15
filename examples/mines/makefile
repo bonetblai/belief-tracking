@@ -3,9 +3,16 @@ MDP_ENGINE_HOME=	../../../mdp-engine
 
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine -I $(MDP_ENGINE_HOME)/engine
 
-CXX=			g++
-CXXEXT=			-std=c++0x
+CXX=			c++
+CXXEXT=			-std=c++11
+CXXEXT2=		-std=c++11 -I ~/software/libdai/include -Wno-deprecated -Wall -W -Wextra -fPIC -DMACOSX -arch x86_64 -O3 -DDAI_DEBUG -L ~/software/libdai/lib -ldai -lgmpxx -lgmp
+
+#c++ -std=c++11 -I ~/software/libdai/include -Wno-deprecated -Wall -W -Wextra -fPIC -DMACOSX -arch x86_64 -O3 -g -DDAI_DEBUG  -L ~/software/libdai/lib -o mines2 main2.cc c_api.o -ldai -lgmpxx -lgmp -arch x86_64
+
 CFLAGS=			-Wall -Werror -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
+
+mines2:			main2.cc c_api.o
+			$(CXX) $(CXXEXT2) -o mines2 main2.cc c_api.o
 
 mines:			main.cc c_api.o
 			$(CXX) $(CFLAGS) -o mines main.cc c_api.o
