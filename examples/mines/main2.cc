@@ -177,6 +177,8 @@ pair<float, bool> js_divergence(const vector<float> &P, const vector<float> &Q) 
 struct ms_cbt_t {
     int nrows_;
     int ncols_;
+    int nmines_;
+    bool noisy_;
 
     vector<dai::Var> variables_;
     vector<dai::Factor> factors_;
@@ -188,7 +190,10 @@ struct ms_cbt_t {
     mutable dai::FactorGraph approx_inference_fg_;
     mutable dai::InfAlg *approx_inference_algorithm_;
 
-    ms_cbt_t(int nrows, int ncols) : nrows_(nrows), ncols_(ncols) {
+    set<int> plays_;
+    int nflags_;
+
+    ms_cbt_t(int nrows, int ncols, int nmines, bool noisy = false) : nrows_(nrows), ncols_(ncols), nmines_(nmines), noisy_(noisy) {
         variables_ = vector<dai::Var>(nrows_ * ncols_);
         for( int i = 0; i < nrows_ * ncols_; ++i )
             variables_[i] = dai::Var(i, 2);
@@ -224,10 +229,14 @@ struct ms_cbt_t {
             for( int j = 0; j < (1 << factor.vars().size()); ++j )
                 factor.set(j, p);
         }
-        cout << "RESET" << endl;
+        plays_.clear();
+        nflags_ = 0;
+        approx_inference_algorithm_ = 0;
     }
 
     void update(bool flag_action, int cell, int obs) {
+        assert(plays_.find(cell) == plays_.end());
+        plays_.insert(cell);
         int row = cell / ncols_, col = cell % ncols_;
         cout << "cbt: flag=" << flag_action
              << ", cell=" << cell << ":(" << col << "," << row << ")"
@@ -239,10 +248,21 @@ struct ms_cbt_t {
             const dai::VarSet &vars = factor.vars();
             for( int j = 0; j < (1 << vars.size()); ++j ) {
                 int popcount = __builtin_popcount(j);
-                //cout << "j=" << j << ", pop=" << popcount << endl;
-                if( popcount != obs ) factor.set(j, 0);
+                if( !noisy_ ) {
+                    if( popcount != obs ) factor.set(j, 0);
+                } else {
+                    if( popcount == obs ) {
+                        factor.set(j, factor[j] * .95);
+                    } else if( (popcount == obs - 1) || (popcount == obs + 1) ) {
+                        factor.set(j, factor[j] * .05);
+                    } else {
+                        factor.set(j, 0);
+                    }
+                }
                 if( (j & (1 << center)) != 0 ) factor.set(j, 0);
             }
+        } else {
+            ++nflags_;
         }
     }
 
@@ -259,8 +279,8 @@ struct ms_cbt_t {
     void apply_junction_tree() const {
         dai::PropertySet opts;
         jt_fg_ = dai::FactorGraph(factors_);
-        size_t maxstates = 1e8;
-        dai::boundTreewidth(jt_fg_, &dai::eliminationCost_MinFill, maxstates);
+        //size_t maxstates = 1e8;
+        //dai::boundTreewidth(jt_fg_, &dai::eliminationCost_MinFill, maxstates);
         jt_ = dai::JTree(jt_fg_, opts("updates", string("HUGIN")));
         jt_.init();
         jt_.run();
@@ -268,8 +288,12 @@ struct ms_cbt_t {
     void apply_junction_tree(vector<float> &P) const {
         P.clear();
         apply_junction_tree();
-        for( int i = 0; i < nrows_ * ncols_; ++i )
+        float mass = 0;
+        for( int i = 0; i < nrows_ * ncols_; ++i ) {
             P.push_back(jt_.belief(jt_fg_.var(i))[0]);
+            mass = P.back();
+        }
+        for( int i = 0; i < nrows_ * ncols_; ++i ) P[i] /= mass;
     }
     pair<float, float> jt_marginal(int cell) const {
         return make_pair(float(jt_.belief(jt_fg_.var(cell))[0]), float(jt_.belief(jt_fg_.var(cell))[1]));
@@ -278,21 +302,74 @@ struct ms_cbt_t {
     void apply_approx_inference() const {
         dai::PropertySet opts;
         approx_inference_fg_ = dai::FactorGraph(factors_);
-        //approx_inference_algorithm_ = new dai::BP(approx_inference_fg_, opts("updates", string("SEQFIX"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
+        delete approx_inference_algorithm_;
+        approx_inference_algorithm_ = new dai::BP(approx_inference_fg_, opts("updates", string("SEQRND"))("logdomain", true)("tol", 1e-9)("maxiter", (size_t)10000));
         //approx_inference_algorithm_ = new dai::Gibbs(approx_inference_fg_, opts("maxiter", (size_t)10000)("burnin", (size_t)100)("restart", (size_t)10000));
-        approx_inference_algorithm_ = new dai::HAK(approx_inference_fg_, opts("doubleloop", true)("clusters", string("BETHE"))("maxiter", (size_t)10000)("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)100)("maxtime", double(2)));
+        //approx_inference_algorithm_ = new dai::HAK(approx_inference_fg_, opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
         approx_inference_algorithm_->init();
         approx_inference_algorithm_->run();
     }
     void apply_approx_inference(vector<float> &P) const {
         P.clear();
         apply_approx_inference();
-        for( int i = 0; i < nrows_ * ncols_; ++i )
+        float mass = 0;
+        for( int i = 0; i < nrows_ * ncols_; ++i ) {
             P.push_back(approx_inference_algorithm_->belief(approx_inference_fg_.var(i))[0]);
+            mass = P.back();
+        }
+        for( int i = 0; i < nrows_ * ncols_; ++i ) P[i] /= mass;
     }
     pair<float, float> approx_inference_marginal(int cell) const {
         return make_pair(float(approx_inference_algorithm_->belief(approx_inference_fg_.var(cell))[0]),
                          float(approx_inference_algorithm_->belief(approx_inference_fg_.var(cell))[1]));
+    }
+
+    int agent_get_action(pair<float, float> (ms_cbt_t::*marginal)(int) const) const {
+        float best_prob_for_open = 0, best_prob_for_flag = 0;
+        vector<int> best_for_open, best_for_flag;
+        for( int i = 0; i < nrows_ * ncols_; ++i ) {
+            if( plays_.find(i) != plays_.end() ) continue;
+            pair<float, float> p((this->*marginal)(i));
+            if( best_for_open.empty() || (p.first >= best_prob_for_open) ) {
+                if( best_for_open.empty() || (p.first > best_prob_for_open) ) {
+                    best_prob_for_open = p.first;
+                    best_for_open.clear();
+                }
+                best_for_open.push_back(i);
+            }
+            if( (nflags_ < nmines_) && (best_for_flag.empty() || (p.second >= best_prob_for_flag)) ) {
+                if( best_for_flag.empty() || (p.second > best_prob_for_flag) ) {
+                    best_prob_for_flag = p.second;
+                    best_for_flag.clear();
+                }
+                best_for_flag.push_back(i);
+            }
+        }
+        if( !best_for_open.empty() && (best_prob_for_open >= best_prob_for_flag) ) {
+            random_shuffle(best_for_open.begin(), best_for_open.end());
+            return best_for_open.back() + (nrows_ * ncols_);
+        } else if( !best_for_flag.empty() && (best_prob_for_open < best_prob_for_flag) ) {
+            random_shuffle(best_for_flag.begin(), best_for_flag.end());
+            return best_for_flag.back();
+        }
+        else if( !best_for_open.empty() ) {
+            random_shuffle(best_for_open.begin(), best_for_open.end());
+            return best_for_open.back() + (nrows_ * ncols_);
+        } else if( nflags_ < nmines_ ) {
+            assert(!best_for_flag.empty());
+            random_shuffle(best_for_flag.begin(), best_for_flag.end());
+            return best_for_flag.back();
+        } else {
+            assert(0);
+            return 0;
+        }
+    }
+    int agent_is_flag_action(int action) {
+        return action < nrows_ * ncols_ ? 1 : 0;
+    }
+    int agent_get_cell(int action) {
+        bool flag = action < nrows_ * ncols_;
+        return flag ? action : action - (nrows_ * ncols_);
     }
 
     void print_marginals(ostream &os, pair<float, float> (ms_cbt_t::*marginal)(int) const, int prec = 2) {
@@ -648,8 +725,8 @@ int main(int argc, const char **argv) {
 
 #ifdef LIBDAI
     // create distributions
-    //ms_fjt_t fjt(nrows, ncols);
-    ms_cbt_t cbt(nrows, ncols);
+    ms_cbt_t cbt(nrows, ncols, nmines, false);
+    //ms_cbt_t cbt(nrows, ncols, nmines, true);
 #endif
 
     // run for the specified number of trials
@@ -658,16 +735,22 @@ int main(int argc, const char **argv) {
         minefield_t minefield(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
 #ifdef LIBDAI
-        //fjt.reset();
         cbt.reset();
+        //cbt.apply_junction_tree();
+        cbt.apply_approx_inference();
 #endif
 
         bool win = true;
         int previous_nguesses = agent_get_nguesses();
         vector<pair<int,int> > execution(nrows * ncols);
         for( int play = 0; play < nrows * ncols; ++play ) {
-            int is_guess;
+            int is_guess = 2;
+#ifndef LIBDAI
             int action = agent_get_action(&is_guess);
+#else
+            //int action = cbt.agent_get_action(&ms_cbt_t::jt_marginal);
+            int action = cbt.agent_get_action(&ms_cbt_t::approx_inference_marginal);
+#endif
             if( play == 0 ) {
                 assert(!agent_is_flag_action(action));
                 int cell = agent_get_cell(action);
@@ -702,28 +785,29 @@ int main(int argc, const char **argv) {
             // update factors
             cbt.update(agent_is_flag_action(action), agent_get_cell(action), obs);
 
-            // compute and print exact marginals
-            //cout << "Marginals (exact):" << endl;
-            //cbt.compute_joint();
-            //cbt.print_marginals(cout, &ms_cbt_t::joint_marginal);
-
+#if 0
             // compute and print exact marginals via junction tree
             vector<float> P;
             cout << "Marginals (exact: junction tree):" << endl;
             cbt.apply_junction_tree(P);
             cbt.print_marginals(cout, &ms_cbt_t::jt_marginal);
+#endif
 
+#if 1
             // approximate and print marginals
             vector<float> Q;
             cout << "Marginals (approx. inference):" << endl;
             cbt.apply_approx_inference(Q);
             cbt.print_marginals(cout, &ms_cbt_t::approx_inference_marginal);
+#endif
 
+#if 0
             // calculate KL-divergence
             pair<float, bool> kl1 = kl_divergence(P, Q);
             pair<float, bool> kl2 = kl_divergence(Q, P);
             pair<float, bool> js = js_divergence(P, Q);
             cout << "KL-divergence: v1=" << kl1.first << ", s1=" << kl1.second << ", v2=" << kl2.first << ", s2=" << kl2.second << ", R=" << (kl1.first * kl2.first) / (kl1.first + kl2.first) << ", J=" << js.first << endl;
+#endif
 
 #if 0
             cout << "VERIFY JOIN-1" << endl;
