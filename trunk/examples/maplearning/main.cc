@@ -75,7 +75,7 @@ struct tracking_t {
     vector<vector<vector<float> > > marginals_;
 
     tracking_t(const cellmap_t &cellmap);
-    virtual void initialize(int initial_pos) = 0;
+    virtual void initialize(int initial_loc) = 0;
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
     virtual void get_marginal(int var, vector<float> &marginal) const = 0;
@@ -120,7 +120,7 @@ struct coord_t {
     int row_;
     static int ncols_;
     coord_t(int col, int row) : col_(col), row_(row) { }
-    coord_t(int pos) : col_(pos % ncols_), row_(pos / ncols_) { }
+    coord_t(int loc) : col_(loc % ncols_), row_(loc / ncols_) { }
     int as_index() const { return row_ * ncols_ + col_; }
     void print(ostream &os) const {
         os << "(" << col_ << "," << row_ << ")";
@@ -174,9 +174,9 @@ struct cellmap_t {
     // action labels
     enum { up, right, down, left };
 
-    float probability(int action, int pos, int new_pos) const {
+    float probability(int action, int old_loc, int new_loc) const {
         float p = 0;
-        coord_t coord(pos), new_coord(new_pos);
+        coord_t coord(old_loc), new_coord(new_loc);
         if( action == up ) {
             if( coord.row_ + 1 < nrows_ ) {
                 p = new_coord.row_ == coord.row_ + 1 ? pa_ : (new_coord.row_ == coord.row_ ? 1 - pa_ : 0);
@@ -209,13 +209,13 @@ struct cellmap_t {
         return p;
     }
 
-    float obs_probability(int obs, int pos, int /*last_action*/) const {
-        return cells_[pos].label_ == obs ? po_ : (1 - po_) / float(nlabels_ - 1);
+    float obs_probability(int obs, int loc, int /*last_action*/) const {
+        return cells_[loc].label_ == obs ? po_ : (1 - po_) / float(nlabels_ - 1);
     }
 
     // run execution: action application and observation sampling
-    int sample_location(int pos, int action) const {
-        coord_t coord(pos), new_coord(pos);
+    int sample_location(int loc, int action) const {
+        coord_t coord(loc), new_coord(loc);
         if( drand48() < pa_ ) {
             if( action == up )
                 new_coord = coord_t(coord.col_, coord.row_ + 1 < nrows_ ? coord.row_ + 1 : coord.row_);
@@ -229,9 +229,9 @@ struct cellmap_t {
         return new_coord.as_index();
     }
 
-    int sample_obs(int pos, int /*last_action*/) const {
-        assert((pos >= 0) && (pos < int(cells_.size())));
-        int label = cells_[pos].label_;
+    int sample_obs(int loc, int /*last_action*/) const {
+        assert((loc >= 0) && (loc < int(cells_.size())));
+        int label = cells_[loc].label_;
         if( drand48() > po_ ) {
             int i = lrand48() % (nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {
@@ -246,10 +246,10 @@ struct cellmap_t {
         return label;
     }
 
-    void initialize(int initial_pos, vector<pair<string, tracking_t*> > &tracking_algorithms) const {
+    void initialize(int initial_loc, vector<pair<string, tracking_t*> > &tracking_algorithms) const {
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             tracking_t &tracking = *tracking_algorithms[i].second;
-            tracking.initialize(initial_pos);
+            tracking.initialize(initial_loc);
             tracking.calculate_marginals();
             tracking.store_marginals();
         }
@@ -282,24 +282,24 @@ struct cellmap_t {
         // initialize tracking algorithms
         initialize(0, tracking_algorithms);
 
-        int hidden_pos = 0;
+        int hidden_loc = 0;
         for( size_t t = 0; true; ++t ) {
-            if( !execution.empty() && (t >= execution.size()) ) return make_pair(t, hidden_pos);
-            if( execution.empty() && (t >= size_t(nsteps)) ) return make_pair(t, hidden_pos);
+            if( !execution.empty() && (t >= execution.size()) ) return make_pair(t, hidden_loc);
+            if( execution.empty() && (t >= size_t(nsteps)) ) return make_pair(t, hidden_loc);
             int last_action = -1;
             int obs = -1;
 
-            // select next action, update hidden pos, and sample observation
+            // select next action, update hidden loc, and sample observation
             if( !execution.empty() ) {
-                hidden_pos = execution[t].loc_;
+                hidden_loc = execution[t].loc_;
                 obs = execution[t].obs_;
                 last_action = execution[t].last_action_;
             } else {
                 assert(!tracking_algorithms.empty());
                 last_action = policy->select_action(tracking_algorithms[0].second);
-                hidden_pos = sample_location(hidden_pos, last_action);
-                obs = sample_obs(hidden_pos, last_action);
-                cout << "step (t=" << t << "): last_action=" << last_action << ", obs=" << obs << ", pos=" << hidden_pos << endl;
+                hidden_loc = sample_location(hidden_loc, last_action);
+                obs = sample_obs(hidden_loc, last_action);
+                cout << "step (t=" << t << "): last_action=" << last_action << ", obs=" << obs << ", loc=" << hidden_loc << endl;
             } 
 
             // update tracking
@@ -324,7 +324,7 @@ struct cellmap_t {
     // scoring of tracking algorithms
     typedef int score_t;
 
-    score_t compute_score(int current_pos, const tracking_t &tracking) const {
+    score_t compute_score(int current_loc, const tracking_t &tracking) const {
         score_t score = 0;
         for( int var = 0; var < 1 + nrows_ * ncols_; ++var ) {
             vector<float> marginal;
@@ -343,17 +343,17 @@ struct cellmap_t {
                 if( var < nrows_ * ncols_ ) {
                     score += cells_[var].label_ == most_probable[0] ? 1 : 0;
                 } else {
-                    score += current_pos == most_probable[0] ? 1 : 0;
+                    score += current_loc == most_probable[0] ? 1 : 0;
                 }
             }
         }
         return score;
     }
 
-    void compute_scores(int current_pos, const vector<pair<string, tracking_t*> > &tracking_algorithms, vector<score_t> &scores) const {
+    void compute_scores(int current_loc, const vector<pair<string, tracking_t*> > &tracking_algorithms, vector<score_t> &scores) const {
         scores.clear();
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
-            scores.push_back(compute_score(current_pos, *tracking_algorithms[i].second));
+            scores.push_back(compute_score(current_loc, *tracking_algorithms[i].second));
     }
 
     // R plots
@@ -412,29 +412,29 @@ struct pcbt_t : public tracking_t {
         factors_ = vector<dai::Factor>(nloc_);
     }
 
-    void reset_factors(size_t initial_pos) {
+    void reset_factors(size_t initial_loc) {
         float p = 1.0 / float(nlabels_);
         for( int i = 0; i < nloc_; ++i ) {
             factors_[i] = dai::Factor(dai::VarSet(variables_[i], variables_[nloc_]), 0.0);
             for( size_t j = 0; j < factors_[i].nrStates(); ++j ) {
-                if( j / nlabels_ == initial_pos ) factors_[i].set(j, p);
+                if( j / nlabels_ == initial_loc ) factors_[i].set(j, p);
             }
         }
     }
 
-    void filter_with_obs(int fpos, dai::Factor &factor, int /*last_action*/, int obs) const {
-        //cout << "FILTER[obs=" << obs << "]: old factor[" << fpos << "]: " << factor << endl;
+    void filter_with_obs(int floc, dai::Factor &factor, int /*last_action*/, int obs) const {
+        //cout << "FILTER[obs=" << obs << "]: old factor[" << floc << "]: " << factor << endl;
         float po = cellmap_.po_;
         for( int j = 0; j < nlabels_ * nloc_; ++j ) {
             float weight = factor[j];
             int label = j % nlabels_;
-            int pos = j / nlabels_;
-            if( fpos == pos )
+            int loc = j / nlabels_;
+            if( floc == loc )
                 factor.set(j, weight * (label == obs ? po : (1 - po) / float(nlabels_ - 1)));
             else
                 factor.set(j, weight * 0.5);
         }
-        //cout << "FILTER[obs=" << obs << "]: new factor[" << fpos << "]: " << factor << endl;
+        //cout << "FILTER[obs=" << obs << "]: new factor[" << floc << "]: " << factor << endl;
     }
 
     void update_factor(int i, int last_action, int obs) {
@@ -444,11 +444,11 @@ struct pcbt_t : public tracking_t {
             dai::Factor new_factor(factor.vars(), 0.0);
             for( size_t j = 0; j < factor.nrStates(); ++j ) {
                 int new_label = j % nlabels_;
-                int new_pos = j / nlabels_;
+                int new_loc = j / nlabels_;
                 float new_weight = 0.0;
-                for( int pos = 0; pos < nloc_; ++pos ) {
-                    float weight = factor[new_label + nlabels_ * pos];
-                    new_weight += cellmap_.probability(last_action, pos, new_pos) * weight;
+                for( int loc = 0; loc < nloc_; ++loc ) {
+                    float weight = factor[new_label + nlabels_ * loc];
+                    new_weight += cellmap_.probability(last_action, loc, new_loc) * weight;
                 }
                 new_factor.set(j, new_weight);
             }
@@ -460,9 +460,9 @@ struct pcbt_t : public tracking_t {
         //cout << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]: new factor[" << i << "]: " << factors_[i] << endl;
     }
 
-    virtual void initialize(int initial_pos) {
+    virtual void initialize(int initial_loc) {
         marginals_.clear();
-        reset_factors(initial_pos);
+        reset_factors(initial_loc);
     }
 
     virtual void update(int last_action, int obs) {
@@ -512,8 +512,7 @@ struct pcbt_bp_t : public pcbt_t {
     }
 };
 
-template <typename T> struct history_t : public vector<T> { };
-
+// Generic Particle Filter
 template <typename T> struct PF_t : public tracking_t {
     int nparticles_;
     vector<pair<float, T> > particles_;
@@ -521,7 +520,7 @@ template <typename T> struct PF_t : public tracking_t {
 
     PF_t(const cellmap_t &cellmap, int nparticles) : tracking_t(cellmap), nparticles_(nparticles) { }
 
-    virtual void initialize(int initial_pos) = 0;
+    virtual void initialize(int initial_loc) = 0;
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
     virtual void get_marginal(int var, vector<float> &marginal) const = 0;
@@ -545,17 +544,18 @@ template <typename T> struct PF_t : public tracking_t {
     }
 };
 
+// Sequential Importance Sampling (SIS) Particle Filter
 struct SIS_t : public PF_t<vector<int> > {
     SIS_t(const cellmap_t &cellmap, int nparticles) : PF_t(cellmap, nparticles) { }
 
-    virtual void initialize(int initial_pos) {
+    virtual void initialize(int initial_loc) {
         particles_ = vector<pair<float, vector<int> > >(nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
             particles_[i].first = 1;
             particles_[i].second = vector<int>(nloc_ + 1);
             for( int j = 0; j < nloc_; ++j )
                 particles_[i].second[j] = lrand48() % nlabels_;
-            particles_[i].second[nloc_] = initial_pos;
+            particles_[i].second[nloc_] = initial_loc;
         }
     }
 
@@ -563,9 +563,9 @@ struct SIS_t : public PF_t<vector<int> > {
         for( int i = 0; i < nparticles_; ++i ) {
             float &weight = particles_[i].first;
             vector<int> &sample = particles_[i].second;
-            int new_pos = cellmap_.sample_location(sample.back(), last_action);
-            weight *= cellmap_.obs_probability(obs, new_pos, last_action);
-            sample.back() = new_pos;
+            int new_loc = cellmap_.sample_location(sample.back(), last_action);
+            weight *= cellmap_.obs_probability(obs, new_loc, last_action);
+            sample.back() = new_loc;
         }
     }
 
@@ -592,17 +592,22 @@ struct SIS_t : public PF_t<vector<int> > {
     }
 };
 
-struct SIR_t : public PF_t<vector<int> > {
-    SIR_t(const cellmap_t &cellmap, int nparticles) : PF_t(cellmap, nparticles) { }
+// Generic Sequential Importance Resampling (SIR) Particle Filter
+struct Gen_SIR_t : public PF_t<vector<int> > {
+    Gen_SIR_t(const cellmap_t &cellmap, int nparticles) : PF_t(cellmap, nparticles) { }
 
-    virtual void initialize(int initial_pos) {
+    virtual int sample_from_proposal_density(int loc, int last_action, int obs) const = 0;
+    virtual float proposal_density(int new_loc, int loc, int last_action, int obs) const = 0;
+    virtual float weight(int new_loc, int loc, int last_action, int obs) const = 0;
+
+    virtual void initialize(int initial_loc) {
         particles_ = vector<pair<float, vector<int> > >(nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
             particles_[i].first = 1.0 / float(nparticles_);
             particles_[i].second = vector<int>(nloc_ + 1);
             for( int j = 0; j < nloc_; ++j )
                 particles_[i].second[j] = lrand48() % nlabels_;
-            particles_[i].second[nloc_] = initial_pos;
+            particles_[i].second[nloc_] = initial_loc;
         }
     }
 
@@ -617,11 +622,12 @@ struct SIR_t : public PF_t<vector<int> > {
         for( int i = 0; i < nparticles_; ++i ) {
             int index = indices[i];
             vector<int> sample = particles_[index].second;
-            int new_pos = cellmap_.sample_location(sample.back(), last_action);
-            float weight = cellmap_.obs_probability(obs, new_pos, last_action);
-            sample.back() = new_pos;
-            total_mass += weight;
-            new_particles.push_back(make_pair(weight, sample));
+            int loc = sample.back();
+            int new_loc = sample_from_proposal_density(loc, last_action, obs);
+            float w = weight(new_loc, loc, last_action, obs);
+            sample.back() = new_loc;
+            total_mass += w;
+            new_particles.push_back(make_pair(w, sample));
         }
         for( int i = 0; i < nparticles_; ++i )
             new_particles[i].first /= total_mass;
@@ -647,10 +653,31 @@ struct SIR_t : public PF_t<vector<int> > {
     }
 };
 
+struct Optimal_SIR_t : public Gen_SIR_t {
+    Optimal_SIR_t(const cellmap_t &cellmap, int nparticles) : Gen_SIR_t(cellmap, nparticles) { }
+    virtual int sample_from_proposal_density(int loc, int last_action, int obs) const = 0;
+    virtual float proposal_density(int new_loc, int loc, int last_action, int obs) const = 0;
+    virtual float weight(int new_loc, int loc, int last_action, int obs) const {
+        return cellmap_.obs_probability(obs, loc, last_action) * cellmap_.probability(last_action, loc, new_loc) / proposal_density(new_loc, loc, last_action, obs);
+    }
+};
+
+struct Motion_Model_SIR_t : public Gen_SIR_t {
+    Motion_Model_SIR_t(const cellmap_t &cellmap, int nparticles) : Gen_SIR_t(cellmap, nparticles) { }
+    virtual int sample_from_proposal_density(int loc, int last_action, int /*obs*/) const {
+        return cellmap_.sample_location(loc, last_action);
+    }
+    virtual float proposal_density(int new_loc, int loc, int last_action, int /*obs*/) const {
+        return cellmap_.probability(last_action, loc, new_loc);
+    }
+    virtual float weight(int /*new_loc*/, int loc, int last_action, int obs) const {
+        return cellmap_.obs_probability(obs, loc, last_action);
+    }
+};
+
 struct RBPF_t : public PF_t<vector<int> > {
     RBPF_t(const cellmap_t &cellmap, int nparticles) : PF_t(cellmap, nparticles) { }
-
-    virtual void initialize(int initial_pos) = 0;
+    virtual void initialize(int initial_loc) = 0;
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
     virtual void get_marginal(int var, vector<float> &marginal) const = 0;
@@ -767,13 +794,15 @@ int main(int argc, const char **argv) {
     pcbt_bp_t bp(cellmap, "BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
     pcbt_bp_t hak(cellmap, "HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
     SIS_t sis(cellmap, 50);
-    SIR_t sir(cellmap, 50);
+    Motion_Model_SIR_t mm_sir(cellmap, 50);
+    Optimal_SIR_t opt_sir(cellmap, 50);
     //RBPF_t rbpf(cellmap, 50);
     tracking_algorithms.push_back(make_pair("jt", &jt));
     tracking_algorithms.push_back(make_pair("bp", &bp));
     tracking_algorithms.push_back(make_pair("hak", &hak));
     tracking_algorithms.push_back(make_pair("sis", &sis));
-    tracking_algorithms.push_back(make_pair("sir", &sir));
+    tracking_algorithms.push_back(make_pair("mm-sir", &mm_sir));
+    tracking_algorithms.push_back(make_pair("opt-sir", &opt_sir));
     //tracking_algorithms.push_back(make_pair("rbpf", &rbpf));
 
     // action selection
@@ -827,7 +856,8 @@ int main(int argc, const char **argv) {
 
         // generate R plots
         cellmap.generate_R_plot(cout, jt, "jt");
-        cellmap.generate_R_plot(cout, sir, "sir");
+        cellmap.generate_R_plot(cout, mm_sir, "mm-sir");
+        cellmap.generate_R_plot(cout, opt_sir, "opt-sir");
     }
 
     return 0;
