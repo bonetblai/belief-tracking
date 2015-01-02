@@ -620,11 +620,11 @@ struct SIS_t : public PF_t<vector<int> > {
 };
 
 // Generic Sequential Importance Resampling (SIR) Particle Filter
-struct Gen_SIR_t : public PF_t<vector<int> > {
+struct SIR_t : public PF_t<vector<int> > {
     vector<pair<int, int> > history_;
 
-    Gen_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : PF_t(name, cellmap, nparticles) { }
-    virtual ~Gen_SIR_t() { }
+    SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : PF_t(name, cellmap, nparticles) { }
+    virtual ~SIR_t() { }
 
     virtual void sample_from_pi(vector<int> &new_state, const vector<int> &state, int last_action, int obs) const = 0;
     virtual float importance_weight(const vector<int> &new_state, const vector<int> &state, int last_action, int obs) const = 0;
@@ -684,11 +684,11 @@ struct Gen_SIR_t : public PF_t<vector<int> > {
     }
 };
 
-struct Optimal_SIR_t : public Gen_SIR_t {
+struct Optimal_SIR_t : public SIR_t {
     int nstates_;
     float **cdf_;
 
-    Optimal_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : Gen_SIR_t(name, cellmap, nparticles) {
+    Optimal_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR_t(name, cellmap, nparticles) {
         nstates_ = nloc_;
         for( int loc = 0; loc < nloc_; ++loc )
             nstates_ *= nlabels_;
@@ -783,8 +783,8 @@ struct Optimal_SIR_t : public Gen_SIR_t {
     }
 };
 
-struct Motion_Model_SIR_t : public Gen_SIR_t {
-    Motion_Model_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : Gen_SIR_t(name, cellmap, nparticles) { }
+struct Motion_Model_SIR_t : public SIR_t {
+    Motion_Model_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR_t(name, cellmap, nparticles) { }
     virtual ~Motion_Model_SIR_t() { }
 
     virtual void sample_from_pi(vector<int> &new_state, const vector<int> &state, int last_action, int /*obs*/) const {
@@ -797,8 +797,8 @@ struct Motion_Model_SIR_t : public Gen_SIR_t {
     }
 };
 
-struct RBPF_t : public Gen_SIR_t {
-    RBPF_t(const string &name, const cellmap_t &cellmap, int nparticles) : Gen_SIR_t(name, cellmap, nparticles) { }
+struct RBPF_t : public SIR_t {
+    RBPF_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR_t(name, cellmap, nparticles) { }
     virtual ~RBPF_t() { }
 
     virtual void sample_from_pi(vector<int> &new_state, const vector<int> &state, int last_action, int /*obs*/) const {
