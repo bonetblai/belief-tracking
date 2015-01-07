@@ -280,7 +280,13 @@ struct cellmap_t {
     };
     struct execution_t : public vector<execution_step_t> { };
 
-    void run_execution(const int *labels, int labels_size, const execution_t &input_execution, execution_t &output_execution, int nsteps, const action_selection_t *policy, vector<tracking_t*> &tracking_algorithms) {
+    void run_execution(const int *labels,
+                       int labels_size,
+                       const execution_t &input_execution,
+                       execution_t &output_execution,
+                       int nsteps,
+                       const action_selection_t *policy,
+                       vector<tracking_t*> &tracking_algorithms) {
         // set labels for callmap
         if( labels_size > 0 )
             set_labels(labels, labels_size);
@@ -318,17 +324,33 @@ struct cellmap_t {
             advance_step(last_action, obs, tracking_algorithms);
         }
     }
-    void run_execution(const int *labels, int labels_size, const execution_t &input_execution, execution_t &output_execution, vector<tracking_t*> &tracking_algorithms) {
+    void run_execution(const int *labels,
+                       int labels_size,
+                       const execution_t &input_execution,
+                       execution_t &output_execution,
+                       vector<tracking_t*> &tracking_algorithms) {
         run_execution(labels, labels_size, input_execution, output_execution, 0, 0, tracking_algorithms);
     }
-    void run_execution(const int *labels, int labels_size, execution_t &output_execution, int nsteps, const action_selection_t &policy, vector<tracking_t*> &tracking_algorithms) {
+    void run_execution(const int *labels,
+                       int labels_size,
+                       execution_t &output_execution,
+                       int nsteps,
+                       const action_selection_t &policy,
+                       vector<tracking_t*> &tracking_algorithms) {
         execution_t empty_execution;
         run_execution(labels, labels_size, empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
     }
-    void run_execution(const vector<int> &labels, const execution_t &input_execution, execution_t &output_execution, vector<tracking_t*> &tracking_algorithms) {
+    void run_execution(const vector<int> &labels,
+                       const execution_t &input_execution,
+                       execution_t &output_execution,
+                       vector<tracking_t*> &tracking_algorithms) {
         run_execution(&labels[0], labels.size(), input_execution, output_execution, 0, 0, tracking_algorithms);
     }
-    void run_execution(const vector<int> &labels, execution_t &output_execution, int nsteps, const action_selection_t &policy, vector<tracking_t*> &tracking_algorithms) {
+    void run_execution(const vector<int> &labels,
+                       execution_t &output_execution,
+                       int nsteps,
+                       const action_selection_t &policy,
+                       vector<tracking_t*> &tracking_algorithms) {
         execution_t empty_execution;
         run_execution(&labels[0], labels.size(), empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
     }
@@ -389,7 +411,7 @@ struct cellmap_t {
 
         os << "dmf=melt(as.data.frame(t(matrix(mar_" << tracking.name_ << ", ncol=" << ncols_ << ", byrow=T))));" << endl
            << "dmf$y = rep(1:" << ncols_ << ", " << tracking.marginals_.size() << ");" << endl
-           << "p <- ggplot(dmf,aes(y=variable, x=y)) + "
+           << "plot_" << tracking.name_ << " <- ggplot(dmf,aes(y=variable, x=y)) + "
            << "geom_tile(aes(fill=value)) + "
            << "geom_text(aes(label=ifelse(value>.01, trunc(100*value, digits=2)/100, \"\")), size=3, angle=0, color=\"white\") +"
            << "labs(y=\"time step\", x=\"location\") + "
@@ -398,12 +420,13 @@ struct cellmap_t {
            << "scale_y_discrete(labels=paste(\"t=\", 0:" << tracking.marginals_.size() << ", sep=\"\"));" << endl;
 
         os << "pdf(\"marginals_" << tracking.name_ << ".pdf\");" << endl
-           << "show(p)" << endl
+           << "show(plot_" << tracking.name_ << ")" << endl
            << "dev.off();" << endl;
     }
 };
 
-tracking_t::tracking_t(const string &name, const cellmap_t &cellmap) : name_(name), cellmap_(cellmap) {
+tracking_t::tracking_t(const string &name, const cellmap_t &cellmap)
+  : name_(name), cellmap_(cellmap) {
     nloc_ = cellmap_.nrows_ * cellmap_.ncols_;
     nlabels_ = cellmap_.nlabels_;
 }
@@ -423,7 +446,8 @@ struct pcbt_t : public tracking_t {
     mutable dai::FactorGraph fg_;
     mutable dai::InfAlg *inference_algorithm_;
 
-    pcbt_t(const string &name, const cellmap_t &cellmap, int memory) : tracking_t(name, cellmap), memory_(memory) {
+    pcbt_t(const string &name, const cellmap_t &cellmap, int memory)
+      : tracking_t(name, cellmap), memory_(memory) {
         prefix_mask_ = 1;
         for( int i = 0; i < memory_; ++i ) prefix_mask_ *= nloc_;
         //cout << "pcbt: memory=" << memory_ << ", prefix=" << prefix_mask_ << endl;
@@ -456,7 +480,8 @@ struct pcbt_t : public tracking_t {
     }
 
     void progress_with_action(int /*floc*/, dai::Factor &factor, int last_action) const {
-        //cout << "    PROGRESS[action=" << last_action << "]: old factor[" << floc << "]: " << factor << endl;
+        //cout << "    PROGRESS[action=" << last_action << "]:"
+        //     << " old factor[" << floc << "]: " << factor << endl;
         if( last_action != -1 ) {
             dai::Factor new_factor(factor.vars(), 0.0);
             for( size_t j = 0; j < factor.nrStates(); ++j ) {
@@ -474,11 +499,13 @@ struct pcbt_t : public tracking_t {
             }
             factor = new_factor;
         }
-        //cout << "    PROGRESS[action=" << last_action << "]: new factor[" << floc << "]: " << factor << endl;
+        //cout << "    PROGRESS[action=" << last_action << "]:"
+        //     << " new factor[" << floc << "]: " << factor << endl;
     }
 
     void filter_with_obs(int floc, dai::Factor &factor, int /*last_action*/, int obs) const {
-        //cout << "    FILTER[obs=" << obs << "]: old factor[" << floc << "]: " << factor << endl;
+        //cout << "    FILTER[obs=" << obs << "]:"
+        //     << " old factor[" << floc << "]: " << factor << endl;
         if( obs != -1 ) {
             float po = cellmap_.po_;
             for( size_t j = 0; j < factor.nrStates(); ++j ) {
@@ -491,14 +518,17 @@ struct pcbt_t : public tracking_t {
                     factor.set(j, weight * 0.5);
             }
         }
-        //cout << "    FILTER[obs=" << obs << "]: new factor[" << floc << "]: " << factor << endl;
+        //cout << "    FILTER[obs=" << obs << "]:"
+        //     << " new factor[" << floc << "]: " << factor << endl;
     }
 
     void update_factor(int i, int last_action, int obs) {
-        //cout << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]: old factor[" << i << "]: " << factors_[i] << endl;
+        //cout << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]:"
+        //     << " old factor[" << i << "]: " << factors_[i] << endl;
         progress_with_action(i, factors_[i], last_action);
         filter_with_obs(i, factors_[i], last_action, obs);
-        //cout << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]: new factor[" << i << "]: " << factors_[i] << endl;
+        //cout << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]:"
+        //     << " new factor[" << i << "]: " << factors_[i] << endl;
     }
 
     virtual void initialize(int initial_loc) {
@@ -566,7 +596,9 @@ template <typename T> struct PF_t : public tracking_t {
     vector<pair<float, T> > particles_;
     vector<vector<float> > marginals_on_vars_;
 
-    PF_t(const string &name, const cellmap_t &cellmap, int nparticles) : tracking_t(name, cellmap), nparticles_(nparticles) { }
+    PF_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : tracking_t(name, cellmap), nparticles_(nparticles) {
+    }
     virtual ~PF_t() { }
 
     virtual void initialize(int initial_loc) = 0;
@@ -602,7 +634,9 @@ template <typename T> struct PF_t : public tracking_t {
 
 // Sequential Importance Sampling (SIS) Particle Filter
 struct SIS_t : public PF_t<vector<int> > {
-    SIS_t(const string &name, const cellmap_t &cellmap, int nparticles) : PF_t(name, cellmap, nparticles) { }
+    SIS_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : PF_t(name, cellmap, nparticles) {
+    }
     virtual ~SIS_t() { }
 
     virtual void initialize(int initial_loc) {
@@ -619,10 +653,10 @@ struct SIS_t : public PF_t<vector<int> > {
     virtual void update(int last_action, int obs) {
         for( int i = 0; i < nparticles_; ++i ) {
             float &weight = particles_[i].first;
-            vector<int> &particle = particles_[i].second;
-            int new_loc = cellmap_.sample_loc(particle[nloc_], last_action);
-            weight *= cellmap_.obs_probability(obs, particle[nloc_], particle, last_action);
-            particle[nloc_] = new_loc;
+            vector<int> &p = particles_[i].second;
+            int new_loc = cellmap_.sample_loc(p[nloc_], last_action);
+            weight *= cellmap_.obs_probability(obs, p[nloc_], p, last_action);
+            p[nloc_] = new_loc;
         }
     }
 
@@ -638,9 +672,9 @@ struct SIS_t : public PF_t<vector<int> > {
 
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
-            const vector<int> &particle = particles_[i].second;
+            const vector<int> &p = particles_[i].second;
             for( int j = 0; j <= nloc_; ++j )
-                marginals_on_vars_[j][particle[j]] += weight / total_mass;
+                marginals_on_vars_[j][p[j]] += weight / total_mass;
         }
     }
 
@@ -653,11 +687,13 @@ struct SIS_t : public PF_t<vector<int> > {
 struct SIR_t : public PF_t<vector<int> > {
     vector<pair<int, int> > history_;
 
-    SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : PF_t(name, cellmap, nparticles) { }
+    SIR_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : PF_t(name, cellmap, nparticles) {
+    }
     virtual ~SIR_t() { }
 
-    virtual void sample_from_pi(vector<int> &new_particle, const vector<int> &particle, int last_action, int obs) const = 0;
-    virtual float importance_weight(const vector<int> &new_particle, const vector<int> &particle, int last_action, int obs) const = 0;
+    virtual void sample_from_pi(vector<int> &np, const vector<int> &p, int last_action, int obs) const = 0;
+    virtual float importance_weight(const vector<int> &np, const vector<int> &p, int last_action, int obs) const = 0;
 
     virtual void initialize(int initial_loc) {
         particles_ = vector<pair<float, vector<int> > >(nparticles_);
@@ -680,12 +716,12 @@ struct SIR_t : public PF_t<vector<int> > {
         new_particles.reserve(nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
             int index = indices[i];
-            vector<int> &particle = particles_[index].second;
-            vector<int> new_particle;
-            sample_from_pi(new_particle, particle, last_action, obs);
-            float weight = importance_weight(new_particle, particle, last_action, obs);
+            vector<int> &p = particles_[index].second;
+            vector<int> np;
+            sample_from_pi(np, p, last_action, obs);
+            float weight = importance_weight(np, p, last_action, obs);
             total_mass += weight;
-            new_particles.push_back(make_pair(weight, new_particle));
+            new_particles.push_back(make_pair(weight, np));
         }
         for( int i = 0; i < nparticles_; ++i )
             new_particles[i].first /= total_mass;
@@ -702,10 +738,10 @@ struct SIR_t : public PF_t<vector<int> > {
 
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
-            const vector<int> &particle = particles_[i].second;
+            const vector<int> &p = particles_[i].second;
             for( int j = 0; j < nloc_; ++j )
-                marginals_on_vars_[j][particle[j]] += weight;
-            marginals_on_vars_[nloc_][particle.back()] += weight;
+                marginals_on_vars_[j][p[j]] += weight;
+            marginals_on_vars_[nloc_][p.back()] += weight;
         }
     }
 
@@ -718,7 +754,8 @@ struct optimal_SIR_t : public SIR_t {
     int nstates_;
     float **cdf_;
 
-    optimal_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR_t(name, cellmap, nparticles) {
+    optimal_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : SIR_t(name, cellmap, nparticles) {
         nstates_ = nloc_;
         for( int loc = 0; loc < nloc_; ++loc )
             nstates_ *= nlabels_;
@@ -745,7 +782,8 @@ struct optimal_SIR_t : public SIR_t {
                 cdf_[i][state_index2] = state_index2 > 0 ? cdf_[i][state_index2 - 1] : 0;
                 cdf_[i][state_index2] += pi(state2, state, action, obs);
             }
-            //cout << "cdf[" << i << "/" << nstates_ * nlabels_ * 4 << "][" << nstates_ - 1 << "]=" << setprecision(9) << cdf_[i][nstates_ - 1] << endl;
+            //cout << "cdf[" << i << "/" << nstates_ * nlabels_ * 4 << "][" << nstates_ - 1 << "]="
+            //     << setprecision(9) << cdf_[i][nstates_ - 1] << endl;
             assert(fabs(cdf_[i][nstates_ - 1] - 1.0) < .0001);
         }
     }
@@ -814,33 +852,36 @@ struct optimal_SIR_t : public SIR_t {
 };
 
 struct motion_model_SIR_t : public SIR_t {
-    motion_model_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR_t(name, cellmap, nparticles) { }
+    motion_model_SIR_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : SIR_t(name, cellmap, nparticles) {
+    }
     virtual ~motion_model_SIR_t() { }
 
-    virtual void sample_from_pi(vector<int> &new_state, const vector<int> &state, int last_action, int /*obs*/) const {
-        new_state = state;
-        int new_loc = cellmap_.sample_loc(state[nloc_], last_action);
-        new_state[nloc_] = new_loc;
+    virtual void sample_from_pi(vector<int> &np, const vector<int> &p, int last_action, int /*obs*/) const {
+        np = p;
+        np[nloc_] = cellmap_.sample_loc(p[nloc_], last_action);
     }
-    virtual float importance_weight(const vector<int> &/*new_state*/, const vector<int> &state, int last_action, int obs) const {
-        return cellmap_.obs_probability(obs, state[nloc_], state, last_action);
+    virtual float importance_weight(const vector<int> &np, const vector<int> &/*p*/, int last_action, int obs) const {
+        return cellmap_.obs_probability(obs, np[nloc_], np, last_action);
     }
 };
 
 struct RBPF_t : public SIR_t {
-    RBPF_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR_t(name, cellmap, nparticles) { }
+    RBPF_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : SIR_t(name, cellmap, nparticles) {
+    }
     virtual ~RBPF_t() { }
 
-    virtual void sample_from_pi(vector<int> &new_particle, const vector<int> &particle, int last_action, int /*obs*/) const {
-        new_particle = particle;
-        int new_loc = cellmap_.sample_loc(particle.back(), last_action);
-        new_particle.push_back(new_loc);
+    virtual void sample_from_pi(vector<int> &np, const vector<int> &p, int last_action, int /*obs*/) const {
+        np = p;
+        int new_loc = cellmap_.sample_loc(p.back(), last_action);
+        np.push_back(new_loc);
     }
-    virtual float importance_weight(const vector<int> &new_particle, const vector<int> &particle, int last_action, int obs) const {
-        float p = 0;
+    virtual float importance_weight(const vector<int> &np, const vector<int> &p, int last_action, int obs) const {
+        float weight = 0;
         for( int label = 0; label < nlabels_; ++label ) // marginalize over possible labels at current loc
-            p += cellmap_.obs_probability(obs, label, last_action) * probability(label, new_particle.back(), particle);
-        return p;
+            weight += cellmap_.obs_probability(obs, label, last_action) * probability(label, np.back(), p);
+        return weight;
     }
 
     // computes P(Map[curret_loc]=label | history of actions, obs)
@@ -875,11 +916,13 @@ template <typename T> struct SIR2_t : public PF_t<T> {
 
     vector<pair<int, int> > history_;
 
-    SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles) : PF_t<T>(name, cellmap, nparticles) { }
+    SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : PF_t<T>(name, cellmap, nparticles) {
+    }
     virtual ~SIR2_t() { }
 
-    virtual void sample_from_pi(T &new_particle, const T &particle, int last_action, int obs) const = 0;
-    virtual float importance_weight(const T &new_particle, const T &particle, int last_action, int obs) const = 0;
+    virtual void sample_from_pi(T &np, const T &p, int last_action, int obs) const = 0;
+    virtual float importance_weight(const T &np, const T &p, int last_action, int obs) const = 0;
 
     virtual void initialize(int initial_loc) {
         particles_ = vector<pair<float, T> >(nparticles_);
@@ -899,12 +942,12 @@ template <typename T> struct SIR2_t : public PF_t<T> {
         new_particles.reserve(nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
             int index = indices[i];
-            const T &particle = particles_[index].second;
-            T new_particle;
-            sample_from_pi(new_particle, particle, last_action, obs);
-            float weight = importance_weight(new_particle, particle, last_action, obs);
+            const T &p = particles_[index].second;
+            T np;
+            sample_from_pi(np, p, last_action, obs);
+            float weight = importance_weight(np, p, last_action, obs);
             total_mass += weight;
-            new_particles.push_back(make_pair(weight, new_particle));
+            new_particles.push_back(make_pair(weight, np));
         }
         for( int i = 0; i < nparticles_; ++i )
             new_particles[i].first /= total_mass;
@@ -920,10 +963,10 @@ template <typename T> struct SIR2_t : public PF_t<T> {
         marginals_on_vars_[nloc_] = vector<float>(nloc_, 0.0);
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
-            const T &particle = particles_[i].second;
+            const T &p = particles_[i].second;
             for( int j = 0; j < nloc_; ++j )
-                marginals_on_vars_[j][particle.label_on_loc(j)] += weight;
-            marginals_on_vars_[nloc_][particle.current_loc()] += weight;
+                marginals_on_vars_[j][p.label_on_loc(j)] += weight;
+            marginals_on_vars_[nloc_][p.current_loc()] += weight;
         }
     }
 
@@ -956,7 +999,8 @@ struct optimal_SIR2_t : public SIR2_t<base_particle_t> {
     int nstates_;
     float **cdf_;
 
-    optimal_SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR2_t(name, cellmap, nparticles) {
+    optimal_SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : SIR2_t(name, cellmap, nparticles) {
         nstates_ = nloc_;
         for( int loc = 0; loc < nloc_; ++loc )
             nstates_ *= nlabels_;
@@ -972,18 +1016,19 @@ struct optimal_SIR2_t : public SIR2_t<base_particle_t> {
         cdf_ = new float*[nstates_ * nlabels_ * 4];
         for( int i = 0; i < nstates_ * nlabels_ * 4; ++i ) {
             cdf_[i] = new float[nstates_];
-            base_particle_t particle;
+            base_particle_t p;
             int state_index = i % nstates_;
             int obs = (i / nstates_) % nlabels_;
             int action = (i / nstates_) / nlabels_;
-            decode(state_index, particle);
+            decode(state_index, p);
             for( int state_index2 = 0; state_index2 < nstates_; ++state_index2 ) {
-                base_particle_t particle2;
-                decode(state_index2, particle2);
+                base_particle_t p2;
+                decode(state_index2, p2);
                 cdf_[i][state_index2] = state_index2 > 0 ? cdf_[i][state_index2 - 1] : 0;
-                cdf_[i][state_index2] += pi(particle2, particle, action, obs);
+                cdf_[i][state_index2] += pi(p2, p, action, obs);
             }
-            //cout << "cdf[" << i << "/" << nstates_ * nlabels_ * 4 << "][" << nstates_ - 1 << "]=" << setprecision(9) << cdf_[i][nstates_ - 1] << endl;
+            //cout << "cdf[" << i << "/" << nstates_ * nlabels_ * 4 << "][" << nstates_ - 1 << "]="
+            //     << setprecision(9) << cdf_[i][nstates_ - 1] << endl;
             assert(fabs(cdf_[i][nstates_ - 1] - 1.0) < .0001);
         }
     }
@@ -991,58 +1036,58 @@ struct optimal_SIR2_t : public SIR2_t<base_particle_t> {
         return cdf_[(last_action * nlabels_ + obs) * nstates_ + state_index];
     }
 
-    int encode(const base_particle_t &particle) const {
+    int encode(const base_particle_t &p) const {
         int state_index = 0;
         for( int loc = 0; loc < nloc_; ++loc ) {
             state_index *= nlabels_;
-            state_index += particle.map_[loc];
+            state_index += p.map_[loc];
         }
-        state_index = state_index * nloc_ + particle.current_loc();
+        state_index = state_index * nloc_ + p.current_loc();
         return state_index;
     }
-    void decode(int state_index, base_particle_t &particle) const {
-        particle.map_ = vector<int>(nloc_, 0);
-        particle.current_loc_ = state_index % nloc_;
+    void decode(int state_index, base_particle_t &p) const {
+        p.map_ = vector<int>(nloc_, 0);
+        p.current_loc_ = state_index % nloc_;
         state_index /= nloc_;
         for( int loc = nloc_ - 1; loc >= 0; --loc ) {
-            particle.map_[loc] = state_index % nlabels_;
+            p.map_[loc] = state_index % nlabels_;
             state_index /= nlabels_;
         }
     }
 
-    virtual void sample_from_pi(base_particle_t &new_particle, const base_particle_t &particle, int last_action, int obs) const {
-        const float *dist = pi_cdf(encode(particle), last_action, obs);
+    virtual void sample_from_pi(base_particle_t &np, const base_particle_t &p, int last_action, int obs) const {
+        const float *dist = pi_cdf(encode(p), last_action, obs);
         int state_index = sample_from_distribution(nstates_, dist);
-        decode(state_index, new_particle);
+        decode(state_index, np);
     }
 
-    float pi(const base_particle_t &new_particle, const base_particle_t &particle, int last_action, int obs) const {
-        // new_state has probability:
-        //   P(new_state|state,last_action,obs) = P(new_state,obs|state,last_action) / P(obs|state,last_action)
-        //                                      = P(obs|new_state,state,last_action) * P(new_state|state,last_action) / P(obs|state,last_action)
-        //                                      = P(obs|new_state,last_action) * P(new_state|state,last_action) / P(obs|state,last_action)
-        if( new_particle.map_ == particle.map_ ) {
-            float p = cellmap_.obs_probability(obs, new_particle.current_loc(), new_particle.map_, last_action);
-            p *= cellmap_.loc_probability(last_action, particle.current_loc(), new_particle.current_loc());
-            return p / importance_weight(new_particle, particle, last_action, obs);
+    float pi(const base_particle_t &np, const base_particle_t &p, int last_action, int obs) const {
+        // np has probability:
+        //   P(np|p,last_action,obs) = P(np,obs|p,last_action) / P(obs|p,last_action)
+        //                           = P(obs|np,p,last_action) * P(np|p,last_action) / P(obs|p,last_action)
+        //                           = P(obs|np,last_action) * P(np|p,last_action) / P(obs|p,last_action)
+        if( np.map_ == p.map_ ) {
+            float prob = cellmap_.obs_probability(obs, np.current_loc(), np.map_, last_action);
+            prob *= cellmap_.loc_probability(last_action, p.current_loc(), np.current_loc());
+            return prob / importance_weight(np, p, last_action, obs);
         } else {
             return 0;
         }
     }
 
-    virtual float importance_weight(const base_particle_t &/*new_particle*/, const base_particle_t &particle, int last_action, int obs) const {
-        // weight = P(obs|new_state,last_action) * P(new_state|state,last_action) / P(new_state|state,last_action,obs)
-        //        = P(obs|state,last_action) [see above derivation in pi(..)]
-        //        = SUM P(new_state,obs|state,last_action)
-        //        = SUM P(obs|new_state,state,last_action) P(new_state|state,last_action)
-        //        = SUM P(obs|new_state,last_action) P(new_state|state,last_action)
-        // since P(new_state|state,last_action) = 0 if state and new_states have different labels,
-        // we can simplify the sum over locations instead of states
-        float p = 0;
-        int loc = particle.current_loc();
+    virtual float importance_weight(const base_particle_t &/*np*/, const base_particle_t &p, int last_action, int obs) const {
+        // weight = P(obs|np,last_action) * P(np|p,last_action) / P(np|p,last_action,obs)
+        //        = P(obs|p,last_action) [see above derivation in pi(..)]
+        //        = SUM P(np,obs|p,last_action)
+        //        = SUM P(obs|np,p,last_action) P(np|p,last_action)
+        //        = SUM P(obs|np,last_action) P(np|p,last_action)
+        // since P(np|p,last_action) = 0 if p and np have different labels,
+        // we can simplify the sum over locations instead of maps
+        float weight = 0;
+        int loc = p.current_loc();
         for( int new_loc = 0; new_loc < nloc_; ++new_loc )
-            p += cellmap_.obs_probability(obs, new_loc, particle.map_, last_action) * cellmap_.loc_probability(last_action, loc, new_loc);
-        return p;
+            weight += cellmap_.obs_probability(obs, new_loc, p.map_, last_action) * cellmap_.loc_probability(last_action, loc, new_loc);
+        return weight;
     }
 };
 
@@ -1050,15 +1095,17 @@ struct optimal_SIR2_t : public SIR2_t<base_particle_t> {
 // SIR filter with proposal distribution given by motion model
 
 struct motion_model_SIR2_t : public SIR2_t<base_particle_t> {
-    motion_model_SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR2_t(name, cellmap, nparticles) { }
+    motion_model_SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : SIR2_t(name, cellmap, nparticles) {
+    }
     virtual ~motion_model_SIR2_t() { }
 
-    virtual void sample_from_pi(base_particle_t &new_particle, const base_particle_t &particle, int last_action, int /*obs*/) const {
-        new_particle = particle;
-        new_particle.current_loc_ = cellmap_.sample_loc(particle.current_loc(), last_action);
+    virtual void sample_from_pi(base_particle_t &np, const base_particle_t &p, int last_action, int /*obs*/) const {
+        np = p;
+        np.current_loc_ = cellmap_.sample_loc(p.current_loc(), last_action);
     }
-    virtual float importance_weight(const base_particle_t &/*new_particle*/, const base_particle_t &particle, int last_action, int obs) const {
-        return cellmap_.obs_probability(obs, particle.current_loc(), particle.map_, last_action);
+    virtual float importance_weight(const base_particle_t &np, const base_particle_t &/*p*/, int last_action, int obs) const {
+        return cellmap_.obs_probability(obs, np.current_loc(), np.map_, last_action);
     }
 };
 
@@ -1069,34 +1116,43 @@ struct RBPF_particle_t : public base_particle_t {
     vector<vector<float> > factors_;
     void sample(int nloc, int nlabels, int initial_loc) {
         base_particle_t::sample(nloc, nlabels, initial_loc);
-        factors_ = vector<vector<float> >(nloc, vector<float>(nlabels, 1 / float(nlabels)));
+        factors_ = vector<vector<float> >(nloc, vector<float>(nlabels, 1.0 / float(nlabels)));
     }
-    void update(int last_action, int obs) {
-        assert(0);
+    void update(int last_action, int obs, const cellmap_t &cellmap) {
+        assert(current_loc() < int(factors_.size()));
+        vector<float> &factor = factors_[current_loc()];
+        assert(cellmap.nlabels_ == int(factor.size()));
+        float total_mass = 0.0;
+        for( int label = 0; label < cellmap.nlabels_; ++label ) {
+            factor[label] *= cellmap.obs_probability(obs, label, last_action);
+            total_mass += factor[label];
+        }
+        for( int label = 0; label < cellmap.nlabels_; ++label )
+            factor[label] /= total_mass;
+    }
+    float probability(int label, int loc) const {
+        assert(loc < int(factors_.size()));
+        assert(label < int(factors_[loc].size()));
+        return factors_[loc][label];
     }
 };
 
 struct RBPF2_t : public SIR2_t<RBPF_particle_t> {
-    RBPF2_t(const string &name, const cellmap_t &cellmap, int nparticles) : SIR2_t(name, cellmap, nparticles) { }
+    RBPF2_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : SIR2_t(name, cellmap, nparticles) {
+    }
     virtual ~RBPF2_t() { }
 
-    virtual void sample_from_pi(RBPF_particle_t &new_particle, const RBPF_particle_t &particle, int last_action, int obs) const {
-        new_particle = particle;
-        new_particle.current_loc_ = cellmap_.sample_loc(particle.current_loc(), last_action);
-        new_particle.update(last_action, obs);
+    virtual void sample_from_pi(RBPF_particle_t &np, const RBPF_particle_t &p, int last_action, int obs) const {
+        np = p;
+        np.current_loc_ = cellmap_.sample_loc(p.current_loc(), last_action);
+        np.update(last_action, obs, cellmap_);
     }
-    virtual float importance_weight(const RBPF_particle_t &new_particle, const RBPF_particle_t &/*particle*/, int last_action, int obs) const {
-        float p = 0;
+    virtual float importance_weight(const RBPF_particle_t &np, const RBPF_particle_t &p, int last_action, int obs) const {
+        float prob = 0;
         for( int label = 0; label < nlabels_; ++label ) // marginalize over possible labels at current loc
-            p += cellmap_.obs_probability(obs, label, last_action) * probability(label, new_particle);
-        return p;
-    }
-
-    // computes P(Map[curret_loc]=label | history of actions, obs)
-    float probability(int label, const RBPF_particle_t &particle) const {
-        assert(particle.current_loc() < int(particle.factors_.size()));
-        assert(label < int(particle.factors_[particle.current_loc()].size()));
-        return particle.factors_[particle.current_loc()][label];
+            prob += cellmap_.obs_probability(obs, label, last_action) * p.probability(label, np.current_loc());
+        return prob;
     }
 };
 
@@ -1228,34 +1284,36 @@ int main(int argc, const char **argv) {
         char *token = strtok(0, ":");
         if( name == "jt" ) {
             memory = token != 0 ? atoi(token) : memory;
-            tracking_algorithms.push_back(new pcbt_jt_t(name, cellmap, memory, opts("updates", string("HUGIN"))));
+            tracking_algorithms.push_back(new pcbt_jt_t(name + "_" + to_string(memory), cellmap, memory, opts("updates", string("HUGIN"))));
         } else if( name == "bp" ) {
             memory = token != 0 ? atoi(token) : memory;
-            tracking_algorithms.push_back(new pcbt_bp_t(name, cellmap, memory, "BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000)));
+            tracking_algorithms.push_back(new pcbt_bp_t(name + "_" + to_string(memory), cellmap, memory, "BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000)));
         } else if( name == "hak" ) {
             memory = token != 0 ? atoi(token) : memory;
-            tracking_algorithms.push_back(new pcbt_bp_t(name, cellmap, memory, "HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2))));
+            tracking_algorithms.push_back(new pcbt_bp_t(name + "_" + to_string(memory), cellmap, memory, "HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2))));
         } else if( name == "sis" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new SIS_t(name, cellmap, nparticles));
+            tracking_algorithms.push_back(new SIS_t(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "mm_sir" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new motion_model_SIR_t(name, cellmap, nparticles));
-        } else if( name == "mm2_sir" ) {
+            tracking_algorithms.push_back(new motion_model_SIR_t(name + "_" + to_string(nparticles), cellmap, nparticles));
+        } else if( name == "mm_sir2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new motion_model_SIR2_t(name, cellmap, nparticles));
+            tracking_algorithms.push_back(new motion_model_SIR2_t(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "opt_sir" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new optimal_SIR_t(name, cellmap, nparticles));
-        } else if( name == "opt2_sir" ) {
+            tracking_algorithms.push_back(new optimal_SIR_t(name + "_" + to_string(nparticles), cellmap, nparticles));
+        } else if( name == "opt_sir2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new optimal_SIR2_t(name, cellmap, nparticles));
+            tracking_algorithms.push_back(new optimal_SIR2_t(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "rbpf" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new RBPF_t(name, cellmap, nparticles));
+            tracking_algorithms.push_back(new RBPF_t(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "rbpf2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new RBPF2_t(name, cellmap, nparticles));
+            tracking_algorithms.push_back(new RBPF2_t(name + "_" + to_string(nparticles), cellmap, nparticles));
+        } else {
+            cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
         }
         free(str);
     }
