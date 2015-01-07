@@ -866,45 +866,6 @@ struct motion_model_SIR_t : public SIR_t {
     }
 };
 
-struct RBPF_t : public SIR_t {
-    RBPF_t(const string &name, const cellmap_t &cellmap, int nparticles)
-      : SIR_t(name, cellmap, nparticles) {
-    }
-    virtual ~RBPF_t() { }
-
-    virtual void sample_from_pi(vector<int> &np, const vector<int> &p, int last_action, int /*obs*/) const {
-        np = p;
-        int new_loc = cellmap_.sample_loc(p.back(), last_action);
-        np.push_back(new_loc);
-    }
-    virtual float importance_weight(const vector<int> &np, const vector<int> &p, int last_action, int obs) const {
-        float weight = 0;
-        for( int label = 0; label < nlabels_; ++label ) // marginalize over possible labels at current loc
-            weight += cellmap_.obs_probability(obs, label, last_action) * probability(label, np.back(), p);
-        return weight;
-    }
-
-    // computes P(Map[curret_loc]=label | history of actions, obs)
-    float probability(int label, int current_loc, const vector<int> &state) const {
-        if( !history_.empty() ) {
-            float freq_at_current_loc = 0;
-            float freq_same_label_at_current_loc = 0;
-            for( size_t i = nloc_ + 1; i < state.size(); ++i ) {
-                int loc = state[i];
-                if( loc == current_loc ) {
-                    ++freq_at_current_loc;
-                    assert(history_.size() > i - nloc_ - 1);
-                    freq_same_label_at_current_loc = label == history_[i - nloc_ - 1].second ? 1 : 0;
-                }
-            }
-            return freq_at_current_loc == 0 ? 1 / float(nlabels_) : float(freq_same_label_at_current_loc) / float(freq_at_current_loc);
-        } else {
-            return 1 / float(nlabels_);
-        }
-    }
-};
-
-
 
 // Generic Sequential Importance Resampling (SIR2) Particle Filter
 template <typename T> struct SIR2_t : public PF_t<T> {
@@ -1306,9 +1267,6 @@ int main(int argc, const char **argv) {
         } else if( name == "opt_sir2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new optimal_SIR2_t(name + "_" + to_string(nparticles), cellmap, nparticles));
-        } else if( name == "rbpf" ) {
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new RBPF_t(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "rbpf2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new RBPF2_t(name + "_" + to_string(nparticles), cellmap, nparticles));
