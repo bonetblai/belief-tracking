@@ -464,23 +464,22 @@ struct pcbt_t : public tracking_t {
     }
 
     void reset_factors(size_t initial_loc) {
-        int loc_hist = initial_loc;
+        int init_loc_hist = initial_loc;
         for( int i = 0; i < memory_; ++i )
-            loc_hist = loc_hist * nloc_ + initial_loc;
+            init_loc_hist = init_loc_hist * nloc_ + initial_loc;
 
-        float p = 1.0 / float(nlabels_);
         for( int i = 0; i < nloc_; ++i ) {
             dai::VarSet factor_vars(variables_[i], variables_[nloc_]);
             factors_[i] = dai::Factor(factor_vars, 0.0);
 
             // set valuations for initial loc (memory loc variables are also set to initial loc)
             for( int label = 0; label < nlabels_; ++label )
-                factors_[i].set(loc_hist * nlabels_ + label, p);
+                factors_[i].set(init_loc_hist * nlabels_ + label, 1.0);
         }
     }
 
-    void progress_with_action(int /*floc*/, dai::Factor &factor, int last_action) const {
-        //cout << "    PROGRESS[action=" << last_action << "]:"
+    void progress_with_action(int floc, dai::Factor &factor, int last_action) const {
+        //cerr << "    PROGRESS[action=" << last_action << "]:"
         //     << " old factor[" << floc << "]: " << factor << endl;
         if( last_action != -1 ) {
             dai::Factor new_factor(factor.vars(), 0.0);
@@ -494,31 +493,32 @@ struct pcbt_t : public tracking_t {
                     int new_loc_hist = prefix_loc_hist * nloc_ + new_loc;
                     float new_weight = weight * cellmap_.loc_probability(last_action, loc, new_loc);
                     int index = new_loc_hist * nlabels_ + label;
-                    new_factor.set(index, new_factor[index] + new_weight);
+                    assert(index < int(new_factor.nrStates()));
+                    if( new_weight != 0 ) new_factor.set(index, new_factor[index] + new_weight);
                 }
             }
             factor = new_factor;
         }
-        //cout << "    PROGRESS[action=" << last_action << "]:"
+        //cerr << "    PROGRESS[action=" << last_action << "]:"
         //     << " new factor[" << floc << "]: " << factor << endl;
     }
 
-    void filter_with_obs(int floc, dai::Factor &factor, int /*last_action*/, int obs) const {
-        //cout << "    FILTER[obs=" << obs << "]:"
+    void filter_with_obs(int floc, dai::Factor &factor, int last_action, int obs) const {
+        //cerr << "    FILTER[obs=" << obs << "]:"
         //     << " old factor[" << floc << "]: " << factor << endl;
         if( obs != -1 ) {
-            float po = cellmap_.po_;
             for( size_t j = 0; j < factor.nrStates(); ++j ) {
                 float weight = factor[j];
                 int label = j % nlabels_;
                 int loc_hist = j / nlabels_;
-                if( floc == (loc_hist % nloc_) ) // floc == "most recent loc in loc_hist"
-                    factor.set(j, weight * (label == obs ? po : (1 - po) / float(nlabels_ - 1)));
-                else
-                    factor.set(j, weight * 0.5);
+                if( floc == (loc_hist % nloc_) ) { // floc == "most recent loc in loc_hist"
+                    factor.set(j, weight * cellmap_.obs_probability(obs, label, last_action));
+                } else {
+                    factor.set(j, weight / float(nlabels_));
+                }
             }
         }
-        //cout << "    FILTER[obs=" << obs << "]:"
+        //cerr << "    FILTER[obs=" << obs << "]:"
         //     << " new factor[" << floc << "]: " << factor << endl;
     }
 
@@ -606,6 +606,29 @@ template <typename T> struct PF_t : public tracking_t {
     virtual void calculate_marginals() = 0;
     virtual void get_marginal(int var, vector<float> &marginal) const = 0;
 
+    void stochastic_sampling(int n, vector<int> &indices) const {
+        vector<float> cdf(nparticles_, 0);
+        cdf[0] = particles_[0].first;
+        for( int i = 1; i < nparticles_; ++i )
+            cdf[i] = cdf[i - 1] + particles_[i].first;
+
+        indices.clear();
+        indices.reserve(n);
+        for( int j = 0; j < n; ++j ) {
+            float u = drand48();
+            if( u > cdf.back() ) {
+                indices.push_back(nparticles_ - 1);
+            } else {
+                for( size_t i = 0; i < cdf.size(); ++i ) {
+                    if( u < cdf[i] ) {
+                        indices.push_back(i);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     void stochastic_universal_sampling(int n, vector<int> &indices) const {
         vector<float> cdf(nparticles_, 0);
         cdf[0] = particles_[0].first;
@@ -616,10 +639,8 @@ template <typename T> struct PF_t : public tracking_t {
         indices.reserve(n);
         float u = drand48() / float(n);
         for( int i = 0, j = 0; j < n; ++j ) {
-            assert(u <= 1.0);
-            while( u > cdf[i] ) ++i;
-            indices.push_back(i);
-            assert(i < nparticles_);
+            while( (i < nparticles_) && (u > cdf[i]) ) ++i;
+            indices.push_back(i == nparticles_ ? nparticles_ - 1 : i);
             u += 1.0 / float(n);
         }
     }
@@ -896,6 +917,7 @@ template <typename T> struct SIR2_t : public PF_t<T> {
     virtual void update(int last_action, int obs) {
         vector<int> indices;
         PF_t<T>::stochastic_universal_sampling(nparticles_, indices);
+        //PF_t<T>::stochastic_sampling(nparticles_, indices);
         assert(indices.size() == size_t(nparticles_));
 
         float total_mass = 0.0;
@@ -1076,7 +1098,8 @@ struct motion_model_SIR2_t : public SIR2_t<base_particle_t> {
 struct RBPF_particle_t : public base_particle_t {
     vector<vector<float> > factors_;
     void sample(int nloc, int nlabels, int initial_loc) {
-        base_particle_t::sample(nloc, nlabels, initial_loc);
+        //base_particle_t::sample(nloc, nlabels, initial_loc);
+        current_loc_ = initial_loc;
         factors_ = vector<vector<float> >(nloc, vector<float>(nlabels, 1.0 / float(nlabels)));
     }
     void update(int last_action, int obs, const cellmap_t &cellmap) {
@@ -1096,6 +1119,12 @@ struct RBPF_particle_t : public base_particle_t {
         assert(label < int(factors_[loc].size()));
         return factors_[loc][label];
     }
+
+    const RBPF_particle_t& operator=(const RBPF_particle_t &p) {
+        current_loc_ = p.current_loc_;
+        factors_ = p.factors_;
+        return *this;
+    }
 };
 
 struct RBPF2_t : public SIR2_t<RBPF_particle_t> {
@@ -1114,6 +1143,22 @@ struct RBPF2_t : public SIR2_t<RBPF_particle_t> {
         for( int label = 0; label < nlabels_; ++label ) // marginalize over possible labels at current loc
             prob += cellmap_.obs_probability(obs, label, last_action) * p.probability(label, np.current_loc());
         return prob;
+    }
+
+    virtual void calculate_marginals() {
+        marginals_on_vars_ = vector<vector<float> >(nloc_ + 1);
+        for( int i = 0; i < nloc_; ++i )
+            marginals_on_vars_[i] = vector<float>(nlabels_, 0.0);
+        marginals_on_vars_[nloc_] = vector<float>(nloc_, 0.0);
+        for( int i = 0; i < nparticles_; ++i ) {
+            float weight = particles_[i].first;
+            const RBPF_particle_t &p = particles_[i].second;
+            for( int loc = 0; loc < nloc_; ++loc ) {
+                for( int label = 0; label < nlabels_; ++label )
+                    marginals_on_vars_[loc][label] += weight * p.probability(label, loc);
+            }
+            marginals_on_vars_[nloc_][p.current_loc()] += weight;
+        }
     }
 };
 
@@ -1282,6 +1327,7 @@ int main(int argc, const char **argv) {
     int labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
 
     cellmap_t::execution_t fixed_execution;
+    fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, -1));
     fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::right));
     fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::right));
     fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
@@ -1295,7 +1341,7 @@ int main(int argc, const char **argv) {
     fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::left));
     fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::left));
     fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
-    fixed_execution.push_back(cellmap_t::execution_step_t(0, 1, cellmap_t::left));
+    fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
     fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
 
     // run for the specified number of trials
