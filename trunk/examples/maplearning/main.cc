@@ -478,7 +478,7 @@ struct pcbt_t : public tracking_t {
         }
     }
 
-    void progress_with_action(int floc, dai::Factor &factor, int last_action) const {
+    void progress_with_action(int /*floc*/, dai::Factor &factor, int last_action) const {
         //cerr << "    PROGRESS[action=" << last_action << "]:"
         //     << " old factor[" << floc << "]: " << factor << endl;
         if( last_action != -1 ) {
@@ -1320,6 +1320,11 @@ int main(int argc, const char **argv) {
         }
         free(str);
     }
+
+    // compute longest name
+    int size_longest_name = 0;
+    for( size_t i = 0; i < tracking_algorithms.size(); ++i )
+        size_longest_name = max(size_longest_name, tracking_algorithms[i].size());
 
     // action selection
     action_selection_t policy(cellmap);
