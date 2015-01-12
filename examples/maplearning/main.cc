@@ -28,75 +28,12 @@
 #include <math.h>
 
 #include <dai/alldai.h>
+#include "putils.h"
 
 using namespace std;
 
 // Forward references
 struct cellmap_t;
-struct tracking_t;
-
-struct marginal_t : public vector<float> {
-    marginal_t(size_t size = 0, float p = 0) : vector<float>(size, p) { }
-
-    const marginal_t& operator*=(float p) {
-        for( size_t i = 0; i < size(); ++i )
-            (*this)[i] *= p;
-        return *this;
-    }
-    const marginal_t& operator/=(float p) {
-        return *this *= (1 / p);
-    }
-    const marginal_t& operator+=(const marginal_t &m) {
-        assert(size() == m.size());
-        for( size_t i = 0; i < size(); ++i )
-            (*this)[i] += m[i];
-        return *this;
-    }
-    const marginal_t& operator-=(const marginal_t &m) {
-        assert(size() == m.size());
-        for( size_t i = 0; i < size(); ++i )
-            (*this)[i] -= m[i];
-        return *this;
-    }
-
-    void print(ostream &os) const {
-        //os << "[";
-        for( size_t i = 0; i < size(); ++i )
-            //os << " " << i << "->" << (*this)[i];
-            os << " " << (*this)[i] << (i + 1 < size() ? "," : "");
-        //os << " ]";
-    }
-};
-
-inline ostream& operator<<(ostream &os, const marginal_t &marginal) {
-    marginal.print(os);
-    return os;
-}
-
-pair<float, bool> KL_divergence(const marginal_t &P, const marginal_t &Q) {
-    assert(P.size() == Q.size());
-    float kl = 0;
-    for( size_t i = 0; i < P.size(); ++i ) {
-        float p = P[i];
-        float q = Q[i];
-        if( (q == 0) && (p != 0) ) return make_pair(kl, false);
-        if( p == 0 ) continue;
-        kl += p * (log(p) - log(q));
-    }
-    return make_pair(kl, true);
-}
-
-pair<float, bool> JS_divergence(const marginal_t &P, const marginal_t &Q) {
-    assert(P.size() == Q.size());
-    marginal_t M(P.size(), 0);
-    for( size_t i = 0; i < M.size(); ++i )
-        M[i] = (P[i] + Q[i]) / 2;
-    pair<float, bool> kl1 = KL_divergence(P, M);
-    pair<float, bool> kl2 = KL_divergence(Q, M);
-    assert(kl1.second && kl2.second);
-    return make_pair((kl1.first + kl2.first) / 2, true);
-}
-
 
 // General Tracking Algorithm
 struct tracking_t {
@@ -105,35 +42,35 @@ struct tracking_t {
     int nloc_;
     int nlabels_;
 
-    vector<vector<marginal_t> > marginals_;
+    vector<vector<dai::Factor> > marginals_;
 
     tracking_t(const string &name, const cellmap_t &cellmap);
     virtual ~tracking_t() { }
     virtual void initialize(int initial_loc) = 0;
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
-    virtual void get_marginal(int var, marginal_t &marginal) const = 0;
+    virtual void get_marginal(int var, dai::Factor &marginal) const = 0;
 
     void store_marginals() {
-        marginals_.push_back(vector<marginal_t>(nloc_ + 1));
+        marginals_.push_back(vector<dai::Factor>(nloc_ + 1));
         for( int var = 0; var < nloc_; ++var )
             get_marginal(var, marginals_.back()[var]);
         get_marginal(nloc_, marginals_.back()[nloc_]);
     }
 
-    const marginal_t& stored_marginal(int t, int var) const {
+    const dai::Factor& stored_marginal(int t, int var) const {
         assert(t < int(marginals_.size()));
-        const vector<marginal_t> &marginals_at_time_t = marginals_[t];
+        const vector<dai::Factor> &marginals_at_time_t = marginals_[t];
         assert(var < int(marginals_at_time_t.size()));
         return marginals_at_time_t[var];
     }
 
     int MAP_on_var(int var) const {
-        marginal_t marginal;
+        dai::Factor marginal;
         get_marginal(var, marginal);
         float max_probability = 0;
         int best = 0;
-        for( size_t i = 0; i < marginal.size(); ++i ) {
+        for( size_t i = 0; i < marginal.nrStates(); ++i ) {
             if( marginal[i] >= max_probability ) {
                 max_probability = marginal[i];
                 best = i;
@@ -142,7 +79,6 @@ struct tracking_t {
         return best;
     }
 };
-
 
 // General Action Selection Policy
 struct action_selection_t {
@@ -412,11 +348,11 @@ struct cellmap_t {
         score_t score = 0;
         for( int var = 0; var < 1 + nrows_ * ncols_; ++var ) {
             if( relevant_cells.find(var) != relevant_cells.end() ) {
-                marginal_t marginal;
+                dai::Factor marginal;
                 tracking.get_marginal(var, marginal);
                 float max_probability = 0;
                 vector<int> most_probable;
-                for( size_t i = 0; i < marginal.size(); ++i ) {
+                for( size_t i = 0; i < marginal.nrStates(); ++i ) {
                     if( marginal[i] >= max_probability ) {
                         if( marginal[i] > max_probability )
                             most_probable.clear();
@@ -452,7 +388,9 @@ struct cellmap_t {
     // R plots
     void generate_R_plot(ostream &os, const tracking_t &tracking) const {
         for( size_t t = 0; t < tracking.marginals_.size(); ++t ) {
-            os << "mar_" << tracking.name_ << "_t" << t << " <- c(" << tracking.stored_marginal(t, nrows_ * ncols_) << ");" << endl;
+            os << "mar_" << tracking.name_ << "_t" << t << " <- c"
+               << tracking.stored_marginal(t, nrows_ * ncols_).p()
+               << ";" << endl;
         }
         os << "mar_" << tracking.name_ << " <- c(";
         for( size_t t = 0; t < tracking.marginals_.size(); ++t )
@@ -644,30 +582,25 @@ struct pcbt_t : public tracking_t {
         if( project_join_ ) marginalize_beams();
     }
 
-    virtual void get_marginal(int var, marginal_t &marginal) const {
+    virtual void get_marginal(int var, dai::Factor &marginal) const {
         if( !project_join_ ) {
             const dai::Factor &factor = inference_algorithm_->belief(fg_.var(var));
             if( var < nloc_ ) {
-                marginal = marginal_t(factor.nrStates());
-                for( size_t i = 0; i < factor.nrStates(); ++i )
-                    marginal[i] = factor[i];
+                marginal = factor;
             } else {
-                marginal = marginal_t(nloc_, 0);
+                marginal = dai::Factor(dai::VarSet(dai::Var(nloc_, nloc_)), 0.0);
                 for( size_t i = 0; i < factor.nrStates(); ++i )
-                    marginal[i % nloc_] += factor[i];
+                    marginal.set(i % nloc_, marginal[i % nloc_] + factor[i]);
             }
         } else {
             if( var < nloc_ ) {
-                const dai::Factor &factor = factors_[var];
-                marginal = marginal_t(factor.nrStates());
-                for( size_t i = 0; i < factor.nrStates(); ++i )
-                    marginal[i] = factor[i];
+                marginal = factors_[var];
             } else {
                 const dai::Factor &factor = factors_[0];
-                marginal = marginal_t(nloc_, 0);
+                marginal = dai::Factor(dai::VarSet(dai::Var(nloc_, nloc_)), 0.0);
                 for( size_t i = 0; i < factor.nrStates(); ++i ) {
                     int loc_hist = i / nlabels_;
-                    marginal[loc_hist % nloc_] += factor[i];
+                    marginal.set(loc_hist % nloc_, marginal[loc_hist % nloc_] + factor[i]);
                 }
             }
         }
@@ -675,12 +608,11 @@ struct pcbt_t : public tracking_t {
 };
 
 
-
 // Generic Particle Filter
 template <typename T> struct PF_t : public tracking_t {
     int nparticles_;
     vector<pair<float, T> > particles_;
-    vector<marginal_t> marginals_on_vars_;
+    vector<dai::Factor> marginals_on_vars_;
 
     PF_t(const string &name, const cellmap_t &cellmap, int nparticles)
       : tracking_t(name, cellmap), nparticles_(nparticles) {
@@ -690,10 +622,10 @@ template <typename T> struct PF_t : public tracking_t {
     virtual void initialize(int initial_loc) = 0;
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
-    virtual void get_marginal(int var, marginal_t &marginal) const = 0;
+    virtual void get_marginal(int var, dai::Factor &marginal) const = 0;
 
     void stochastic_sampling(int n, vector<int> &indices) const {
-        marginal_t cdf(nparticles_, 0);
+        vector<float> cdf(nparticles_, 0);
         cdf[0] = particles_[0].first;
         for( int i = 1; i < nparticles_; ++i )
             cdf[i] = cdf[i - 1] + particles_[i].first;
@@ -716,7 +648,7 @@ template <typename T> struct PF_t : public tracking_t {
     }
 
     void stochastic_universal_sampling(int n, vector<int> &indices) const {
-        marginal_t cdf(nparticles_, 0);
+        vector<float> cdf(nparticles_, 0);
         cdf[0] = particles_[0].first;
         for( int i = 1; i < nparticles_; ++i )
             cdf[i] = cdf[i - 1] + particles_[i].first;
@@ -768,10 +700,10 @@ struct SIS_t : public PF_t<vector<int> > {
     }
 
     virtual void calculate_marginals() {
-        marginals_on_vars_ = vector<marginal_t>(nloc_ + 1);
+        marginals_on_vars_ = vector<dai::Factor>(nloc_ + 1);
         for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = marginal_t(nlabels_, 0.0);
-        marginals_on_vars_[nloc_] = marginal_t(nloc_, 0.0);
+            marginals_on_vars_[i] = dai::Factor(dai::VarSet(dai::Var(i, nlabels_)), 0.0);
+        marginals_on_vars_[nloc_] = dai::Factor(dai::VarSet(dai::Var(nloc_, nloc_)), 0.0);
 
         float total_mass = 0;
         for( int i = 0; i < nparticles_; ++i )
@@ -781,11 +713,11 @@ struct SIS_t : public PF_t<vector<int> > {
             float weight = particles_[i].first;
             const vector<int> &p = particles_[i].second;
             for( int j = 0; j <= nloc_; ++j )
-                marginals_on_vars_[j][p[j]] += weight / total_mass;
+                marginals_on_vars_[j].set(p[j], marginals_on_vars_[j][p[j]] + weight / total_mass);
         }
     }
 
-    virtual void get_marginal(int var, marginal_t &marginal) const {
+    virtual void get_marginal(int var, dai::Factor &marginal) const {
         marginal = marginals_on_vars_[var];
     }
 };
@@ -838,21 +770,21 @@ struct SIR_t : public PF_t<vector<int> > {
     }
 
     virtual void calculate_marginals() {
-        marginals_on_vars_ = vector<marginal_t>(nloc_ + 1);
+        marginals_on_vars_ = vector<dai::Factor>(nloc_ + 1);
         for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = marginal_t(nlabels_, 0.0);
-        marginals_on_vars_[nloc_] = marginal_t(nloc_, 0.0);
+            marginals_on_vars_[i] = dai::Factor(dai::VarSet(dai::Var(i, nlabels_)), 0.0);
+        marginals_on_vars_[nloc_] = dai::Factor(dai::VarSet(dai::Var(nloc_, nloc_)), 0.0);
 
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
             const vector<int> &p = particles_[i].second;
             for( int j = 0; j < nloc_; ++j )
-                marginals_on_vars_[j][p[j]] += weight;
-            marginals_on_vars_[nloc_][p.back()] += weight;
+                marginals_on_vars_[j].set(p[j], marginals_on_vars_[j][p[j]] + weight);
+            marginals_on_vars_[nloc_].set(p.back(), marginals_on_vars_[nloc_][p.back()] + weight);
         }
     }
 
-    virtual void get_marginal(int var, marginal_t &marginal) const {
+    virtual void get_marginal(int var, dai::Factor &marginal) const {
         marginal = marginals_on_vars_[var];
     }
 };
@@ -1026,20 +958,20 @@ template <typename T> struct SIR2_t : public PF_t<T> {
     }
 
     virtual void calculate_marginals() {
-        marginals_on_vars_ = vector<marginal_t>(nloc_ + 1);
+        marginals_on_vars_ = vector<dai::Factor>(nloc_ + 1);
         for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = marginal_t(nlabels_, 0.0);
-        marginals_on_vars_[nloc_] = marginal_t(nloc_, 0.0);
+            marginals_on_vars_[i] = dai::Factor(dai::VarSet(dai::Var(i, nlabels_)), 0.0);
+        marginals_on_vars_[nloc_] = dai::Factor(dai::VarSet(dai::Var(nloc_, nloc_)), 0.0);
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
             const T &p = particles_[i].second;
             for( int j = 0; j < nloc_; ++j )
-                marginals_on_vars_[j][p.label_on_loc(j)] += weight;
-            marginals_on_vars_[nloc_][p.current_loc()] += weight;
+                marginals_on_vars_[j].set(p.label_on_loc(j), marginals_on_vars_[j][p.label_on_loc(j)] + weight);
+            marginals_on_vars_[nloc_].set(p.current_loc(), marginals_on_vars_[nloc_][p.current_loc()] + weight);
         }
     }
 
-    virtual void get_marginal(int var, marginal_t &marginal) const {
+    virtual void get_marginal(int var, dai::Factor &marginal) const {
         marginal = marginals_on_vars_[var];
     }
 };
@@ -1161,44 +1093,43 @@ struct optimal_SIR2_t : public SIR2_t<base_particle_t> {
 
 // SIR filter with proposal distribution given by motion model
 struct motion_model_SIR2_t : public SIR2_t<base_particle_t> {
-motion_model_SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles)
-: SIR2_t(name, cellmap, nparticles) {
-}
-virtual ~motion_model_SIR2_t() { }
+    motion_model_SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : SIR2_t(name, cellmap, nparticles) {
+    }
+    virtual ~motion_model_SIR2_t() { }
 
-virtual void sample_from_pi(base_particle_t &np, const base_particle_t &p, int last_action, int /*obs*/) const {
-np = p;
-np.current_loc_ = cellmap_.sample_loc(p.current_loc(), last_action);
-}
-virtual float importance_weight(const base_particle_t &np, const base_particle_t &/*p*/, int last_action, int obs) const {
-return cellmap_.obs_probability(obs, np.current_loc(), np.map_, last_action);
-}
+    virtual void sample_from_pi(base_particle_t &np, const base_particle_t &p, int last_action, int /*obs*/) const {
+        np = p;
+        np.current_loc_ = cellmap_.sample_loc(p.current_loc(), last_action);
+    }
+    virtual float importance_weight(const base_particle_t &np, const base_particle_t &/*p*/, int last_action, int obs) const {
+        return cellmap_.obs_probability(obs, np.current_loc(), np.map_, last_action);
+    }
 };
 
 
 // Rao-Blackwellised SIR Filter
 struct RBPF_particle_t : public base_particle_t {
-    vector<marginal_t> factors_;
+    vector<dai::Factor> factors_;
     void sample(int nloc, int nlabels, int initial_loc) {
         //base_particle_t::sample(nloc, nlabels, initial_loc);
         current_loc_ = initial_loc;
-        factors_ = vector<marginal_t>(nloc, marginal_t(nlabels, 1.0 / float(nlabels)));
+        factors_ = vector<dai::Factor>(nloc, dai::Factor(dai::VarSet(dai::Var(0, nlabels)), 1.0 / float(nlabels)));
     }
     void update(int last_action, int obs, const cellmap_t &cellmap) {
         assert(current_loc() < int(factors_.size()));
-        marginal_t &factor = factors_[current_loc()];
-        assert(cellmap.nlabels_ == int(factor.size()));
+        dai::Factor &factor = factors_[current_loc()];
+        assert(cellmap.nlabels_ == int(factor.nrStates()));
         float total_mass = 0.0;
         for( int label = 0; label < cellmap.nlabels_; ++label ) {
-            factor[label] *= cellmap.obs_probability(obs, label, last_action);
+            factor.set(label, factor[label] * cellmap.obs_probability(obs, label, last_action));
             total_mass += factor[label];
         }
-        for( int label = 0; label < cellmap.nlabels_; ++label )
-            factor[label] /= total_mass;
+        factor /= total_mass;
     }
     float probability(int label, int loc) const {
         assert(loc < int(factors_.size()));
-        assert(label < int(factors_[loc].size()));
+        assert(label < int(factors_[loc].nrStates()));
         return factors_[loc][label];
     }
 
@@ -1228,18 +1159,18 @@ struct RBPF2_t : public SIR2_t<RBPF_particle_t> {
     }
 
     virtual void calculate_marginals() {
-        marginals_on_vars_ = vector<marginal_t>(nloc_ + 1);
+        marginals_on_vars_ = vector<dai::Factor>(nloc_ + 1);
         for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = marginal_t(nlabels_, 0.0);
-        marginals_on_vars_[nloc_] = marginal_t(nloc_, 0.0);
+            marginals_on_vars_[i] = dai::Factor(dai::VarSet(dai::Var(i, nlabels_)), 0.0);
+        marginals_on_vars_[nloc_] = dai::Factor(dai::VarSet(dai::Var(nloc_, nloc_)), 0.0);
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
             const RBPF_particle_t &p = particles_[i].second;
             for( int loc = 0; loc < nloc_; ++loc ) {
                 for( int label = 0; label < nlabels_; ++label )
-                    marginals_on_vars_[loc][label] += weight * p.probability(label, loc);
+                    marginals_on_vars_[loc].set(label, marginals_on_vars_[loc][label] + weight * p.probability(label, loc));
             }
-            marginals_on_vars_[nloc_][p.current_loc()] += weight;
+            marginals_on_vars_[nloc_].set(p.current_loc(), marginals_on_vars_[nloc_][p.current_loc()] + weight);
         }
     }
 };
@@ -1285,7 +1216,7 @@ struct particle_pcbt_t {
         }
     }
 
-    void progress_factor_with_action(int findex, dai::Factor &factor, int last_action) const {
+    void progress_factor_with_action(int /*findex*/, dai::Factor &factor, int last_action) const {
         //cerr << "    PROGRESS[action=" << last_action << "]:"
         //     << " old factor[" << findex << "]: " << factor << endl;
         if( last_action != -1 ) {
@@ -1366,19 +1297,15 @@ struct particle_pcbt_t {
         inference_algorithm_->run();
     }
 
-    void get_marginal(int var, marginal_t &marginal) const {
+    void get_marginal(int var, dai::Factor &marginal) const {
         const dai::Factor &factor = inference_algorithm_->belief(fg_.var(var));
         if( var < nloc_ ) {
-            marginal = marginal_t(factor.nrStates());
-            for( size_t i = 0; i < factor.nrStates(); ++i ) {
-                assert(factor[i] <= 1);
-                marginal[i] = factor[i];
-            }
+            marginal = factor;
         } else {
-            marginal = marginal_t(nloc_, 0);
+            marginal = dai::Factor(dai::VarSet(dai::Var(nloc_, nloc_)), 0.0);
             for( size_t i = 0; i < factor.nrStates(); ++i ) {
                 assert(factor[i] <= 1);
-                marginal[i % nloc_] += factor[i];
+                marginal.set(i % nloc_, marginal[i % nloc_] + factor[i]);
             }
         }
     }
@@ -1447,9 +1374,9 @@ struct ppcbt_t : public tracking_t {
             particles_[i].second.calculate_marginals(algorithm_, opts_);
     }
 
-    virtual void get_marginal(int var, marginal_t &marginal) const {
-        marginal_t pmarginal;
-        marginal = marginal_t(var < nloc_ ? nlabels_ : nloc_);
+    virtual void get_marginal(int var, dai::Factor &marginal) const {
+        marginal = dai::Factor(dai::VarSet(dai::Var(var, var < nloc_ ? nlabels_ : nloc_)), 0.0);
+        dai::Factor pmarginal(marginal);
         for( int i = 0; i < nparticles_; ++i ) {
             particles_[i].second.get_marginal(var, pmarginal);
             pmarginal *= particles_[i].first;
@@ -1519,9 +1446,9 @@ struct ppcbt2_t : public PF_t<particle_pcbt_t> {
             particles_[i].second.calculate_marginals(algorithm_, opts_);
     }
 
-    virtual void get_marginal(int var, marginal_t &marginal) const {
-        marginal_t pmarginal;
-        marginal = marginal_t(var < nloc_ ? nlabels_ : nloc_);
+    virtual void get_marginal(int var, dai::Factor &marginal) const {
+        marginal = dai::Factor(dai::VarSet(dai::Var(var, var < nloc_ ? nlabels_ : nloc_)), 0.0);
+        dai::Factor pmarginal(marginal);
         for( int i = 0; i < nparticles_; ++i ) {
             particles_[i].second.get_marginal(var, pmarginal);
             pmarginal *= particles_[i].first;
@@ -1529,7 +1456,6 @@ struct ppcbt2_t : public PF_t<particle_pcbt_t> {
         }
     }
 };
-
 
 
 void usage(ostream &os) {
