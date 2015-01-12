@@ -31,19 +31,49 @@
 
 using namespace std;
 
-// forward references
+// Forward references
 struct cellmap_t;
+struct tracking_t;
 
-inline ostream& operator<<(ostream &os, const vector<float> &dist) {
-    //os << "[";
-    for( size_t i = 0; i < dist.size(); ++i )
-        //os << " " << i << "->" << dist[i];
-        os << " " << dist[i] << (i + 1 < dist.size() ? "," : "");
-    //os << " ]";
+struct marginal_t : public vector<float> {
+    marginal_t(size_t size = 0, float p = 0) : vector<float>(size, p) { }
+
+    const marginal_t& operator*=(float p) {
+        for( size_t i = 0; i < size(); ++i )
+            (*this)[i] *= p;
+        return *this;
+    }
+    const marginal_t& operator/=(float p) {
+        return *this *= (1 / p);
+    }
+    const marginal_t& operator+=(const marginal_t &m) {
+        assert(size() == m.size());
+        for( size_t i = 0; i < size(); ++i )
+            (*this)[i] += m[i];
+        return *this;
+    }
+    const marginal_t& operator-=(const marginal_t &m) {
+        assert(size() == m.size());
+        for( size_t i = 0; i < size(); ++i )
+            (*this)[i] -= m[i];
+        return *this;
+    }
+
+    void print(ostream &os) const {
+        //os << "[";
+        for( size_t i = 0; i < size(); ++i )
+            //os << " " << i << "->" << (*this)[i];
+            os << " " << (*this)[i] << (i + 1 < size() ? "," : "");
+        //os << " ]";
+    }
+};
+
+inline ostream& operator<<(ostream &os, const marginal_t &marginal) {
+    marginal.print(os);
     return os;
 }
 
-pair<float, bool> KL_divergence(const vector<float> &P, const vector<float> &Q) {
+pair<float, bool> KL_divergence(const marginal_t &P, const marginal_t &Q) {
     assert(P.size() == Q.size());
     float kl = 0;
     for( size_t i = 0; i < P.size(); ++i ) {
@@ -56,9 +86,9 @@ pair<float, bool> KL_divergence(const vector<float> &P, const vector<float> &Q) 
     return make_pair(kl, true);
 }
 
-pair<float, bool> JS_divergence(const vector<float> &P, const vector<float> &Q) {
+pair<float, bool> JS_divergence(const marginal_t &P, const marginal_t &Q) {
     assert(P.size() == Q.size());
-    vector<float> M(P.size(), 0);
+    marginal_t M(P.size(), 0);
     for( size_t i = 0; i < M.size(); ++i )
         M[i] = (P[i] + Q[i]) / 2;
     pair<float, bool> kl1 = KL_divergence(P, M);
@@ -67,36 +97,39 @@ pair<float, bool> JS_divergence(const vector<float> &P, const vector<float> &Q) 
     return make_pair((kl1.first + kl2.first) / 2, true);
 }
 
+
+// General Tracking Algorithm
 struct tracking_t {
     string name_;
     const cellmap_t &cellmap_;
     int nloc_;
     int nlabels_;
 
-    vector<vector<vector<float> > > marginals_;
+    vector<vector<marginal_t> > marginals_;
 
     tracking_t(const string &name, const cellmap_t &cellmap);
+    virtual ~tracking_t() { }
     virtual void initialize(int initial_loc) = 0;
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
-    virtual void get_marginal(int var, vector<float> &marginal) const = 0;
+    virtual void get_marginal(int var, marginal_t &marginal) const = 0;
 
     void store_marginals() {
-        marginals_.push_back(vector<vector<float> >(nloc_ + 1));
+        marginals_.push_back(vector<marginal_t>(nloc_ + 1));
         for( int var = 0; var < nloc_; ++var )
             get_marginal(var, marginals_.back()[var]);
         get_marginal(nloc_, marginals_.back()[nloc_]);
     }
 
-    const vector<float>& stored_marginal(int t, int var) const {
+    const marginal_t& stored_marginal(int t, int var) const {
         assert(t < int(marginals_.size()));
-        const vector<vector<float> > &marginals_at_time_t = marginals_[t];
+        const vector<marginal_t> &marginals_at_time_t = marginals_[t];
         assert(var < int(marginals_at_time_t.size()));
         return marginals_at_time_t[var];
     }
 
     int MAP_on_var(int var) const {
-        vector<float> marginal;
+        marginal_t marginal;
         get_marginal(var, marginal);
         float max_probability = 0;
         int best = 0;
@@ -110,11 +143,15 @@ struct tracking_t {
     }
 };
 
+
+// General Action Selection Policy
 struct action_selection_t {
     const cellmap_t &cellmap_;
     action_selection_t(const cellmap_t &cellmap) : cellmap_(cellmap) { }
-    int select_action(const tracking_t *tracking = 0) const;
+    virtual ~action_selection_t() { }
+    virtual int select_action(const tracking_t *tracking = 0) const = 0;
 };
+
 
 struct coord_t {
     int col_;
@@ -222,6 +259,19 @@ struct cellmap_t {
     }
 
     // run execution: action application and observation sampling
+    int regress_loc(int new_loc, int action) const {
+        coord_t coord(new_loc), new_coord(new_loc);
+        if( action == up )
+            coord = coord_t(new_coord.col_, new_coord.row_ == 0 ? 0 : new_coord.row_ - 1);
+        else if( action == right )
+            coord = coord_t(new_coord.col_ == 0 ? 0 : new_coord.col_ - 1, new_coord.row_);
+        else if( action == down )
+            coord = coord_t(new_coord.col_, new_coord.row_ == nrows_ - 1 ? nrows_ - 1 : new_coord.row_ + 1);
+        else if( action == left )
+            coord = coord_t(new_coord.col_ == ncols_ - 1 ? ncols_ - 1 : new_coord.col_ + 1, new_coord.row_);
+        return coord.as_index();
+    }
+
     int sample_loc(int loc, int action) const {
         coord_t coord(loc), new_coord(loc);
         if( drand48() < pa_ ) {
@@ -316,7 +366,7 @@ struct cellmap_t {
                 last_action = policy->select_action(tracking_algorithms[0]);
                 hidden_loc = sample_loc(hidden_loc, last_action);
                 obs = sample_obs(hidden_loc, last_action);
-                cout << "step (t=" << t << "): last_action=" << last_action << ", obs=" << obs << ", loc=" << hidden_loc << endl;
+                cerr << "step (t=" << t << "): last_action=" << last_action << ", obs=" << obs << ", loc=" << hidden_loc << endl;
             } 
 
             // update tracking
@@ -362,7 +412,7 @@ struct cellmap_t {
         score_t score = 0;
         for( int var = 0; var < 1 + nrows_ * ncols_; ++var ) {
             if( relevant_cells.find(var) != relevant_cells.end() ) {
-                vector<float> marginal;
+                marginal_t marginal;
                 tracking.get_marginal(var, marginal);
                 float max_probability = 0;
                 vector<int> most_probable;
@@ -402,15 +452,15 @@ struct cellmap_t {
     // R plots
     void generate_R_plot(ostream &os, const tracking_t &tracking) const {
         for( size_t t = 0; t < tracking.marginals_.size(); ++t ) {
-            os << "mar_" << tracking.name_ << "_t" << t << " = c(" << tracking.stored_marginal(t, nrows_ * ncols_) << ");" << endl;
+            os << "mar_" << tracking.name_ << "_t" << t << " <- c(" << tracking.stored_marginal(t, nrows_ * ncols_) << ");" << endl;
         }
-        os << "mar_" << tracking.name_ << " = c(";
+        os << "mar_" << tracking.name_ << " <- c(";
         for( size_t t = 0; t < tracking.marginals_.size(); ++t )
             os << "mar_" << tracking.name_ << "_t" << t << (t + 1 < tracking.marginals_.size() ? ", " : "");
         os << ");" << endl;
 
-        os << "dmf=melt(as.data.frame(t(matrix(mar_" << tracking.name_ << ", ncol=" << ncols_ << ", byrow=T))));" << endl
-           << "dmf$y = rep(1:" << ncols_ << ", " << tracking.marginals_.size() << ");" << endl
+        os << "dmf <- melt(as.data.frame(t(matrix(mar_" << tracking.name_ << ", ncol=" << ncols_ << ", byrow=T))));" << endl
+           << "dmf$y <- rep(1:" << ncols_ << ", " << tracking.marginals_.size() << ");" << endl
            << "plot_" << tracking.name_ << " <- ggplot(dmf,aes(y=variable, x=y)) + "
            << "geom_tile(aes(fill=value)) + "
            << "geom_text(aes(label=ifelse(value>.01, trunc(100*value, digits=2)/100, \"\")), size=3, angle=0, color=\"white\") +"
@@ -431,29 +481,42 @@ tracking_t::tracking_t(const string &name, const cellmap_t &cellmap)
     nlabels_ = cellmap_.nlabels_;
 }
 
-int action_selection_t::select_action(const tracking_t *tracking) const {
-    int action = drand48() > .30 ? cellmap_t::right : cellmap_t::left;
-    return action;
-}
+struct naive_action_selection_t : public action_selection_t {
+    naive_action_selection_t(const cellmap_t &cellmap) : action_selection_t(cellmap) { }
+    virtual ~naive_action_selection_t() { }
+    virtual int select_action(const tracking_t */*tracking*/) const {
+        int action = drand48() > .30 ? cellmap_t::right : cellmap_t::left;
+        return action;
+    }
+};
 
 
+// (Standard) Probabilistic Causal Belief Tracking
 struct pcbt_t : public tracking_t {
     int memory_;
     int prefix_mask_;
     vector<dai::Var> variables_;
     vector<dai::Factor> factors_;
 
+    bool project_join_;
+    bool marginals_calculated_;
+
+    string algorithm_;
+    dai::PropertySet opts_;
+
     mutable dai::FactorGraph fg_;
     mutable dai::InfAlg *inference_algorithm_;
 
-    pcbt_t(const string &name, const cellmap_t &cellmap, int memory)
-      : tracking_t(name, cellmap), memory_(memory) {
+    pcbt_t(const string &name, const cellmap_t &cellmap, int memory, bool project_join = false)
+      : tracking_t(name, cellmap), memory_(memory), project_join_(project_join)  {
         prefix_mask_ = 1;
         for( int i = 0; i < memory_; ++i ) prefix_mask_ *= nloc_;
-        //cout << "pcbt: memory=" << memory_ << ", prefix=" << prefix_mask_ << endl;
+        //cerr << "pcbt: memory=" << memory_ << ", prefix=" << prefix_mask_ << endl;
         inference_algorithm_ = 0;
+        marginals_calculated_ = false;
         create_variables_and_factors();
     }
+    virtual ~pcbt_t() { }
 
     void create_variables_and_factors() {
         variables_ = vector<dai::Var>(cellmap_.nrows_ * cellmap_.ncols_ + 1);
@@ -478,9 +541,9 @@ struct pcbt_t : public tracking_t {
         }
     }
 
-    void progress_with_action(int /*floc*/, dai::Factor &factor, int last_action) const {
+    void progress_factor_with_action(int /*findex*/, dai::Factor &factor, int last_action) const {
         //cerr << "    PROGRESS[action=" << last_action << "]:"
-        //     << " old factor[" << floc << "]: " << factor << endl;
+        //     << " old factor[" << findex << "]: " << factor << endl;
         if( last_action != -1 ) {
             dai::Factor new_factor(factor.vars(), 0.0);
             for( size_t j = 0; j < factor.nrStates(); ++j ) {
@@ -500,18 +563,18 @@ struct pcbt_t : public tracking_t {
             factor = new_factor;
         }
         //cerr << "    PROGRESS[action=" << last_action << "]:"
-        //     << " new factor[" << floc << "]: " << factor << endl;
+        //     << " new factor[" << findex << "]: " << factor << endl;
     }
 
-    void filter_with_obs(int floc, dai::Factor &factor, int last_action, int obs) const {
+    void filter_factor_with_obs(int findex, dai::Factor &factor, int last_action, int obs) const {
         //cerr << "    FILTER[obs=" << obs << "]:"
-        //     << " old factor[" << floc << "]: " << factor << endl;
+        //     << " old factor[" << findex << "]: " << factor << endl;
         if( obs != -1 ) {
             for( size_t j = 0; j < factor.nrStates(); ++j ) {
                 float weight = factor[j];
                 int label = j % nlabels_;
                 int loc_hist = j / nlabels_;
-                if( floc == (loc_hist % nloc_) ) { // floc == "most recent loc in loc_hist"
+                if( findex == (loc_hist % nloc_) ) { // findex == "most recent loc in loc_hist"
                     factor.set(j, weight * cellmap_.obs_probability(obs, label, last_action));
                 } else {
                     factor.set(j, weight / float(nlabels_));
@@ -519,16 +582,31 @@ struct pcbt_t : public tracking_t {
             }
         }
         //cerr << "    FILTER[obs=" << obs << "]:"
-        //     << " new factor[" << floc << "]: " << factor << endl;
+        //     << " new factor[" << findex << "]: " << factor << endl;
+    }
+
+    void marginalize_beams() {
+        for( int i = 0; i < int(factors_.size()); ++i ) {
+            cerr << "MARGINALIZE: old factor[" << i << "]: " << factors_[i] << endl;
+            dai::Factor &factor = factors_[i];
+            const dai::Factor &new_factor = inference_algorithm_->belief(factor.vars());
+            factor = new_factor;
+            cerr << "MARGINALIZE: new factor[" << i << "]: " << factors_[i] << endl;
+        }
     }
 
     void update_factor(int i, int last_action, int obs) {
-        //cout << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]:"
+        //cerr << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]:"
         //     << " old factor[" << i << "]: " << factors_[i] << endl;
-        progress_with_action(i, factors_[i], last_action);
-        filter_with_obs(i, factors_[i], last_action, obs);
-        //cout << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]:"
+        progress_factor_with_action(i, factors_[i], last_action);
+        filter_factor_with_obs(i, factors_[i], last_action, obs);
+        //cerr << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]:"
         //     << " new factor[" << i << "]: " << factors_[i] << endl;
+    }
+
+    void set_algorithm_and_options(const string &algorithm, const dai::PropertySet &opts) {
+        algorithm_ = algorithm;
+        opts_ = opts;
     }
 
     virtual void initialize(int initial_loc) {
@@ -538,63 +616,71 @@ struct pcbt_t : public tracking_t {
 
     virtual void update(int last_action, int obs) {
         assert((obs >= 0) && (obs < nlabels_));
-        for( int i = 0; i < nloc_; ++i )
+        for( int i = 0; i < int(factors_.size()); ++i )
             update_factor(i, last_action, obs);
-    }
+        marginals_calculated_ = false;
 
-    virtual void get_marginal(int var, vector<float> &marginal) const {
-        const dai::Factor &factor = inference_algorithm_->belief(fg_.var(var));
-        if( var < nloc_ ) {
-            marginal = vector<float>(factor.nrStates());
-            for( size_t i = 0; i < factor.nrStates(); ++i )
-                marginal[i] = factor[i];
-        } else {
-            marginal = vector<float>(nloc_, 0);
-            for( size_t i = 0; i < factor.nrStates(); ++i )
-                marginal[i % nloc_] += factor[i];
+        if( project_join_ ) {
+            calculate_marginals_internal();
+            marginalize_beams();
         }
     }
-};
 
-struct pcbt_jt_t : public pcbt_t {
-    const dai::PropertySet opts_;
-
-    pcbt_jt_t(const string &name, const cellmap_t &cellmap, int memory, const dai::PropertySet &opts)
-      : pcbt_t(name, cellmap, memory), opts_(opts) { }
-
-    virtual void calculate_marginals() {
+    void calculate_marginals_internal() {
         fg_ = dai::FactorGraph(factors_);
         delete inference_algorithm_;
-        inference_algorithm_ = new dai::JTree(fg_, opts_);
-        inference_algorithm_->init();
-        inference_algorithm_->run();
-    }
-};
-
-struct pcbt_bp_t : public pcbt_t {
-    string algorithm_;
-    const dai::PropertySet opts_;
-
-    pcbt_bp_t(const string &name, const cellmap_t &cellmap, int memory, const string &algorithm, const dai::PropertySet &opts)
-      : pcbt_t(name, cellmap, memory), algorithm_(algorithm), opts_(opts) { }
-
-    virtual void calculate_marginals() {
-        fg_ = dai::FactorGraph(factors_);
-        delete inference_algorithm_;
-        if( algorithm_ == "BP" )
+        if( algorithm_ == "JT" )
+            inference_algorithm_ = new dai::JTree(fg_, opts_);
+        else if( algorithm_ == "BP" )
             inference_algorithm_ = new dai::BP(fg_, opts_);
         else if( algorithm_ == "HAK" )
             inference_algorithm_ = new dai::HAK(fg_, opts_);
         inference_algorithm_->init();
         inference_algorithm_->run();
+        marginals_calculated_ = true;
+    }
+    virtual void calculate_marginals() {
+        if( !marginals_calculated_ ) calculate_marginals_internal();
+        if( project_join_ ) marginalize_beams();
+    }
+
+    virtual void get_marginal(int var, marginal_t &marginal) const {
+        if( !project_join_ ) {
+            const dai::Factor &factor = inference_algorithm_->belief(fg_.var(var));
+            if( var < nloc_ ) {
+                marginal = marginal_t(factor.nrStates());
+                for( size_t i = 0; i < factor.nrStates(); ++i )
+                    marginal[i] = factor[i];
+            } else {
+                marginal = marginal_t(nloc_, 0);
+                for( size_t i = 0; i < factor.nrStates(); ++i )
+                    marginal[i % nloc_] += factor[i];
+            }
+        } else {
+            if( var < nloc_ ) {
+                const dai::Factor &factor = factors_[var];
+                marginal = marginal_t(factor.nrStates());
+                for( size_t i = 0; i < factor.nrStates(); ++i )
+                    marginal[i] = factor[i];
+            } else {
+                const dai::Factor &factor = factors_[0];
+                marginal = marginal_t(nloc_, 0);
+                for( size_t i = 0; i < factor.nrStates(); ++i ) {
+                    int loc_hist = i / nlabels_;
+                    marginal[loc_hist % nloc_] += factor[i];
+                }
+            }
+        }
     }
 };
+
+
 
 // Generic Particle Filter
 template <typename T> struct PF_t : public tracking_t {
     int nparticles_;
     vector<pair<float, T> > particles_;
-    vector<vector<float> > marginals_on_vars_;
+    vector<marginal_t> marginals_on_vars_;
 
     PF_t(const string &name, const cellmap_t &cellmap, int nparticles)
       : tracking_t(name, cellmap), nparticles_(nparticles) {
@@ -604,10 +690,10 @@ template <typename T> struct PF_t : public tracking_t {
     virtual void initialize(int initial_loc) = 0;
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
-    virtual void get_marginal(int var, vector<float> &marginal) const = 0;
+    virtual void get_marginal(int var, marginal_t &marginal) const = 0;
 
     void stochastic_sampling(int n, vector<int> &indices) const {
-        vector<float> cdf(nparticles_, 0);
+        marginal_t cdf(nparticles_, 0);
         cdf[0] = particles_[0].first;
         for( int i = 1; i < nparticles_; ++i )
             cdf[i] = cdf[i - 1] + particles_[i].first;
@@ -630,7 +716,7 @@ template <typename T> struct PF_t : public tracking_t {
     }
 
     void stochastic_universal_sampling(int n, vector<int> &indices) const {
-        vector<float> cdf(nparticles_, 0);
+        marginal_t cdf(nparticles_, 0);
         cdf[0] = particles_[0].first;
         for( int i = 1; i < nparticles_; ++i )
             cdf[i] = cdf[i - 1] + particles_[i].first;
@@ -682,10 +768,10 @@ struct SIS_t : public PF_t<vector<int> > {
     }
 
     virtual void calculate_marginals() {
-        marginals_on_vars_ = vector<vector<float> >(nloc_ + 1);
+        marginals_on_vars_ = vector<marginal_t>(nloc_ + 1);
         for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = vector<float>(nlabels_, 0.0);
-        marginals_on_vars_[nloc_] = vector<float>(nloc_, 0.0);
+            marginals_on_vars_[i] = marginal_t(nlabels_, 0.0);
+        marginals_on_vars_[nloc_] = marginal_t(nloc_, 0.0);
 
         float total_mass = 0;
         for( int i = 0; i < nparticles_; ++i )
@@ -699,7 +785,7 @@ struct SIS_t : public PF_t<vector<int> > {
         }
     }
 
-    virtual void get_marginal(int var, vector<float> &marginal) const {
+    virtual void get_marginal(int var, marginal_t &marginal) const {
         marginal = marginals_on_vars_[var];
     }
 };
@@ -752,10 +838,10 @@ struct SIR_t : public PF_t<vector<int> > {
     }
 
     virtual void calculate_marginals() {
-        marginals_on_vars_ = vector<vector<float> >(nloc_ + 1);
+        marginals_on_vars_ = vector<marginal_t>(nloc_ + 1);
         for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = vector<float>(nlabels_, 0.0);
-        marginals_on_vars_[nloc_] = vector<float>(nloc_, 0.0);
+            marginals_on_vars_[i] = marginal_t(nlabels_, 0.0);
+        marginals_on_vars_[nloc_] = marginal_t(nloc_, 0.0);
 
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
@@ -766,7 +852,7 @@ struct SIR_t : public PF_t<vector<int> > {
         }
     }
 
-    virtual void get_marginal(int var, vector<float> &marginal) const {
+    virtual void get_marginal(int var, marginal_t &marginal) const {
         marginal = marginals_on_vars_[var];
     }
 };
@@ -803,7 +889,7 @@ struct optimal_SIR_t : public SIR_t {
                 cdf_[i][state_index2] = state_index2 > 0 ? cdf_[i][state_index2 - 1] : 0;
                 cdf_[i][state_index2] += pi(state2, state, action, obs);
             }
-            //cout << "cdf[" << i << "/" << nstates_ * nlabels_ * 4 << "][" << nstates_ - 1 << "]="
+            //cerr << "cdf[" << i << "/" << nstates_ * nlabels_ * 4 << "][" << nstates_ - 1 << "]="
             //     << setprecision(9) << cdf_[i][nstates_ - 1] << endl;
             assert(fabs(cdf_[i][nstates_ - 1] - 1.0) < .0001);
         }
@@ -940,10 +1026,10 @@ template <typename T> struct SIR2_t : public PF_t<T> {
     }
 
     virtual void calculate_marginals() {
-        marginals_on_vars_ = vector<vector<float> >(nloc_ + 1);
+        marginals_on_vars_ = vector<marginal_t>(nloc_ + 1);
         for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = vector<float>(nlabels_, 0.0);
-        marginals_on_vars_[nloc_] = vector<float>(nloc_, 0.0);
+            marginals_on_vars_[i] = marginal_t(nlabels_, 0.0);
+        marginals_on_vars_[nloc_] = marginal_t(nloc_, 0.0);
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
             const T &p = particles_[i].second;
@@ -953,14 +1039,13 @@ template <typename T> struct SIR2_t : public PF_t<T> {
         }
     }
 
-    virtual void get_marginal(int var, vector<float> &marginal) const {
+    virtual void get_marginal(int var, marginal_t &marginal) const {
         marginal = marginals_on_vars_[var];
     }
 };
 
 
-// base particle used in the different SIR filters
-
+// Base particle used in the different SIR filters
 struct base_particle_t {
     int current_loc_;
     vector<int> map_;
@@ -977,7 +1062,6 @@ struct base_particle_t {
 
 
 // SIR filter with proposal distribution given by optimal choice (intractable)
-
 struct optimal_SIR2_t : public SIR2_t<base_particle_t> {
     int nstates_;
     float **cdf_;
@@ -1010,7 +1094,7 @@ struct optimal_SIR2_t : public SIR2_t<base_particle_t> {
                 cdf_[i][state_index2] = state_index2 > 0 ? cdf_[i][state_index2 - 1] : 0;
                 cdf_[i][state_index2] += pi(p2, p, action, obs);
             }
-            //cout << "cdf[" << i << "/" << nstates_ * nlabels_ * 4 << "][" << nstates_ - 1 << "]="
+            //cerr << "cdf[" << i << "/" << nstates_ * nlabels_ * 4 << "][" << nstates_ - 1 << "]="
             //     << setprecision(9) << cdf_[i][nstates_ - 1] << endl;
             assert(fabs(cdf_[i][nstates_ - 1] - 1.0) < .0001);
         }
@@ -1076,35 +1160,33 @@ struct optimal_SIR2_t : public SIR2_t<base_particle_t> {
 
 
 // SIR filter with proposal distribution given by motion model
-
 struct motion_model_SIR2_t : public SIR2_t<base_particle_t> {
-    motion_model_SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles)
-      : SIR2_t(name, cellmap, nparticles) {
-    }
-    virtual ~motion_model_SIR2_t() { }
+motion_model_SIR2_t(const string &name, const cellmap_t &cellmap, int nparticles)
+: SIR2_t(name, cellmap, nparticles) {
+}
+virtual ~motion_model_SIR2_t() { }
 
-    virtual void sample_from_pi(base_particle_t &np, const base_particle_t &p, int last_action, int /*obs*/) const {
-        np = p;
-        np.current_loc_ = cellmap_.sample_loc(p.current_loc(), last_action);
-    }
-    virtual float importance_weight(const base_particle_t &np, const base_particle_t &/*p*/, int last_action, int obs) const {
-        return cellmap_.obs_probability(obs, np.current_loc(), np.map_, last_action);
-    }
+virtual void sample_from_pi(base_particle_t &np, const base_particle_t &p, int last_action, int /*obs*/) const {
+np = p;
+np.current_loc_ = cellmap_.sample_loc(p.current_loc(), last_action);
+}
+virtual float importance_weight(const base_particle_t &np, const base_particle_t &/*p*/, int last_action, int obs) const {
+return cellmap_.obs_probability(obs, np.current_loc(), np.map_, last_action);
+}
 };
 
 
 // Rao-Blackwellised SIR Filter
-
 struct RBPF_particle_t : public base_particle_t {
-    vector<vector<float> > factors_;
+    vector<marginal_t> factors_;
     void sample(int nloc, int nlabels, int initial_loc) {
         //base_particle_t::sample(nloc, nlabels, initial_loc);
         current_loc_ = initial_loc;
-        factors_ = vector<vector<float> >(nloc, vector<float>(nlabels, 1.0 / float(nlabels)));
+        factors_ = vector<marginal_t>(nloc, marginal_t(nlabels, 1.0 / float(nlabels)));
     }
     void update(int last_action, int obs, const cellmap_t &cellmap) {
         assert(current_loc() < int(factors_.size()));
-        vector<float> &factor = factors_[current_loc()];
+        marginal_t &factor = factors_[current_loc()];
         assert(cellmap.nlabels_ == int(factor.size()));
         float total_mass = 0.0;
         for( int label = 0; label < cellmap.nlabels_; ++label ) {
@@ -1146,10 +1228,10 @@ struct RBPF2_t : public SIR2_t<RBPF_particle_t> {
     }
 
     virtual void calculate_marginals() {
-        marginals_on_vars_ = vector<vector<float> >(nloc_ + 1);
+        marginals_on_vars_ = vector<marginal_t>(nloc_ + 1);
         for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = vector<float>(nlabels_, 0.0);
-        marginals_on_vars_[nloc_] = vector<float>(nloc_, 0.0);
+            marginals_on_vars_[i] = marginal_t(nlabels_, 0.0);
+        marginals_on_vars_[nloc_] = marginal_t(nloc_, 0.0);
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
             const RBPF_particle_t &p = particles_[i].second;
@@ -1161,6 +1243,293 @@ struct RBPF2_t : public SIR2_t<RBPF_particle_t> {
         }
     }
 };
+
+
+// (Particle) Probabilistic Causal Belief Tracking
+struct particle_pcbt_t {
+    const cellmap_t *cellmap_;
+    int nloc_;
+    int nlabels_;
+    int current_loc_;
+    vector<dai::Var> variables_;
+    vector<dai::Factor> factors_;
+
+    mutable dai::FactorGraph fg_;
+    mutable dai::InfAlg *inference_algorithm_;
+
+    particle_pcbt_t(const cellmap_t *cellmap) : cellmap_(cellmap) {
+        nloc_ = cellmap_->nrows_ * cellmap_->ncols_;
+        nlabels_ = cellmap_->nlabels_;
+        current_loc_ = 0;
+        inference_algorithm_ = 0;
+        create_variables_and_factors();
+    }
+
+    void create_variables_and_factors() {
+        variables_ = vector<dai::Var>(nloc_ + 1);
+        for( int i = 0; i < nloc_; ++i )
+            variables_[i] = dai::Var(i, nlabels_);
+        variables_[nloc_] = dai::Var(nloc_, nloc_);
+        factors_ = vector<dai::Factor>(nloc_);
+    }
+
+    void reset_factors(size_t initial_loc) {
+        current_loc_ = initial_loc;
+        for( int i = 0; i < nloc_; ++i ) {
+            dai::VarSet factor_vars(variables_[i], variables_[nloc_]);
+            factors_[i] = dai::Factor(factor_vars, 0.0);
+
+            // set valuations for initial loc
+            for( int label = 0; label < nlabels_; ++label )
+                factors_[i].set(initial_loc * nlabels_ + label, 1 / float(nlabels_));
+        }
+    }
+
+    void progress_factor_with_action(int findex, dai::Factor &factor, int last_action) const {
+        //cerr << "    PROGRESS[action=" << last_action << "]:"
+        //     << " old factor[" << findex << "]: " << factor << endl;
+        if( last_action != -1 ) {
+            float total_mass = 0;
+            dai::Factor new_factor(factor.vars(), 0.0);
+            for( size_t j = 0; j < factor.nrStates(); ++j ) {
+                int label = j % nlabels_;
+                int loc = j / nlabels_;
+                float weight = factor[j];
+                if( loc != current_loc_ ) continue;
+                for( int new_loc = 0; new_loc < nloc_; ++new_loc ) {
+                    float new_weight = weight * cellmap_->loc_probability(last_action, loc, new_loc);
+                    int index = new_loc * nlabels_ + label;
+                    assert(index < int(new_factor.nrStates()));
+                    if( new_weight != 0 ) new_factor.set(index, new_factor[index] + new_weight);
+                    total_mass += new_weight;
+                }
+            }
+            new_factor /= total_mass;
+            factor = new_factor;
+        }
+        //cerr << "    PROGRESS[action=" << last_action << "]:"
+        //     << " new factor[" << findex << "]: " << factor << endl;
+    }
+
+    void filter_factor_with_obs(int findex, dai::Factor &factor, int last_action, int obs) const {
+        //cerr << "    FILTER[obs=" << obs << "]:"
+        //     << " old factor[" << findex << "]: " << factor << endl;
+        if( obs != -1 ) {
+            float total_mass = 0;
+            for( size_t j = 0; j < factor.nrStates(); ++j ) {
+                float weight = factor[j];
+                int label = j % nlabels_;
+                int loc = j / nlabels_;
+                if( findex == loc ) {
+                    factor.set(j, weight * cellmap_->obs_probability(obs, label, last_action));
+                } else {
+                    factor.set(j, weight / float(nlabels_));
+                }
+                total_mass += factor[j];
+            }
+            factor /= total_mass;
+        }
+        //cerr << "    FILTER[obs=" << obs << "]:"
+        //     << " new factor[" << findex << "]: " << factor << endl;
+    }
+
+    void update_factor(int i, int last_action, int obs) {
+        //cerr << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]:"
+        //     << " old factor[" << i << "]: " << factors_[i] << endl;
+        progress_factor_with_action(i, factors_[i], last_action);
+        filter_factor_with_obs(i, factors_[i], last_action, obs);
+        //cerr << "UPDATE[last_action=" << last_action << ", obs=" << obs << "]:"
+        //     << " new factor[" << i << "]: " << factors_[i] << endl;
+    }
+
+    int new_loc(int last_action, int /*obs*/) const {
+        return cellmap_->sample_loc(current_loc_, last_action);
+    }
+
+    void update(int last_action, int obs, int new_loc) {
+        assert((obs >= 0) && (obs < nlabels_));
+        for( int i = 0; i < int(factors_.size()); ++i )
+            update_factor(i, last_action, obs);
+        current_loc_ = new_loc;
+    }
+
+    void calculate_marginals(const string &algorithm, const dai::PropertySet &opts) {
+        fg_ = dai::FactorGraph(factors_);
+        //delete inference_algorithm_;
+        if( algorithm == "JT" )
+            inference_algorithm_ = new dai::JTree(fg_, opts);
+        else if( algorithm == "BP" )
+            inference_algorithm_ = new dai::BP(fg_, opts);
+        else if( algorithm == "HAK" )
+            inference_algorithm_ = new dai::HAK(fg_, opts);
+        inference_algorithm_->init();
+        inference_algorithm_->run();
+    }
+
+    void get_marginal(int var, marginal_t &marginal) const {
+        const dai::Factor &factor = inference_algorithm_->belief(fg_.var(var));
+        if( var < nloc_ ) {
+            marginal = marginal_t(factor.nrStates());
+            for( size_t i = 0; i < factor.nrStates(); ++i ) {
+                assert(factor[i] <= 1);
+                marginal[i] = factor[i];
+            }
+        } else {
+            marginal = marginal_t(nloc_, 0);
+            for( size_t i = 0; i < factor.nrStates(); ++i ) {
+                assert(factor[i] <= 1);
+                marginal[i % nloc_] += factor[i];
+            }
+        }
+    }
+
+    float probability(int label, int loc) const {
+        float p = 0;
+        const dai::Factor &factor = factors_[loc];
+        for( size_t j = 0; j < factor.nrStates(); ++j ) {
+            if( j % nlabels_ == label ) p += factor[j];
+        }
+        return p;
+    }
+};
+
+struct ppcbt_t : public tracking_t {
+    int nparticles_;
+    vector<pair<float, particle_pcbt_t> > particles_;
+
+    string algorithm_;
+    dai::PropertySet opts_;
+
+    ppcbt_t(const string &name, const cellmap_t &cellmap, int nparticles)
+      : tracking_t(name, cellmap), nparticles_(nparticles) {
+        create_particles();
+    }
+    virtual ~ppcbt_t() { }
+
+    void set_algorithm_and_options(const string &algorithm, const dai::PropertySet &opts) {
+        algorithm_ = algorithm;
+        opts_ = opts;
+    }
+
+    void create_particles() {
+        for( int i = 0; i < nparticles_; ++i )
+            particles_.push_back(make_pair(1, particle_pcbt_t(&cellmap_)));
+    }
+
+    virtual void initialize(int initial_loc) {
+        marginals_.clear();
+        for( int i = 0; i < nparticles_; ++i ) {
+            particles_[i].first = 1 / float(nparticles_);
+            particles_[i].second.reset_factors(initial_loc);
+        }
+    }
+
+    virtual void update(int last_action, int obs) {
+        float total_weight = 0;
+        for( int i = 0; i < nparticles_; ++i ) {
+            particle_pcbt_t &p = particles_[i].second;
+            int new_loc = p.new_loc(last_action, obs);
+
+            float weight = 0;
+            for( int label = 0; label < nlabels_; ++label ) { // marginalize over possible labels at current loc
+                weight += cellmap_.obs_probability(obs, label, last_action) * p.probability(label, new_loc);
+            }
+            particles_[i].first = weight;
+            p.update(last_action, obs, new_loc);
+            total_weight += weight;
+        }
+        for( int i = 0; i < nparticles_; ++i )
+            particles_[i].first /= total_weight;
+    }
+
+    virtual void calculate_marginals() {
+        for( size_t i = 0; i < particles_.size(); ++i )
+            particles_[i].second.calculate_marginals(algorithm_, opts_);
+    }
+
+    virtual void get_marginal(int var, marginal_t &marginal) const {
+        marginal_t pmarginal;
+        marginal = marginal_t(var < nloc_ ? nlabels_ : nloc_);
+        for( int i = 0; i < nparticles_; ++i ) {
+            particles_[i].second.get_marginal(var, pmarginal);
+            pmarginal *= particles_[i].first;
+            marginal += pmarginal;
+        }
+    }
+};
+
+
+struct ppcbt2_t : public PF_t<particle_pcbt_t> {
+    string algorithm_;
+    dai::PropertySet opts_;
+
+    ppcbt2_t(const string &name, const cellmap_t &cellmap, int nparticles) : PF_t(name, cellmap, nparticles) {
+        create_particles();
+    }
+    virtual ~ppcbt2_t() { }
+
+    void set_algorithm_and_options(const string &algorithm, const dai::PropertySet &opts) {
+        algorithm_ = algorithm;
+        opts_ = opts;
+    }
+
+    void create_particles() {
+        particles_.reserve(nparticles_);
+        for( int i = 0; i < nparticles_; ++i )
+            particles_.push_back(make_pair(1, particle_pcbt_t(&cellmap_)));
+    }
+
+    virtual void initialize(int initial_loc) {
+        for( int i = 0; i < nparticles_; ++i ) {
+            particles_[i].first = 1 / float(nparticles_);
+            particles_[i].second.reset_factors(initial_loc);
+        }
+    }
+
+    virtual void update(int last_action, int obs) {
+        vector<int> indices;
+        PF_t::stochastic_universal_sampling(nparticles_, indices);
+        assert(indices.size() == size_t(nparticles_));
+
+        float total_mass = 0.0;
+        vector<pair<float, particle_pcbt_t> > new_particles;
+        new_particles.reserve(nparticles_);
+        for( int i = 0; i < nparticles_; ++i ) {
+            int index = indices[i];
+            const particle_pcbt_t &p = particles_[index].second;
+            int new_loc = p.new_loc(last_action, obs);
+
+            float new_weight = 0;
+            for( int label = 0; label < nlabels_; ++label ) { // marginalize over possible labels at current loc
+                new_weight += cellmap_.obs_probability(obs, label, last_action) * p.probability(label, new_loc);
+            }
+
+            particle_pcbt_t np = p;
+            np.update(last_action, obs, new_loc);
+            new_particles.push_back(make_pair(new_weight, np));
+            total_mass += new_weight;
+        }
+        for( int i = 0; i < nparticles_; ++i )
+            new_particles[i].first /= total_mass;
+        particles_ = new_particles;
+    }
+
+    virtual void calculate_marginals() {
+        for( size_t i = 0; i < particles_.size(); ++i )
+            particles_[i].second.calculate_marginals(algorithm_, opts_);
+    }
+
+    virtual void get_marginal(int var, marginal_t &marginal) const {
+        marginal_t pmarginal;
+        marginal = marginal_t(var < nloc_ ? nlabels_ : nloc_);
+        for( int i = 0; i < nparticles_; ++i ) {
+            particles_[i].second.get_marginal(var, pmarginal);
+            pmarginal *= particles_[i].first;
+            marginal += pmarginal;
+        }
+    }
+};
+
 
 
 void usage(ostream &os) {
@@ -1258,10 +1627,10 @@ int main(int argc, const char **argv) {
             argc -= 2;
             argv += 2;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
-            usage(cout);
+            usage(cerr);
             exit(-1);
         } else {
-            cout << "error: unexpected argument: " << argv[0] << endl;
+            cerr << "error: unexpected argument: " << argv[0] << endl;
             --argc;
             ++argv;
         }
@@ -1290,13 +1659,31 @@ int main(int argc, const char **argv) {
         char *token = strtok(0, ":");
         if( name == "jt" ) {
             memory = token != 0 ? atoi(token) : memory;
-            tracking_algorithms.push_back(new pcbt_jt_t(name + "_" + to_string(memory), cellmap, memory, opts("updates", string("HUGIN"))));
+            pcbt_t *pcbt = new pcbt_t(name + "_" + to_string(memory), cellmap, memory);
+            pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
+            tracking_algorithms.push_back(pcbt);
         } else if( name == "bp" ) {
             memory = token != 0 ? atoi(token) : memory;
-            tracking_algorithms.push_back(new pcbt_bp_t(name + "_" + to_string(memory), cellmap, memory, "BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000)));
+            pcbt_t *pcbt = new pcbt_t(name + "_" + to_string(memory), cellmap, memory);
+            pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
+            tracking_algorithms.push_back(pcbt);
         } else if( name == "hak" ) {
             memory = token != 0 ? atoi(token) : memory;
-            tracking_algorithms.push_back(new pcbt_bp_t(name + "_" + to_string(memory), cellmap, memory, "HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2))));
+            pcbt_t *pcbt = new pcbt_t(name + "_" + to_string(memory), cellmap, memory);
+            pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
+            tracking_algorithms.push_back(pcbt);
+        } else if( name == "ppcbt_jt" ) {
+            ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 1000);
+            pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
+            tracking_algorithms.push_back(pcbt);
+        } else if( name == "ppcbt_bp" ) {
+            ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 50);
+            pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
+            tracking_algorithms.push_back(pcbt);
+        } else if( name == "ppcbt_hak" ) {
+            ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 50);
+            pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
+            tracking_algorithms.push_back(pcbt);
         } else if( name == "sis" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new SIS_t(name + "_" + to_string(nparticles), cellmap, nparticles));
@@ -1322,12 +1709,12 @@ int main(int argc, const char **argv) {
     }
 
     // compute longest name
-    int size_longest_name = 0;
+    size_t size_longest_name = 0;
     for( size_t i = 0; i < tracking_algorithms.size(); ++i )
-        size_longest_name = max(size_longest_name, tracking_algorithms[i].size());
+        size_longest_name = size_longest_name > tracking_algorithms[i]->name_.size() ? size_longest_name : tracking_algorithms[i]->name_.size();
 
     // action selection
-    action_selection_t policy(cellmap);
+    naive_action_selection_t policy(cellmap);
 
     int labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
 
@@ -1365,16 +1752,16 @@ int main(int argc, const char **argv) {
         vector<cellmap_t::score_t> scores;
         cellmap.compute_scores(output_execution, tracking_algorithms, scores);
         for( size_t i = 0; i < scores.size(); ++i ) {
-            cout << "# score(" << setw(7) << tracking_algorithms[i]->name_ << "): score=" << scores[i] << endl;
+            cout << "# score(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): score=" << scores[i] << endl;
         }
 
         // print final (tracked) map and location
-        cout << "# final(   real): map=[";
+        cout << "# final(" << setw(size_longest_name) << "real" << "): map=[";
         for( int var = 0; var < nrows * ncols; ++var )
             cout << " " << cellmap.cells_[var].label_;
         cout << "], loc=" << output_execution.back().loc_ << endl;
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
-            cout << "# final(" << setw(7) << tracking_algorithms[i]->name_ << "): map=[";
+            cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
             for( int var = 0; var < nrows * ncols; ++var )
                 cout << " " << tracking_algorithms[i]->MAP_on_var(var);
             cout << "], loc=" << tracking_algorithms[i]->MAP_on_var(nrows * ncols) << endl;
@@ -1394,14 +1781,14 @@ int main(int argc, const char **argv) {
 
 #if 0
             // compute and print exact marginals via junction tree
-            vector<float> P1, Q1;
+            marginal_t P1, Q1;
             //cout << "Marginals (exact: junction tree):" << endl;
             apply_junction_tree(P1, Q1);
             store_marginal(nrows_ * ncols_, &cellmap_t::jt_marginal, marginals);
             //print_marginals(cout, &cellmap_t::jt_marginal, 10);
 
             // approximate and print marginals
-            vector<float> P2, Q2;
+            marginal_t P2, Q2;
             //cout << "Marginals (approx. inference):" << endl;
             apply_approx_inference(P2, Q2);
             //print_marginals(cout, &cellmap_t::approx_inference_marginal);
@@ -1411,7 +1798,7 @@ int main(int argc, const char **argv) {
             pair<float, bool> js2 = JS_divergence(Q1, Q2);
             cout << "JS-divergence: P[jt,approx]=" << js1.first << ", Q[jt,approx]=" << js2.first << endl;
 
-    void apply_approx_inference(vector<float> &P, vector<float> &Q) const {
+    void apply_approx_inference(marginal_t &P, marginal_t &Q) const {
         apply_approx_inference();
         P.clear();
         float mass = 0;
