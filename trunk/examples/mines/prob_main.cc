@@ -35,29 +35,6 @@ extern "C" {
 
 using namespace std;
 
-pair<float, bool> KL_divergence(const vector<float> &P, const vector<float> &Q) {
-    assert(P.size() == Q.size());
-    float kl = 0;
-    for( size_t i = 0; i < P.size(); ++i ) {
-        float p = P[i];
-        float q = Q[i];
-        if( (q == 0) && (p != 0) ) return make_pair(kl, false);
-        if( p == 0 ) continue;
-        kl += p * (log(p) - log(q));
-    }
-    return make_pair(kl, true);
-}
-
-pair<float, bool> JS_divergence(const vector<float> &P, const vector<float> &Q) {
-    assert(P.size() == Q.size());
-    vector<float> M(P.size(), 0);
-    for( size_t i = 0; i < M.size(); ++i )
-        M[i] = (P[i] + Q[i]) / 2;
-    pair<float, bool> kl1 = KL_divergence(P, M);
-    pair<float, bool> kl2 = KL_divergence(Q, M);
-    assert(kl1.second && kl2.second);
-    return make_pair((kl1.first + kl2.first) / 2, true);
-}
 
 struct cell_t {
     bool mine_;
@@ -372,14 +349,20 @@ struct ms_cbt_t {
         int old_prec = os.precision();
         os << setprecision(prec);
         for( int row = 0; row < nrows_; ++row ) {
+            os << "|";
             for( int col = 0; col < ncols_; ++col ) {
                 int cell = row * ncols_ + col;
                 //float p = joint_marginal(cell);
                 pair<float, float> p = (this->*marginal)(cell);
+
+                os << " " << setw(4) << 1 - p.first << (plays_.find(cell) != plays_.end() ? "*" : " ") << "|";
+#if 0
                 os << "cbt: P[ (" << col << "," << row << ")=0 ] = " << p.first
                    << (p.second == 0.0 ? "*" : (p.first == 0.0 ? "-" : ""))
                    << endl;
+#endif
             }
+            os << endl;
         }
         os << setprecision(old_prec);
     }
@@ -470,8 +453,22 @@ int main(int argc, const char **argv) {
         minefield_t minefield(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
         cbt.reset();
-        //cbt.apply_junction_tree();
-        cbt.apply_approx_inference();
+
+#if 0
+        // compute and print exact marginals via junction tree
+        vector<float> P;
+        cout << "Marginals (exact: junction tree):" << endl;
+        cbt.apply_junction_tree(P);
+        cbt.print_marginals(cout, &ms_cbt_t::jt_marginal);
+#endif
+
+#if 1
+        // approximate and print marginals
+        vector<float> Q;
+        cout << "Marginals (approx. inference):" << endl;
+        cbt.apply_approx_inference(Q);
+        cbt.print_marginals(cout, &ms_cbt_t::approx_inference_marginal);
+#endif
 
         bool win = true;
         vector<pair<int,int> > execution(nrows * ncols);
@@ -489,6 +486,7 @@ int main(int argc, const char **argv) {
             }
             int obs = minefield.apply_action(action, verbose);
             if( obs == 9 ) {
+                cout << "BOOM" << endl;
                 win = false;
                 break;
             }
