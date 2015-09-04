@@ -58,9 +58,10 @@ struct minefield_t {
     int num_remaining_mines() const { return num_remaining_mines_; }
 
     void sample(int initial_cell) {
+        // do not place a mine at the initial cell or surrounding cells
+        // calculate places where a mine can be placed
         vector<int> available_cells(ncells_, 0);
         set<int> forbidden;
-        // do not place a mine at the initial cell or surrounding cells
         do {
             forbidden.clear();
             available_cells = vector<int>(ncells_, 0);
@@ -85,7 +86,9 @@ struct minefield_t {
             }
         } while( (int)available_cells.size() < nmines_ );
 
-        // place random mines in other cells
+        // available_cells contains the cells where mines can be placed.
+        // Place mines in random cells. For each placed mines, increase
+        // counter of surronding mines in surrounding cells.
         cells_ = vector<cell_t>(ncells_);
         for( int num_placed_mines = 0; num_placed_mines < nmines_; ++num_placed_mines ) {
             int pos = lrand48() % available_cells.size();
@@ -108,7 +111,6 @@ struct minefield_t {
             }
         }
         num_remaining_mines_ = nmines_;
-        //print(cout);
     }
 
     int flag_cell(int cell, bool verbose) {
@@ -133,20 +135,21 @@ struct minefield_t {
         }
     }
 
-    void print(ostream &os) const {
-        for( int c = 0; c < ncols_; ++c ) {
-            for( int r = 0; r < nrows_; ++r ) {
+    void print(ostream &os, bool formatted = false) const {
+        for( int r = 0; r < nrows_; ++r ) {
+            for( int c = 0; c < ncols_; ++c ) {
                 int cell = r * ncols_ + c;
                 if( cells_[cell].mine_ )
                     os << " *";
                 else
                     os << " " << cells_[cell].nmines_;
             }
-            //os << endl;
+            if( formatted ) os << endl;
         }
     }
 };
 
+// divergence measures between distributions
 pair<float, bool> kl_divergence(const vector<float> &P, const vector<float> &Q) {
     assert(P.size() == Q.size());
     float kl = 0;
@@ -171,29 +174,39 @@ pair<float, bool> js_divergence(const vector<float> &P, const vector<float> &Q) 
     return make_pair((kl1.first + kl2.first) / 2, true);
 }
 
-struct ms_cbt_t {
+// probabilistic belief tracking for minesweeper
+struct ms_pbt_t {
+    // grid dimension, num of mines, and noisy flag
     int nrows_;
     int ncols_;
     int nmines_;
     bool noisy_;
 
+    // variables, factors, and centers for each beam.
     vector<dai::Var> variables_;
     vector<dai::Factor> factors_;
     vector<int> centers_;
 
+    // for belief inference
     mutable dai::Factor joint_;
     mutable dai::FactorGraph jt_fg_;
     mutable dai::JTree jt_;
     mutable dai::FactorGraph approx_inference_fg_;
     mutable dai::InfAlg *approx_inference_algorithm_;
 
+    // variables for game play
     set<int> plays_;
     int nflags_;
 
-    ms_cbt_t(int nrows, int ncols, int nmines, bool noisy = false) : nrows_(nrows), ncols_(ncols), nmines_(nmines), noisy_(noisy) {
+    ms_pbt_t(int nrows, int ncols, int nmines, bool noisy = false)
+      : nrows_(nrows), ncols_(ncols), nmines_(nmines), noisy_(noisy) {
+        // create binary variables for each cell in the grid
         variables_ = vector<dai::Var>(nrows_ * ncols_);
         for( int i = 0; i < nrows_ * ncols_; ++i )
             variables_[i] = dai::Var(i, 2);
+
+        // create factors: one factor per cell.
+        // Centers ???
         centers_ = vector<int>(nrows_ * ncols_);
         factors_ = vector<dai::Factor>(nrows_ * ncols_);
         for( int i = 0; i < nrows_ * ncols_; ++i ) {
@@ -213,12 +226,13 @@ struct ms_cbt_t {
             factors_[i] = dai::Factor(varset);
             //cout << "Factor[row=" << row << ",col=" << col << "]=" << p << endl;
         }
-        cout << "cbt: factor graph:"
+        cout << "pbt: factor graph:"
              << " #variables=" << variables_.size()
              << ", #factors=" << factors_.size()
              << endl;
     }
 
+    // reset all factors and game-play variables
     void reset() {
         for( int i = 0; i < nrows_ * ncols_; ++i ) {
             dai::Factor &factor = factors_[i];
@@ -231,13 +245,14 @@ struct ms_cbt_t {
         approx_inference_algorithm_ = 0;
     }
 
+    // update factors for obtained obs for cell
     void update(bool flag_action, int cell, int obs) {
         assert(plays_.find(cell) == plays_.end());
         plays_.insert(cell);
         int row = cell / ncols_, col = cell % ncols_;
-        cout << "cbt: flag=" << flag_action
-             << ", cell=" << cell << ":(" << col << "," << row << ")"
-             << ", obs=" << obs << endl;
+        //cout << "pbt: flag=" << flag_action
+        //     << ", cell=" << cell << ":(" << col << "," << row << ")"
+        //     << ", obs=" << obs << endl;
         if( !flag_action ) {
             int center = centers_[cell];
             //cout << "center=" << center << ", var=" << factors_[cell].vars().var(center) << endl;
@@ -248,6 +263,7 @@ struct ms_cbt_t {
                 if( !noisy_ ) {
                     if( popcount != obs ) factor.set(j, 0);
                 } else {
+                    // noisy update
                     if( popcount == obs ) {
                         factor.set(j, factor[j] * .95);
                     } else if( (popcount == obs - 1) || (popcount == obs + 1) ) {
@@ -263,16 +279,23 @@ struct ms_cbt_t {
         }
     }
 
+    // compute full joint by multiplying factors (exponential)
     void compute_joint() const {
         joint_ = dai::Factor();
         for( int i = 0; i < nrows_ * ncols_; ++i )
             joint_ *= factors_[i];
         joint_.normalize();
     }
+
+    // return the marginal distribution of the full joint over a cell variable
     pair<float, float> joint_marginal(int cell) const {
         return make_pair(float(joint_.marginal(dai::VarSet(variables_[cell]))[0]), float(joint_.marginal(dai::VarSet(variables_[cell]))[1]));
     }
+    void joint_marginal(int cell, dai::Factor &marginal) const {
+        marginal = joint_.marginal(dai::VarSet(variables_[cell]));
+    }
 
+    // use junction tree algorithm to compute the exact marginals for each factor
     void apply_junction_tree() const {
         dai::PropertySet opts;
         jt_fg_ = dai::FactorGraph(factors_);
@@ -321,12 +344,13 @@ struct ms_cbt_t {
                          float(approx_inference_algorithm_->belief(approx_inference_fg_.var(cell))[1]));
     }
 
-    int agent_get_action(pair<float, float> (ms_cbt_t::*marginal)(int) const) const {
+    // recommend action using information in the marginals
+    int agent_get_action(pair<float, float> (ms_pbt_t::*marginal)(int) const) const {
         float best_prob_for_open = 0, best_prob_for_flag = 0;
         vector<int> best_for_open, best_for_flag;
         for( int i = 0; i < nrows_ * ncols_; ++i ) {
-            if( plays_.find(i) != plays_.end() ) continue;
-            pair<float, float> p((this->*marginal)(i));
+            if( plays_.find(i) != plays_.end() ) continue; // cell had been already played
+            pair<float, float> p((this->*marginal)(i));    // get marginal on cell
             if( best_for_open.empty() || (p.first >= best_prob_for_open) ) {
                 if( best_for_open.empty() || (p.first > best_prob_for_open) ) {
                     best_prob_for_open = p.first;
@@ -342,49 +366,42 @@ struct ms_cbt_t {
                 best_for_flag.push_back(i);
             }
         }
+
+        // prioritize open over flag actions
         if( !best_for_open.empty() && (best_prob_for_open >= best_prob_for_flag) ) {
-            random_shuffle(best_for_open.begin(), best_for_open.end());
-            return best_for_open.back() + (nrows_ * ncols_);
+            int cell = best_for_open[lrand48() % best_for_open.size()];
+            return cell + (nrows_ * ncols_);
         } else if( !best_for_flag.empty() && (best_prob_for_open < best_prob_for_flag) ) {
-            random_shuffle(best_for_flag.begin(), best_for_flag.end());
-            return best_for_flag.back();
-        }
-        else if( !best_for_open.empty() ) {
-            random_shuffle(best_for_open.begin(), best_for_open.end());
-            return best_for_open.back() + (nrows_ * ncols_);
+            int cell = best_for_flag[lrand48() % best_for_flag.size()];
+            return cell;
+        } else if( !best_for_open.empty() ) {
+            int cell = best_for_open[lrand48() % best_for_open.size()];
+            return cell + (nrows_ * ncols_);
         } else if( nflags_ < nmines_ ) {
             assert(!best_for_flag.empty());
-            random_shuffle(best_for_flag.begin(), best_for_flag.end());
-            return best_for_flag.back();
+            int cell = best_for_flag[lrand48() % best_for_flag.size()];
+            return cell;
         } else {
             assert(0);
             return 0;
         }
     }
-    int agent_is_flag_action(int action) {
-        return action < nrows_ * ncols_ ? 1 : 0;
+    bool is_flag_action(int action) {
+        return action < nrows_ * ncols_ ? true : false;
     }
     int agent_get_cell(int action) {
-        bool flag = action < nrows_ * ncols_;
-        return flag ? action : action - (nrows_ * ncols_);
+        return is_flag_action(action) ? action : action - (nrows_ * ncols_);
     }
 
-    void print_marginals(ostream &os, pair<float, float> (ms_cbt_t::*marginal)(int) const, int prec = 2) {
+    void print_marginals(ostream &os, pair<float, float> (ms_pbt_t::*marginal)(int) const, int prec = 2) {
         int old_prec = os.precision();
         os << setprecision(prec);
         for( int row = 0; row < nrows_; ++row ) {
             os << "|";
             for( int col = 0; col < ncols_; ++col ) {
                 int cell = row * ncols_ + col;
-                //float p = joint_marginal(cell);
                 pair<float, float> p = (this->*marginal)(cell);
-
                 os << " " << setw(4) << 1 - p.first << (plays_.find(cell) != plays_.end() ? "*" : " ") << "|";
-#if 0
-                os << "cbt: P[ (" << col << "," << row << ")=0 ] = " << p.first
-                   << (p.second == 0.0 ? "*" : (p.first == 0.0 ? "-" : ""))
-                   << endl;
-#endif
             }
             os << endl;
         }
@@ -469,89 +486,98 @@ int main(int argc, const char **argv) {
     seed48(seeds);
 
     // create distributions
-    ms_cbt_t cbt(nrows, ncols, nmines, false);
-    //ms_cbt_t cbt(nrows, ncols, nmines, true);
+    ms_pbt_t pbt(nrows, ncols, nmines, false);
+    //ms_pbt_t pbt(nrows, ncols, nmines, true);
 
     // run for the specified number of trials
     for( int trial = 0; trial < ntrials; ) {
         minefield_t minefield(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
+        pbt.reset();
 
-        cbt.reset();
-
-#if 0
+#if 1
         // compute and print exact marginals via junction tree
         vector<float> P;
         cout << "Marginals (exact: junction tree):" << endl;
-        cbt.apply_junction_tree(P);
-        cbt.print_marginals(cout, &ms_cbt_t::jt_marginal);
+        pbt.apply_junction_tree(P);
+        pbt.print_marginals(cout, &ms_pbt_t::jt_marginal);
 #endif
-
-#if 1
+#if 0
         // approximate and print marginals
         vector<float> Q;
         cout << "Marginals (approx. inference):" << endl;
-        cbt.apply_approx_inference(Q);
-        cbt.print_marginals(cout, &ms_cbt_t::approx_inference_marginal);
+        pbt.apply_approx_inference(Q);
+        pbt.print_marginals(cout, &ms_pbt_t::approx_inference_marginal);
 #endif
 
         bool win = true;
         vector<pair<int,int> > execution(nrows * ncols);
         for( int play = 0; play < nrows * ncols; ++play ) {
-            int is_guess = 2;
+            //int is_guess = 2;
             //int action = agent_get_action(&is_guess);
-            //int action = cbt.agent_get_action(&ms_cbt_t::jt_marginal);
-            int action = cbt.agent_get_action(&ms_cbt_t::approx_inference_marginal);
+            int action = pbt.agent_get_action(&ms_pbt_t::jt_marginal);
+            //int action = pbt.agent_get_action(&ms_pbt_t::approx_inference_marginal);
+
+            bool is_flag_action = pbt.is_flag_action(action);
+            int cell = pbt.agent_get_cell(action);
+            cout << "Play: n=" << play
+                 << ", type=" << (is_flag_action ? "FLAG" : "OPEN")
+                 << ", cell=" << cell << ":(" << cell % ncols << "," << cell / ncols << ")"
+                 << flush;
+
+            // if this is first play, then it must be an open action. The minefield
+            // gets sampled using the action's cell.
             if( play == 0 ) {
-                assert(!agent_is_flag_action(action));
+                assert(!pbt.is_flag_action(action));
                 int cell = agent_get_cell(action);
                 minefield.sample(cell);
                 assert(!minefield.cells_[cell].mine_);
+                cout << endl << endl;
+                minefield.print(cout, true);
+                cout << endl;
             }
+
+            // obtain observation for this action. If first play, observation
+            // must be zero.
             int obs = minefield.apply_action(action, verbose);
+            assert((obs == 0) || (play > 0));
+            if( play > 0 ) cout << ", obs=" << obs << endl;
             if( obs == 9 ) {
                 cout << "BOOM" << endl;
                 win = false;
                 break;
             }
-            agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
+
+            // update execution and agent's belief 
             execution[play] = make_pair(action, obs);
 
-            cout << "ABOUT TO UPDATE:"
-                 << " play=" << play
-                 << ", action=" << action
-                 << ", obs=" << obs
-                 << ", is-guess=" << is_guess
-                 << endl;
-
 #if 0
-            if( (play > 0) && !agent_is_flag_action(action) && (cbt.joint_marginal(agent_get_cell(action)) != 1.0) ) {
-                cout << "cbt: INSECURE ACTION: open cell ("
+            if( (play > 0) && !agent_is_flag_action(action) && (pbt.joint_marginal(agent_get_cell(action)) != 1.0) ) {
+                cout << "pbt: INSECURE ACTION: open cell ("
                      << agent_get_cell(action) / ncols << ","
                      << agent_get_cell(action) % ncols << ")"
                      << endl;
             }
 #endif
 
-            // update factors
-            cbt.update(agent_is_flag_action(action), agent_get_cell(action), obs);
+            // update agent's belief
+            agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
+            pbt.update(pbt.is_flag_action(action), agent_get_cell(action), obs);
 
-#if 0
+#if 1
             // compute and print exact marginals via junction tree
             vector<float> P;
             cout << "Marginals (exact: junction tree):" << endl;
-            cbt.apply_junction_tree(P);
-            cbt.print_marginals(cout, &ms_cbt_t::jt_marginal);
+            pbt.apply_junction_tree(P);
+            pbt.print_marginals(cout, &ms_pbt_t::jt_marginal);
 #endif
-
-#if 1
+#if 0
             // approximate and print marginals
             vector<float> Q;
             cout << "Marginals (approx. inference):" << endl;
-            cbt.apply_approx_inference(Q);
-            cbt.print_marginals(cout, &ms_cbt_t::approx_inference_marginal);
+            pbt.apply_approx_inference(Q);
+            pbt.print_marginals(cout, &ms_pbt_t::approx_inference_marginal);
 #endif
-
 #if 0
             // calculate KL-divergence
             pair<float, bool> kl1 = kl_divergence(P, Q);

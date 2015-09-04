@@ -1,7 +1,8 @@
-BELIEF_TRACKING_HOME=	../..
-MDP_ENGINE_HOME=	../../../mdp-engine
+ROOT=		            ../../../..
+BELIEF_TRACKING_HOME=	$(ROOT)/belief-tracking
+MDP_ENGINE_HOME=		$(ROOT)/mdp-engine
 
-INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine -I $(MDP_ENGINE_HOME)/engine
+INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
 
 CXX=			c++
 CXXEXT=			-std=c++11
@@ -12,9 +13,9 @@ CXXEXT2=		-std=c++11 -DMACOSX -I ~/software/libdai/include -Wno-deprecated -Wall
 
 CFLAGS=			-Wall -O3 $(CXXEXT2) $(INCLUDES) #-DNDEBUG
 
-maplearning:		main.cc
-			$(CXX) $(CFLAGS) -o maplearning main.cc -ldai -lgmpxx -lgmp
+slam:			main.cc
+				$(CXX) $(CFLAGS) -o slam main.cc -ldai -lgmpxx -lgmp
 
 clean:
-			rm -f maplearning *~
+				rm -f slam *~
 

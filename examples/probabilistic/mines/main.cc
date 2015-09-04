@@ -39,6 +39,7 @@ extern "C" {
 
 using namespace std;
 
+
 struct cell_t {
     bool mine_;
     int nmines_;
@@ -61,9 +62,10 @@ struct minefield_t {
     int num_remaining_mines() const { return num_remaining_mines_; }
 
     void sample(int initial_cell) {
+        // do not place a mine at the initial cell or surrounding cells
+        // calculate places where a mine can be placed
         vector<int> available_cells(ncells_, 0);
         set<int> forbidden;
-        // do not place a mine at the initial cell or surrounding cells
         do {
             forbidden.clear();
             available_cells = vector<int>(ncells_, 0);
@@ -88,7 +90,9 @@ struct minefield_t {
             }
         } while( (int)available_cells.size() < nmines_ );
 
-        // place random mines in other cells
+        // available_cells contains the cells where mines can be placed.
+        // Place mines in random cells. For each placed mines, increase
+        // counter of surronding mines in surrounding cells.
         cells_ = vector<cell_t>(ncells_);
         for( int num_placed_mines = 0; num_placed_mines < nmines_; ++num_placed_mines ) {
             int pos = lrand48() % available_cells.size();
@@ -111,7 +115,6 @@ struct minefield_t {
             }
         }
         num_remaining_mines_ = nmines_;
-        //print(cout);
     }
 
     int flag_cell(int cell, bool verbose) {
@@ -136,16 +139,16 @@ struct minefield_t {
         }
     }
 
-    void print(ostream &os) const {
-        for( int c = 0; c < ncols_; ++c ) {
-            for( int r = 0; r < nrows_; ++r ) {
+    void print(ostream &os, bool formatted = false) const {
+        for( int r = 0; r < nrows_; ++r ) {
+            for( int c = 0; c < ncols_; ++c ) {
                 int cell = r * ncols_ + c;
                 if( cells_[cell].mine_ )
                     os << " *";
                 else
                     os << " " << cells_[cell].nmines_;
             }
-            //os << endl;
+            if( formatted ) os << endl;
         }
     }
 };
@@ -386,20 +389,14 @@ void usage(ostream &os) {
        << "             [{-m | --nmines} <nmines>]" << endl
        << "             [{-s | --seed} <seed>]" << endl
        << "             [{-v | --verbose}]" << endl
-       << "             [{-p | --policy} <policy>]" << endl
-       << "             [{-w | --width} <width>]" << endl
-       << "             [{-d | --depth} <depth>]" << endl
-       << "             [{-P | --print-deterministic-execution} <n>]" << endl
        << "             [{-? | --help}]" << endl
        << endl
        << "where <ntrials> is a non-negative integer telling the number of games to" << endl
        << "play (default is 1), <nrows> and <ncols> are positive integers telling" << endl
        << "the dimensions of the minefield (default is 16x16), <nmines> is a positive" << endl
        << "integer telling the number of hidden mines in the minefield (default is 40)," << endl
-       << "<seed> is an integer for setting the seed of the random number generator" << endl
-       << "(default is 0), <policy> is a string describing the policy to use (default" << endl
-       << "is \"base-policy:direct\"), and <width> and <depth> are parameters for the" << endl
-       << "policy (the default policy is parameter-free)." << endl
+       << "and <seed> is an integer for setting the seed of the random number generator" << endl
+       << "(default is 0)." << endl
        << endl
        << "For example," << endl
        << endl
@@ -417,12 +414,6 @@ int main(int argc, const char **argv) {
     int nmines = 40;
     int seed = 0;
     bool verbose = false;
-    bool print_deterministic_executions = false;
-    int executions_to_print = 0;
-
-    string policy = "base-policy:direct";
-    int width = 100;
-    int depth = 10;
 
     --argc;
     ++argv;
@@ -451,23 +442,6 @@ int main(int argc, const char **argv) {
             verbose = true;
             --argc;
             ++argv;
-        } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
-            policy = argv[1];
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-w") || !strcmp(argv[0], "--width") ) {
-            width = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-d") || !strcmp(argv[0], "--depth") ) {
-            depth = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-P") || !strcmp(argv[0], "--print-deterministic-executions") ) {
-            print_deterministic_executions = true;
-            executions_to_print = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
             usage(cout);
             exit(-1);
