@@ -147,6 +147,30 @@ struct minefield_t {
     }
 };
 
+pair<float, bool> kl_divergence(const vector<float> &P, const vector<float> &Q) {
+    assert(P.size() == Q.size());
+    float kl = 0;
+    for( size_t i = 0; i < P.size(); ++i ) {
+        float p = P[i];
+        float q = Q[i];
+        if( (q == 0) && (p != 0) ) return make_pair(kl, false);
+        if( p == 0 ) continue;
+        kl += p * (log(p) - log(q));
+    }
+    return make_pair(kl, true);
+}
+
+pair<float, bool> js_divergence(const vector<float> &P, const vector<float> &Q) {
+    assert(P.size() == Q.size());
+    vector<float> M(P.size(), 0);
+    for( size_t i = 0; i < M.size(); ++i )
+        M[i] = (P[i] + Q[i]) / 2;
+    pair<float, bool> kl1 = kl_divergence(P, M);
+    pair<float, bool> kl2 = kl_divergence(Q, M);
+    assert(kl1.second && kl2.second);
+    return make_pair((kl1.first + kl2.first) / 2, true);
+}
+
 struct ms_cbt_t {
     int nrows_;
     int ncols_;
@@ -382,7 +406,7 @@ void usage(ostream &os) {
        << "play (default is 1), <nrows> and <ncols> are positive integers telling" << endl
        << "the dimensions of the minefield (default is 16x16), <nmines> is a positive" << endl
        << "integer telling the number of hidden mines in the minefield (default is 40)," << endl
-       << " and <seed> is an integer for setting the seed of the random number generator" << endl
+       << "and <seed> is an integer for setting the seed of the random number generator" << endl
        << "(default is 0)." << endl
        << endl
        << "For example," << endl
@@ -452,6 +476,7 @@ int main(int argc, const char **argv) {
     for( int trial = 0; trial < ntrials; ) {
         minefield_t minefield(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
+
         cbt.reset();
 
 #if 0
@@ -477,7 +502,6 @@ int main(int argc, const char **argv) {
             //int action = agent_get_action(&is_guess);
             //int action = cbt.agent_get_action(&ms_cbt_t::jt_marginal);
             int action = cbt.agent_get_action(&ms_cbt_t::approx_inference_marginal);
-
             if( play == 0 ) {
                 assert(!agent_is_flag_action(action));
                 int cell = agent_get_cell(action);
@@ -530,9 +554,9 @@ int main(int argc, const char **argv) {
 
 #if 0
             // calculate KL-divergence
-            pair<float, bool> kl1 = KL_divergence(P, Q);
-            pair<float, bool> kl2 = KL_divergence(Q, P);
-            pair<float, bool> js = JS_divergence(P, Q);
+            pair<float, bool> kl1 = kl_divergence(P, Q);
+            pair<float, bool> kl2 = kl_divergence(Q, P);
+            pair<float, bool> js = js_divergence(P, Q);
             cout << "KL-divergence: v1=" << kl1.first << ", s1=" << kl1.second << ", v2=" << kl2.first << ", s2=" << kl2.second << ", R=" << (kl1.first * kl2.first) / (kl1.first + kl2.first) << ", J=" << js.first << endl;
 #endif
         }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2013 Universidad Simon Bolivar
+ *  Copyright (C) 2014 Universidad Simon Bolivar
  *
  *  Permission is hereby granted to distribute this software for
  *  non-commercial research purposes, provided that this copyright
@@ -27,16 +27,14 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define LIBDAI
-#ifdef LIBDAI
 #include <dai/alldai.h>
-#endif
 
 extern "C" {
 #include "c_api.h"
 };
 
 using namespace std;
+
 
 struct cell_t {
     bool mine_;
@@ -149,7 +147,6 @@ struct minefield_t {
     }
 };
 
-#ifdef LIBDAI
 pair<float, bool> kl_divergence(const vector<float> &P, const vector<float> &Q) {
     assert(P.size() == Q.size());
     float kl = 0;
@@ -305,7 +302,7 @@ struct ms_cbt_t {
         delete approx_inference_algorithm_;
         approx_inference_algorithm_ = new dai::BP(approx_inference_fg_, opts("updates", string("SEQRND"))("logdomain", true)("tol", 1e-9)("maxiter", (size_t)10000));
         //approx_inference_algorithm_ = new dai::Gibbs(approx_inference_fg_, opts("maxiter", (size_t)10000)("burnin", (size_t)100)("restart", (size_t)10000));
-        //approx_inference_algorithm_ = new dai::HAK(approx_inference_fg_, opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
+        //approx_inference_algorithm_ = new dai::HAK(approx_inference_fg_, opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(1)));
         approx_inference_algorithm_->init();
         approx_inference_algorithm_->run();
     }
@@ -376,14 +373,20 @@ struct ms_cbt_t {
         int old_prec = os.precision();
         os << setprecision(prec);
         for( int row = 0; row < nrows_; ++row ) {
+            os << "|";
             for( int col = 0; col < ncols_; ++col ) {
                 int cell = row * ncols_ + col;
                 //float p = joint_marginal(cell);
                 pair<float, float> p = (this->*marginal)(cell);
+
+                os << " " << setw(4) << 1 - p.first << (plays_.find(cell) != plays_.end() ? "*" : " ") << "|";
+#if 0
                 os << "cbt: P[ (" << col << "," << row << ")=0 ] = " << p.first
                    << (p.second == 0.0 ? "*" : (p.first == 0.0 ? "-" : ""))
                    << endl;
+#endif
             }
+            os << endl;
         }
         os << setprecision(old_prec);
     }
@@ -616,7 +619,6 @@ struct ms_cbt_t : public ms_bt_t, public ProbabilisticBeliefTracking::causal_bel
     }
 };
 #endif
-#endif
 
 void usage(ostream &os) {
     os << endl
@@ -626,20 +628,14 @@ void usage(ostream &os) {
        << "             [{-m | --nmines} <nmines>]" << endl
        << "             [{-s | --seed} <seed>]" << endl
        << "             [{-v | --verbose}]" << endl
-       << "             [{-p | --policy} <policy>]" << endl
-       << "             [{-w | --width} <width>]" << endl
-       << "             [{-d | --depth} <depth>]" << endl
-       << "             [{-P | --print-deterministic-execution} <n>]" << endl
        << "             [{-? | --help}]" << endl
        << endl
        << "where <ntrials> is a non-negative integer telling the number of games to" << endl
        << "play (default is 1), <nrows> and <ncols> are positive integers telling" << endl
        << "the dimensions of the minefield (default is 16x16), <nmines> is a positive" << endl
        << "integer telling the number of hidden mines in the minefield (default is 40)," << endl
-       << "<seed> is an integer for setting the seed of the random number generator" << endl
-       << "(default is 0), <policy> is a string describing the policy to use (default" << endl
-       << "is \"base-policy:direct\"), and <width> and <depth> are parameters for the" << endl
-       << "policy (the default policy is parameter-free)." << endl
+       << "and <seed> is an integer for setting the seed of the random number generator" << endl
+       << "(default is 0)." << endl
        << endl
        << "For example," << endl
        << endl
@@ -657,12 +653,6 @@ int main(int argc, const char **argv) {
     int nmines = 40;
     int seed = 0;
     bool verbose = false;
-    bool print_deterministic_executions = false;
-    int executions_to_print = 0;
-
-    string policy = "base-policy:direct";
-    int width = 100;
-    int depth = 10;
 
     --argc;
     ++argv;
@@ -691,23 +681,6 @@ int main(int argc, const char **argv) {
             verbose = true;
             --argc;
             ++argv;
-        } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
-            policy = argv[1];
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-w") || !strcmp(argv[0], "--width") ) {
-            width = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-d") || !strcmp(argv[0], "--depth") ) {
-            depth = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-P") || !strcmp(argv[0], "--print-deterministic-executions") ) {
-            print_deterministic_executions = true;
-            executions_to_print = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
             usage(cout);
             exit(-1);
@@ -723,34 +696,26 @@ int main(int argc, const char **argv) {
     seeds[0] = seeds[1] = seeds[2] = seed;
     seed48(seeds);
 
-#ifdef LIBDAI
     // create distributions
     ms_cbt_t cbt(nrows, ncols, nmines, false);
     //ms_cbt_t cbt(nrows, ncols, nmines, true);
-#endif
 
     // run for the specified number of trials
-    if( print_deterministic_executions ) ntrials = executions_to_print;
     for( int trial = 0; trial < ntrials; ) {
         minefield_t minefield(nrows, ncols, nmines);
         agent_initialize(nrows, ncols, nmines);
-#ifdef LIBDAI
+
         cbt.reset();
         //cbt.apply_junction_tree();
         cbt.apply_approx_inference();
-#endif
 
         bool win = true;
-        int previous_nguesses = agent_get_nguesses();
         vector<pair<int,int> > execution(nrows * ncols);
         for( int play = 0; play < nrows * ncols; ++play ) {
             int is_guess = 2;
-#ifndef LIBDAI
-            int action = agent_get_action(&is_guess);
-#else
+            //int action = agent_get_action(&is_guess);
             //int action = cbt.agent_get_action(&ms_cbt_t::jt_marginal);
             int action = cbt.agent_get_action(&ms_cbt_t::approx_inference_marginal);
-#endif
             if( play == 0 ) {
                 assert(!agent_is_flag_action(action));
                 int cell = agent_get_cell(action);
@@ -759,13 +724,13 @@ int main(int argc, const char **argv) {
             }
             int obs = minefield.apply_action(action, verbose);
             if( obs == 9 ) {
+                cout << "BOOM" << endl;
                 win = false;
                 break;
             }
             agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
             execution[play] = make_pair(action, obs);
 
-#ifdef LIBDAI
             cout << "ABOUT TO UPDATE:"
                  << " play=" << play
                  << ", action=" << action
@@ -829,27 +794,13 @@ int main(int argc, const char **argv) {
             }
             //cbt.print(cout);
 #endif
-#endif
         }
         if( win ) {
-            agent_declare_win(!print_deterministic_executions);
-            if( print_deterministic_executions && (agent_get_nguesses() == 1 + previous_nguesses) ) {
-                ++trial;
-                cout << "minefield:";
-                minefield.print(cout);
-                cout << endl << "execution: ";
-                for( int i = 0; i < nrows * ncols; ++i ) {
-                    int action = execution[i].first, obs = execution[i].second;
-                    int cell = agent_get_cell(action), row = cell / ncols, col = cell % ncols;
-                    cout << (agent_is_flag_action(action) ?  "flag " : "open ")
-                         << row << " " << col << " obs " << obs << " ";
-                }
-                cout << endl;
-            }
+            agent_declare_win(true);
         } else {
-            agent_declare_lose(!print_deterministic_executions);
+            agent_declare_lose(true);
         }
-        if( !print_deterministic_executions ) ++trial;
+        ++trial;
     }
     agent_finalize();
     return 0;
