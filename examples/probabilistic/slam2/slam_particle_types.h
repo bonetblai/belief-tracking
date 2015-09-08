@@ -45,7 +45,9 @@ struct slam_particle_t {
         current_loc_ = base_->initial_loc_;
     }
 
-    //virtual int value_for(int var) const = 0; //CHECK
+    int value_for(int var) const {
+        return var == base_->nvars_ - 1 ? current_loc_ : map_[var];
+    }
 };
 
 // Particle for the SIS filter
@@ -54,10 +56,6 @@ struct sis_slam_particle_t : public slam_particle_t {
         int new_loc = base_->sample_loc(current_loc_, last_action);
         weight *= base_->obs_probability(obs, current_loc_, last_action); // CHECK: IS THIS OK? SHOULD IT BE NEW_LOC INSTEAD?
         current_loc_ = new_loc;
-    }
-
-    int value_for(int var) const {
-        return var == base_->nvars_ - 1 ? current_loc_ : map_[var];
     }
 };
 
@@ -70,10 +68,6 @@ struct motion_model_sir2_slam_particle_t : public slam_particle_t {
 
     float importance_weight(const motion_model_sir2_slam_particle_t &np, const motion_model_sir2_slam_particle_t &/*p*/, int last_action, int obs) const {
         return base_->obs_probability(obs, np.current_loc_, np.map_, last_action);
-    }
-
-    int value_for(int var) const {
-        return var == base_->nvars_ - 1 ? current_loc_ : map_[var];
     }
 };
 
@@ -127,10 +121,6 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
             weight += base_->obs_probability(obs, new_loc, p.map_, last_action) * base_->loc_probability(last_action, loc, new_loc);
         return weight;
     }
-
-    int value_for(int var) const {
-        return var == base_->nvars_ - 1 ? current_loc_ : map_[var];
-    }
 };
 
 // Particle for the Rao-Blackwellised filter
@@ -175,8 +165,12 @@ struct rbpf_slam_particle_t : public slam_particle_t {
         return prob;
     }
 
-    int value_for(int var) const {
-        return var; // CHECK
+    void update_marginal(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            for( int label = 0; label < base_->nlabels_; ++label )
+                marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * probability(label, loc));
+        }
+        marginals_on_vars[base_->nloc_].set(current_loc_, marginals_on_vars[base_->nloc_][current_loc_] + weight);
     }
 
     const rbpf_slam_particle_t& operator=(const rbpf_slam_particle_t &p) {
