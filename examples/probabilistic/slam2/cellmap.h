@@ -79,6 +79,7 @@ struct cellmap_t {
         nlabels_(nlabels), pa_(pa), po_(po), pc_(pc) {
         cells_ = std::vector<cell_t>(nloc_);
     }
+    ~cellmap_t() { }
 
     void set_labels(const int *labels, size_t size) {
         assert(size == cells_.size());
@@ -94,6 +95,11 @@ struct cellmap_t {
         for( size_t i = 0; i < labels.size(); ++i )
             labels[i] = lrand48() % nlabels_;
         set_labels(labels);
+    }
+
+    // API for particle filters
+    int domain_size(int var) const {
+        return var == nvars_ - 1 ? nloc_ : nlabels_;
     }
 
     // action labels

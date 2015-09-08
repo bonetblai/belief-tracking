@@ -6,6 +6,7 @@ DEPS=	    			action_selection.h cellmap.h slam_action_selection.h tracking.h \
 						particle_filter.h \
 						sis.h \
 						sir2.h motion_model_sir2.h optimal_sir2.h \
+						rbpf2.h \
 						slam_particle_types.h
 
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
@@ -19,9 +20,9 @@ CXXEXT2=		-std=c++11 -DMACOSX -I ~/software/libdai/include -Wno-deprecated -Wall
 
 CFLAGS=			-Wall -O3 $(CXXEXT2) $(INCLUDES) #-DNDEBUG
 
-slam:			main.cc $(DEPS)
-				$(CXX) $(CFLAGS) -o slam main.cc -ldai -lgmpxx -lgmp
+slam2:			main.cc $(DEPS)
+				$(CXX) $(CFLAGS) -o slam2 main.cc -ldai -lgmpxx -lgmp
 
 clean:
-				rm -f slam *~
+				rm -f slam2 *~
 

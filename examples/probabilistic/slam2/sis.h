@@ -64,23 +64,24 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
     }
 
     virtual void calculate_marginals() {
-#if 0
-        marginals_on_vars_ = std::vector<dai::Factor>(nloc_ + 1);
-        for( int i = 0; i < nloc_; ++i )
-            marginals_on_vars_[i] = dai::Factor(dai::VarSet(dai::Var(i, nlabels_)), 0.0);
-        marginals_on_vars_[nloc_] = dai::Factor(dai::VarSet(dai::Var(nloc_, nloc_)), 0.0);
+        // initialize marginals
+        marginals_on_vars_ = std::vector<dai::Factor>(base_.nvars_);
+        for( int var = 0; var < base_.nvars_; ++var ) {
+            marginals_on_vars_[var] = dai::Factor(dai::VarSet(dai::Var(var, base_.domain_size(var))), 0.0);
+        }
 
         float total_mass = 0;
         for( int i = 0; i < nparticles_; ++i )
             total_mass += particles_[i].first;
 
+        // aggregate info from particles into marginals
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
-            const std::vector<int> &p = particles_[i].second;
-            for( int j = 0; j <= nloc_; ++j )
-                marginals_on_vars_[j].set(p[j], marginals_on_vars_[j][p[j]] + weight / total_mass);
+            const PTYPE &p = particles_[i].second;
+            for( int var = 0; var < base_.nvars_; ++var ) {
+                marginals_on_vars_[var].set(p.value_for(var), marginals_on_vars_[var][p.value_for(var)] + weight / total_mass);
+            }
         }
-#endif
     }
 
     virtual void get_marginal(int var, dai::Factor &marginal) const {

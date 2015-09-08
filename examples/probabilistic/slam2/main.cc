@@ -37,8 +37,8 @@
 #include "motion_model_sir2.h"
 #include "optimal_sir2.h"
 #include "rbpf2.h"
-#include "slam_particle_types.h"
 //#include "ppcbt2.h"
+#include "slam_particle_types.h"
 
 using namespace std;
 
@@ -206,20 +206,13 @@ int main(int argc, const char **argv) {
         } else if( name == "sis" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new SIS_t<sis_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
-#if 0
-        } else if( name == "mm_sir" ) {
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new motion_model_SIR_t(name + "_" + to_string(nparticles), cellmap, nparticles));
-        } else if( name == "opt_sir" ) {
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new optimal_SIR_t(name + "_" + to_string(nparticles), cellmap, nparticles));
-#endif
         } else if( name == "mm_sir2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new motion_model_SIR2_t<motion_model_sir2_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "opt_sir2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new optimal_SIR2_t<optimal_sir2_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
+            cdf_t<optimal_sir2_slam_particle_t, cellmap_t> *cdf = new cdf_t<optimal_sir2_slam_particle_t, cellmap_t>(cellmap);
+            tracking_algorithms.push_back(new optimal_SIR2_t<optimal_sir2_slam_particle_t, cellmap_t, cdf_t<optimal_sir2_slam_particle_t, cellmap_t> >(name + "_" + to_string(nparticles), cellmap, *cdf, nparticles));
         } else if( name == "rbpf2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new RBPF2_t<rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));

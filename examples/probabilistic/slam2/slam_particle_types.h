@@ -44,6 +44,8 @@ struct slam_particle_t {
             map_[i] = lrand48() % base_->nlabels_;
         current_loc_ = base_->initial_loc_;
     }
+
+    //virtual int value_for(int var) const = 0; //CHECK
 };
 
 // Particle for the SIS filter
@@ -53,6 +55,10 @@ struct sis_slam_particle_t : public slam_particle_t {
         weight *= base_->obs_probability(obs, current_loc_, last_action); // CHECK: IS THIS OK? SHOULD IT BE NEW_LOC INSTEAD?
         current_loc_ = new_loc;
     }
+
+    int value_for(int var) const {
+        return var == base_->nvars_ - 1 ? current_loc_ : map_[var];
+    }
 };
 
 // Particle for the motion model SIR2 filter
@@ -61,8 +67,13 @@ struct motion_model_sir2_slam_particle_t : public slam_particle_t {
         np = p;
         np.current_loc_ = base_->sample_loc(p.current_loc_, last_action);
     }
+
     float importance_weight(const motion_model_sir2_slam_particle_t &np, const motion_model_sir2_slam_particle_t &/*p*/, int last_action, int obs) const {
         return base_->obs_probability(obs, np.current_loc_, np.map_, last_action);
+    }
+
+    int value_for(int var) const {
+        return var == base_->nvars_ - 1 ? current_loc_ : map_[var];
     }
 };
 
@@ -116,6 +127,10 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
             weight += base_->obs_probability(obs, new_loc, p.map_, last_action) * base_->loc_probability(last_action, loc, new_loc);
         return weight;
     }
+
+    int value_for(int var) const {
+        return var == base_->nvars_ - 1 ? current_loc_ : map_[var];
+    }
 };
 
 // Particle for the Rao-Blackwellised filter
@@ -160,12 +175,67 @@ struct rbpf_slam_particle_t : public slam_particle_t {
         return prob;
     }
 
+    int value_for(int var) const {
+        return var; // CHECK
+    }
+
     const rbpf_slam_particle_t& operator=(const rbpf_slam_particle_t &p) {
         current_loc_ = p.current_loc_;
         factors_ = p.factors_;
         return *this;
     }
 };
+
+// Helper class that pre-computes cdfs
+template <typename PTYPE, typename BASE> struct cdf_t {
+    const BASE &base_;
+    int nstates_;
+    int nobs_;
+    int nactions_;
+    float **cdf_;
+
+    cdf_t(const BASE &base) : base_(base) {
+        nstates_ = base_.nloc_;
+        for( int loc = 0; loc < base_.nloc_; ++loc )
+            nstates_ *= base_.nlabels_;
+        nobs_ = base_.nlabels_;
+        nactions_ = 4;
+        calculate_cdf_for_pi();
+    }
+    ~cdf_t() {
+        for( int i = 0; i < nstates_ * nobs_ * nactions_; ++i )
+            delete[] cdf_[i];
+        delete[] cdf_;
+    }
+
+    void calculate_cdf_for_pi() {
+        cdf_ = new float*[nstates_ * nobs_ * nactions_];
+
+        // calculate cdfs
+        for( int i = 0; i < nstates_ * nobs_ * nactions_; ++i ) {
+            cdf_[i] = new float[nstates_];
+            PTYPE p;
+            int state_index = i % nstates_;
+            int obs = (i / nstates_) % nobs_;
+            int action = (i / nstates_) / nobs_;
+            p.decode(state_index);
+            for( int state_index2 = 0; state_index2 < nstates_; ++state_index2 ) {
+                PTYPE p2;
+                p2.decode(state_index2);
+                cdf_[i][state_index2] = state_index2 > 0 ? cdf_[i][state_index2 - 1] : 0;
+                cdf_[i][state_index2] += p.pi(p2, p, action, obs);
+            }
+            //cerr << "cdf[" << i << "/" << nstates_ * nobs_ * nactions_ << "][" << nstates_ - 1 << "]="
+            //     << setprecision(9) << cdf_[i][nstates_ - 1] << endl;
+            assert(fabs(cdf_[i][nstates_ - 1] - 1.0) < .0001);
+        }
+    }
+
+    const float* pi_cdf(int state_index, int last_action, int obs) const {
+        return cdf_[(last_action * nobs_ + obs) * nstates_ + state_index];
+    }
+};
+
 
 #endif
 
