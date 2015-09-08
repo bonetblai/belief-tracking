@@ -31,11 +31,14 @@
 #include "cellmap.h"
 #include "slam_action_selection.h"
 
+#include "pcbt.h"
+
 #include "sis.h"
 #include "motion_model_sir2.h"
 #include "optimal_sir2.h"
 #include "rbpf2.h"
 #include "slam_particle_types.h"
+//#include "ppcbt2.h"
 
 using namespace std;
 
@@ -173,39 +176,29 @@ int main(int argc, const char **argv) {
         char *token = strtok(0, ":");
         if( name == "jt" ) {
             memory = token != 0 ? atoi(token) : memory;
-#if 0
-            pcbt_t *pcbt = new pcbt_t(name + "_" + to_string(memory), cellmap, memory);
+            pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
             tracking_algorithms.push_back(pcbt);
-#endif
         } else if( name == "bp" ) {
             memory = token != 0 ? atoi(token) : memory;
-#if 0
-            pcbt_t *pcbt = new pcbt_t(name + "_" + to_string(memory), cellmap, memory);
+            pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
             tracking_algorithms.push_back(pcbt);
-#endif
         } else if( name == "hak" ) {
             memory = token != 0 ? atoi(token) : memory;
-#if 0
-            pcbt_t *pcbt = new pcbt_t(name + "_" + to_string(memory), cellmap, memory);
+            pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
             tracking_algorithms.push_back(pcbt);
-#endif
-        } else if( name == "ppcbt_jt" ) {
 #if 0
+        } else if( name == "ppcbt_jt" ) {
             ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 1000);
             pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
             tracking_algorithms.push_back(pcbt);
-#endif
         } else if( name == "ppcbt_bp" ) {
-#if 0
             ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 50);
             pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
             tracking_algorithms.push_back(pcbt);
-#endif
         } else if( name == "ppcbt_hak" ) {
-#if 0
             ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 50);
             pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
             tracking_algorithms.push_back(pcbt);
