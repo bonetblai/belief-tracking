@@ -20,9 +20,9 @@ CXXEXT2=		-std=c++11 -DMACOSX -I ~/software/libdai/include -Wno-deprecated -Wall
 
 CFLAGS=			-Wall -O3 $(CXXEXT2) $(INCLUDES) #-DNDEBUG
 
-slam2:			main.cc $(DEPS)
-				$(CXX) $(CFLAGS) -o slam2 main.cc -ldai -lgmpxx -lgmp
+colorslam:		main.cc $(DEPS)
+				$(CXX) $(CFLAGS) -o colorslam main.cc -ldai -lgmpxx -lgmp
 
 clean:
-				rm -f slam2 *~
+				rm -f colorslam *~
 

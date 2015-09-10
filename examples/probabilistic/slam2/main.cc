@@ -45,19 +45,19 @@ using namespace std;
 
 // static members
 int coord_t::ncols_ = 0;
-const cellmap_t *slam_particle_t::base_ = 0;
+const cellmap_t *base_particle_t::base_ = 0;
 
 
 void usage(ostream &os) {
     os << endl
-       << "Usage: maplearning [{-t | --ntrials} <ntrials>]" << endl
-       << "                   [{-r | --nrows} <nrows>]" << endl
-       << "                   [{-c | --ncols} <ncols>]" << endl
-       << "                   [{-l | --nlabels} <nlabels>]" << endl
-       << "                   [{-s | --seed} <seed>]" << endl
-       << "                   [{-v | --verbose}]" << endl
-       << "                   [{-p | --policy} <policy>]" << endl
-       << "                   [{-? | --help}]" << endl
+       << "Usage: colorslam [{-t | --ntrials} <ntrials>]" << endl
+       << "                 [{-r | --nrows} <nrows>]" << endl
+       << "                 [{-c | --ncols} <ncols>]" << endl
+       << "                 [{-l | --nlabels} <nlabels>]" << endl
+       << "                 [{-s | --seed} <seed>]" << endl
+       << "                 [{-v | --verbose}]" << endl
+       << "                 [{-p | --policy} <policy>]" << endl
+       << "                 [{-? | --help}]" << endl
        << endl
        << "where <ntrials> is a non-negative integer telling the number of games to" << endl
        << "play (default is 1), <nrows> and <ncols> are positive integers telling" << endl
@@ -162,7 +162,7 @@ int main(int argc, const char **argv) {
 
     // set static members
     coord_t::ncols_ = ncols;
-    slam_particle_t::base_ = &cellmap;
+    base_particle_t::base_ = &cellmap;
 
     // tracking algorithms
     vector<tracking_t<cellmap_t>*> tracking_algorithms;

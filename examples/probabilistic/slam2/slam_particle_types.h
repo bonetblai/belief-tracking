@@ -33,10 +33,13 @@
 #include <dai/alldai.h>
 
 // Generic particle for the color-tile SLAM problem
-struct slam_particle_t {
+struct base_particle_t {
+    static const cellmap_t *base_;
+};
+
+struct slam_particle_t : public base_particle_t {
     int current_loc_;
     std::vector<int> map_;
-    static const cellmap_t *base_;
 
     void initial_sampling() {
         map_ = std::vector<int>(base_->nloc_);
@@ -124,18 +127,19 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
 };
 
 // Particle for the Rao-Blackwellised filter
-struct rbpf_slam_particle_t : public slam_particle_t {
+struct rbpf_slam_particle_t : public base_particle_t {
+    std::vector<int> loc_history_;
     std::vector<dai::Factor> factors_;
 
     void initial_sampling() {
-        //base_particle_t::initial_sampling();
-        current_loc_ = base_->initial_loc_;
+        loc_history_.push_back(base_->initial_loc_);
         factors_ = std::vector<dai::Factor>(base_->nloc_, dai::Factor(dai::VarSet(dai::Var(0, base_->nlabels_)), 1.0 / float(base_->nlabels_)));
     }
  
     void update(int last_action, int obs) {
-        assert(current_loc_ < int(factors_.size()));
-        dai::Factor &factor = factors_[current_loc_];
+        int current_loc = loc_history_.back();
+        assert(current_loc < int(factors_.size()));
+        dai::Factor &factor = factors_[current_loc];
         assert(base_->nlabels_ == int(factor.nrStates()));
         float total_mass = 0.0;
         for( int label = 0; label < base_->nlabels_; ++label ) {
@@ -154,30 +158,28 @@ struct rbpf_slam_particle_t : public slam_particle_t {
 
     void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
         np = p;
-        np.current_loc_ = base_->sample_loc(p.current_loc_, last_action);
+        int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
+        np.loc_history_.push_back(next_loc);
         np.update(last_action, obs);
     }
 
     float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
         float prob = 0;
         for( int label = 0; label < base_->nlabels_; ++label ) // marginalize over possible labels at current loc
-            prob += base_->obs_probability(obs, label, last_action) * p.probability(label, np.current_loc_);
+            prob += base_->obs_probability(obs, label, last_action) * p.probability(label, np.loc_history_.back());
         return prob;
     }
 
     void update_marginal(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
+        int current_loc = loc_history_.back();
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             for( int label = 0; label < base_->nlabels_; ++label )
                 marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * probability(label, loc));
         }
-        marginals_on_vars[base_->nloc_].set(current_loc_, marginals_on_vars[base_->nloc_][current_loc_] + weight);
+        marginals_on_vars[base_->nloc_].set(current_loc, marginals_on_vars[base_->nloc_][current_loc] + weight);
     }
 
-    const rbpf_slam_particle_t& operator=(const rbpf_slam_particle_t &p) {
-        current_loc_ = p.current_loc_;
-        factors_ = p.factors_;
-        return *this;
-    }
+    int value_for(int /*var*/) const { return -1; }
 };
 
 // Helper class that pre-computes cdfs
