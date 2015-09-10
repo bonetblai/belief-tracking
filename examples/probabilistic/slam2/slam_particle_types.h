@@ -76,23 +76,23 @@ struct motion_model_sir2_slam_particle_t : public slam_particle_t {
 
 // Particle for the optimal SIR2 filter
 struct optimal_sir2_slam_particle_t : public slam_particle_t {
+    // encode/decode particles into/from integers
     int encode() const {
-        int state_index = 0;
+        int code = 0;
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            state_index *= base_->nlabels_;
-            state_index += map_[loc];
+            code *= base_->nlabels_;
+            code += map_[loc];
         }
-        state_index = state_index * base_->nloc_ + current_loc_;
-        return state_index;
+        code = code * base_->nloc_ + current_loc_;
+        return code;
     }
-
-    void decode(int state_index) {
+    void decode(int code) {
         map_ = std::vector<int>(base_->nloc_, 0);
-        current_loc_ = state_index % base_->nloc_;
-        state_index /= base_->nloc_;
+        current_loc_ = code % base_->nloc_;
+        code /= base_->nloc_;
         for( int loc = base_->nloc_ - 1; loc >= 0; --loc ) {
-            map_[loc] = state_index % base_->nlabels_;
-            state_index /= base_->nlabels_;
+            map_[loc] = code % base_->nlabels_;
+            code /= base_->nlabels_;
         }
     }
 
@@ -110,6 +110,7 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
         }
     }
 
+    // ISN'T importance-weight for optimal-sir equal to 1?
     float importance_weight(const optimal_sir2_slam_particle_t &/*np*/, const optimal_sir2_slam_particle_t &p, int last_action, int obs) const {
         // weight = P(obs|np,last_action) * P(np|p,last_action) / P(np|p,last_action,obs)
         //        = P(obs|p,last_action) [see above derivation in pi(..)]
@@ -122,6 +123,7 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
         int loc = p.current_loc_;
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc )
             weight += base_->obs_probability(obs, new_loc, p.map_, last_action) * base_->loc_probability(last_action, loc, new_loc);
+        std::cout << "weight (optimal sir2) = " << weight << std::endl;
         return weight;
     }
 };
