@@ -128,7 +128,7 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
     }
 };
 
-// Particle for the Rao-Blackwellised filter
+// Abstract Particle for the Rao-Blackwellised filter
 struct rbpf_slam_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
     std::vector<dai::Factor> factors_;
@@ -137,7 +137,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
         loc_history_.push_back(base_->initial_loc_);
         factors_ = std::vector<dai::Factor>(base_->nloc_, dai::Factor(dai::VarSet(dai::Var(0, base_->nlabels_)), 1.0 / float(base_->nlabels_)));
     }
- 
+
     void update(int last_action, int obs) {
         int current_loc = loc_history_.back();
         assert(current_loc < int(factors_.size()));
@@ -158,20 +158,6 @@ struct rbpf_slam_particle_t : public base_particle_t {
         return factors_[loc][label];
     }
 
-    void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
-        np = p;
-        int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
-        np.loc_history_.push_back(next_loc);
-        np.update(last_action, obs);
-    }
-
-    float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
-        float prob = 0;
-        for( int label = 0; label < base_->nlabels_; ++label ) // marginalize over possible labels at current loc
-            prob += base_->obs_probability(obs, label, last_action) * p.probability(label, np.loc_history_.back());
-        return prob;
-    }
-
     void update_marginal(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
         int current_loc = loc_history_.back();
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
@@ -182,9 +168,39 @@ struct rbpf_slam_particle_t : public base_particle_t {
     }
 
     int value_for(int /*var*/) const { return -1; }
+
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const = 0;
+    virtual float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const = 0;
 };
 
-// Helper class that pre-computes cdfs
+struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+        np = p;
+        int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
+        np.loc_history_.push_back(next_loc);
+        np.update(last_action, obs);
+    }
+
+    virtual float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+        float prob = 0;
+        for( int label = 0; label < base_->nlabels_; ++label ) // marginalize over possible labels at current loc
+            prob += base_->obs_probability(obs, label, last_action) * p.probability(label, np.loc_history_.back());
+        return prob;
+    }
+};
+
+struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+    }
+
+    virtual float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+        float prob = 0;
+        return prob;
+    }
+};
+
+
+// Helper class that pre-computes cdfs for the optimal sir filter
 template <typename PTYPE, typename BASE> struct cdf_t {
     const BASE &base_;
     int nstates_;

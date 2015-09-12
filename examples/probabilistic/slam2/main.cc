@@ -215,9 +215,12 @@ int main(int argc, const char **argv) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             cdf_t<optimal_sir2_slam_particle_t, cellmap_t> *cdf = new cdf_t<optimal_sir2_slam_particle_t, cellmap_t>(cellmap);
             tracking_algorithms.push_back(new optimal_SIR2_t<optimal_sir2_slam_particle_t, cellmap_t, cdf_t<optimal_sir2_slam_particle_t, cellmap_t> >(name + "_" + to_string(nparticles), cellmap, *cdf, nparticles));
-        } else if( name == "rbpf2" ) {
+        } else if( name == "mm_rbpf2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new RBPF2_t<rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
+            tracking_algorithms.push_back(new RBPF2_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
+        } else if( name == "opt_rbpf2" ) {
+            nparticles = token != 0 ? atoi(token) : nparticles;
+            tracking_algorithms.push_back(new RBPF2_t<optimal_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else {
             cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
         }
