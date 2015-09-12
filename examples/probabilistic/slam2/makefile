@@ -2,7 +2,7 @@ ROOT=		            ../../../..
 BELIEF_TRACKING_HOME=	$(ROOT)/belief-tracking
 MDP_ENGINE_HOME=		$(ROOT)/mdp-engine
 
-DEPS=	    			action_selection.h cellmap.h slam_action_selection.h tracking.h \
+DEPS=	    			action_selection.h cellmap.h slam_action_selection.h tracking.h utils.h \
 						particle_filter.h \
 						sis.h \
 						sir2.h motion_model_sir2.h optimal_sir2.h \

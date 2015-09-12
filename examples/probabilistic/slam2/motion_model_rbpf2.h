@@ -16,40 +16,24 @@
  *
  */
 
-#ifndef OPTIMAL_SIR2_H
-#define OPTIMAL_SIR2_H
+#ifndef MOTION_MODEL_RBPF2_H
+#define MOTION_MODEL_RBPF2_H
 
 #include <cassert>
 #include <string>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <string.h>
-#include <set>
-#include <vector>
-#include <stdlib.h>
-#include <math.h>
 
-#include <dai/alldai.h>
+#include "rbpf2.h"
 
-
-// SIR filter with proposal distribution given by optimal choice
-template <typename PTYPE, typename BASE, typename CDF> struct optimal_SIR2_t : public SIR2_t<PTYPE, BASE> {
-    using PF_t<PTYPE, BASE>::sample_from_distribution;
-
-    const CDF &cdf_;
-
-    optimal_SIR2_t(const std::string &name, const BASE &base, const CDF &cdf, int nparticles)
-      : SIR2_t<PTYPE, BASE>(name, base, nparticles), cdf_(cdf) {
+// RBPF filter with proposal distribution given by motion model
+template <typename PTYPE, typename BASE> struct motion_model_RBPF2_t : public RBPF2_t<PTYPE, BASE> {
+    motion_model_RBPF2_t(const std::string &name, const BASE &base, int nparticles)
+      : RBPF2_t<PTYPE, BASE>(name, base, nparticles) {
     }
-    virtual ~optimal_SIR2_t() { }
+    virtual ~motion_model_RBPF2_t() { }
 
     virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const {
-        const float *dist = cdf_.pi_cdf(p.encode(), last_action, obs);
-        int code = sample_from_distribution(cdf_.nstates_, dist);
-        np.decode(code);
+        p.sample_from_pi(np, p, last_action, obs);
     }
-
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
         return p.importance_weight(np, p, last_action, obs);
     }

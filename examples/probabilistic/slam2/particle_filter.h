@@ -28,7 +28,8 @@
 #include <set>
 #include <vector>
 #include <stdlib.h>
-#include <math.h>
+
+#include "utils.h"
 
 #include <dai/alldai.h>
 
@@ -44,50 +45,24 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
     }
     virtual ~PF_t() { }
 
-    void stochastic_sampling(int n, std::vector<int> &indices) const {
+    void stochastic_sampling(int k, std::vector<int> &indices) const {
         std::vector<float> cdf(nparticles_, 0);
         cdf[0] = particles_[0].first;
         for( int i = 1; i < nparticles_; ++i )
             cdf[i] = cdf[i - 1] + particles_[i].first;
-
-        indices.clear();
-        indices.reserve(n);
-        for( int j = 0; j < n; ++j ) {
-            float u = drand48();
-            if( u > cdf.back() ) {
-                indices.push_back(nparticles_ - 1);
-            } else {
-                for( size_t i = 0; i < cdf.size(); ++i ) {
-                    if( u < cdf[i] ) {
-                        indices.push_back(i);
-                        break;
-                    }
-                }
-            }
-        }
+        return Utils::stochastic_sampling(cdf.size(), &cdf[0], k, indices);
     }
 
-    void stochastic_universal_sampling(int n, std::vector<int> &indices) const {
+    void stochastic_universal_sampling(int k, std::vector<int> &indices) const {
         std::vector<float> cdf(nparticles_, 0);
         cdf[0] = particles_[0].first;
         for( int i = 1; i < nparticles_; ++i )
             cdf[i] = cdf[i - 1] + particles_[i].first;
-
-        indices.clear();
-        indices.reserve(n);
-        float u = drand48() / float(n);
-        for( int i = 0, j = 0; j < n; ++j ) {
-            while( (i < nparticles_) && (u > cdf[i]) ) ++i;
-            indices.push_back(i == nparticles_ ? nparticles_ - 1 : i);
-            u += 1.0 / float(n);
-        }
+        return Utils::stochastic_universal_sampling(cdf.size(), &cdf[0], k, indices);
     }
 
     int sample_from_distribution(int n, const float *cdf) const {
-        float p = drand48();
-        for( int i = 0; i < n; ++i )
-            if( p < cdf[i] ) return i;
-        return n - 1;
+        return Utils::sample_from_distribution(n, cdf);
     }
 };
 
