@@ -32,6 +32,8 @@
 
 #include <dai/alldai.h>
 
+#define EPSILON 0.000001
+
 
 // General Tracking Algorithm
 template <typename BASE> struct tracking_t {
@@ -61,18 +63,19 @@ template <typename BASE> struct tracking_t {
         return marginals_at_time_t[var];
     }
 
-    int MAP_on_var(int var) const {
+    void MAP_on_var(int var, std::vector<int> &map_values, float epsilon = EPSILON) const {
+        map_values.clear();
         dai::Factor marginal;
         get_marginal(var, marginal);
         float max_probability = 0;
-        int best = 0;
-        for( size_t i = 0; i < marginal.nrStates(); ++i ) {
-            if( marginal[i] >= max_probability ) {
-                max_probability = marginal[i];
-                best = i;
+        for( size_t value = 0; value < marginal.nrStates(); ++value ) {
+            if( (marginal[value] - max_probability > epsilon) || (fabs(max_probability - marginal[value]) < epsilon) ) {
+                if( marginal[value] - max_probability > epsilon )
+                    map_values.clear();
+                max_probability = marginal[value];
+                map_values.push_back(value);
             }
         }
-        return best;
     }
 };
 

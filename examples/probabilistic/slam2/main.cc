@@ -91,6 +91,9 @@ int main(int argc, const char **argv) {
     float pa = 0.8;
     float po = 0.9;
 
+    int ptype = 0;
+    int execution_length = 10;
+
     --argc;
     ++argv;
     while( (argc > 0) && (**argv == '-') ) {
@@ -141,8 +144,10 @@ int main(int argc, const char **argv) {
             --argc;
             ++argv;
         } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
-            argc -= 2;
-            argv += 2;
+            ptype = atoi(argv[1]);
+            execution_length = atoi(argv[2]);
+            argc -= 3;
+            argv += 3;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
             usage(cerr);
             exit(-1);
@@ -234,12 +239,27 @@ int main(int argc, const char **argv) {
     // action selection
     naive_action_selection_t policy(cellmap, .30);
 
-    int _labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
-    vector<int> labels(&_labels[0], &_labels[8]);
-    cellmap.sample_labels(labels);
+    // set labels
+    vector<int> labels;
+    if( ptype == 0 || ptype == 1 ) {
+        if( ptype == 0 ) { // 1x8 grid with fixed labels
+            int _labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
+            vector<int> labels(&_labels[0], &_labels[8]);
+        } else { // 1x8 grid with random labels
+            cellmap.sample_labels(labels);
+        }
+    } else if( ptype == 2 || ptype == 3 ) {
+        if( ptype == 2 ) { // X..Y grid with fixed labels
+        } else { // X..Y grid with random labels
+            cellmap.sample_labels(labels);
+        }
+    } else { // general grid with random labels
+        cellmap.sample_labels(labels);
+    }
 
+    // set execution
     cellmap_t::execution_t fixed_execution;
-    cellmap.compute_random_execution(labels, 0, 80, fixed_execution);
+    cellmap.compute_random_execution(labels, 0, execution_length, fixed_execution);
 #if 0
     fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, -1));
     fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::right));
@@ -279,15 +299,39 @@ int main(int argc, const char **argv) {
         }
 
         // print final (tracked) map and location
+        vector<int> map_values;
         cout << "# final(" << setw(size_longest_name) << "real" << "): map=[";
         for( int var = 0; var < nrows * ncols; ++var )
             cout << " " << cellmap.cells_[var].label_;
         cout << "], loc=" << output_execution.back().loc_ << endl;
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
-            for( int var = 0; var < nrows * ncols; ++var )
-                cout << " " << tracking_algorithms[i]->MAP_on_var(var);
-            cout << "], loc=" << tracking_algorithms[i]->MAP_on_var(nrows * ncols) << endl;
+            for( int var = 0; var < nrows * ncols; ++var ) {
+                tracking_algorithms[i]->MAP_on_var(var, map_values);
+                if( map_values.size() == 1 ) {
+                    cout << " " << map_values.back();
+                } else {
+                    cout << " {";
+                    for( size_t k = 0; k < map_values.size(); ++k ) {
+                        cout << map_values[k];
+                        if( k < map_values.size() - 1 ) cout << ",";
+                    }
+                    cout << "}";
+                }
+            }
+
+            cout << "], loc=";
+            tracking_algorithms[i]->MAP_on_var(nrows * ncols, map_values);
+            if( map_values.size() == 1 ) {
+                cout << map_values.back() << endl;
+            } else {
+                cout << " {";
+                for( size_t k = 0; k < map_values.size(); ++k ) {
+                    cout << map_values[k];
+                    if( k < map_values.size() - 1 ) cout << ",";
+                }
+                cout << "}" << endl;
+            }
         }
 
         // generate R plots
