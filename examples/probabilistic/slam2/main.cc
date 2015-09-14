@@ -234,9 +234,13 @@ int main(int argc, const char **argv) {
     // action selection
     naive_action_selection_t policy(cellmap, .30);
 
-    int labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
+    int _labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
+    vector<int> labels(&_labels[0], &_labels[8]);
+    cellmap.sample_labels(labels);
 
     cellmap_t::execution_t fixed_execution;
+    cellmap.compute_random_execution(labels, 0, 80, fixed_execution);
+#if 0
     fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, -1));
     fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::right));
     fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::right));
@@ -253,14 +257,15 @@ int main(int argc, const char **argv) {
     fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
     fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
     fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
+#endif
 
     // run for the specified number of trials
     for( int trial = 0; trial < ntrials; ++trial ) {
         cellmap_t::execution_t output_execution;
         if( (nsteps == 0) && (nrows == 1) && (ncols == 8) )
-            cellmap.run_execution(labels, 8, fixed_execution, output_execution, tracking_algorithms);
+            cellmap.run_execution(labels, fixed_execution, output_execution, tracking_algorithms);
         else
-            cellmap.run_execution(labels, 0, output_execution, nsteps, policy, tracking_algorithms);
+            cellmap.run_execution(labels, output_execution, nsteps, policy, tracking_algorithms);
 
         // calculate final marginals
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
@@ -293,60 +298,4 @@ int main(int argc, const char **argv) {
 
     return 0;
 }
-
-
-
-
-#if 0 // deprecated after main
-            // compute and print exact marginals via junction tree
-            marginal_t P1, Q1;
-            //cout << "Marginals (exact: junction tree):" << endl;
-            apply_junction_tree(P1, Q1);
-            store_marginal(nrows_ * ncols_, &cellmap_t::jt_marginal, marginals);
-            //print_marginals(cout, &cellmap_t::jt_marginal, 10);
-
-            // approximate and print marginals
-            marginal_t P2, Q2;
-            //cout << "Marginals (approx. inference):" << endl;
-            apply_approx_inference(P2, Q2);
-            //print_marginals(cout, &cellmap_t::approx_inference_marginal);
-
-            // calculate KL-divergence
-            pair<float, bool> js1 = JS_divergence(P1, P2);
-            pair<float, bool> js2 = JS_divergence(Q1, Q2);
-            cout << "JS-divergence: P[jt,approx]=" << js1.first << ", Q[jt,approx]=" << js2.first << endl;
-
-    void apply_approx_inference(marginal_t &P, marginal_t &Q) const {
-        apply_approx_inference();
-        P.clear();
-        float mass = 0;
-        for( int i = 0; i < nloc_; ++i ) {
-            P.push_back(approx_inference_algorithm_->belief(approx_inference_fg_.var(i))[0]);
-            mass = P.back();
-        }
-        for( int i = 0; i < nloc_; ++i ) P[i] /= mass;
-        Q.clear();
-        for( int i = 0; i < nloc_; ++i )
-            Q.push_back(approx_inference_algorithm_->belief(approx_inference_fg_.var(nloc_))[i]);
-    }
-
-    // inference algorithms for MAP
-    void apply_junction_tree_for_MAP(vector<size_t> &state) const {
-        dai::PropertySet opts;
-        jt_fg_ = dai::FactorGraph(factors_);
-        jt_ = dai::JTree(jt_fg_, opts("updates", string("HUGIN"))("inference", string("MAXPROD")));
-        jt_.init();
-        jt_.run();
-        state = jt_.findMaximum();
-    }
-
-        // Calculate MAP over cellmap labels
-        vector<size_t> map_value;
-        cellmap.apply_junction_tree_for_MAP(map_value);
-        for( size_t i = 0; i < map_value.size(); ++i ) {
-            cout << "v" << i << " = " << map_value[i];
-            if( int(i) < nrows * ncols ) cout << " [label=" << cellmap.cells_[i].label_ << "]";
-            cout << endl;
-        }
-#endif
 

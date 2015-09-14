@@ -199,7 +199,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         cdf_.reserve(base_->nloc_);
 
         int current_loc = p.loc_history_.back();
-        float previous = 0.0;
+        float previous = 0;
 
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
@@ -208,6 +208,12 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
             cdf_.push_back(previous + base_->loc_probability(last_action, current_loc, new_loc) * prob);
             previous = cdf_.back();
         }
+
+        // normalize
+        for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
+            cdf_[new_loc] /= cdf_.back();
+        }
+        assert(cdf_.back() == 1.0);
     }
 
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {

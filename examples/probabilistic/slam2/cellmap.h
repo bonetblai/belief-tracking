@@ -90,10 +90,14 @@ struct cellmap_t {
         set_labels(&labels[0], labels.size());
     }
 
-    void sample_labels() {
-        std::vector<int> labels(cells_.size(), 0);
+    void sample_labels(std::vector<int> &labels) const {
+        labels = std::vector<int>(cells_.size(), 0);
         for( size_t i = 0; i < labels.size(); ++i )
             labels[i] = lrand48() % nlabels_;
+    }
+    void sample_labels() {
+        std::vector<int> labels(cells_.size(), 0);
+        sample_labels(labels);
         set_labels(labels);
     }
 
@@ -103,13 +107,15 @@ struct cellmap_t {
     }
 
     // action labels
-    enum { up, right, down, left };
+    enum { up, down, right, left };
 
     // computes P(new_loc | old_lod, action)
     float loc_probability(int action, int old_loc, int new_loc) const {
         float p = 0;
         coord_t coord(old_loc), new_coord(new_loc);
-        if( action == up ) {
+        if( action == -1 ) {
+            p =  old_loc == new_loc ? 1 : 0;
+        } else if( action == up ) {
             if( coord.row_ + 1 < nrows_ ) {
                 p = new_coord.row_ == coord.row_ + 1 ? pa_ : (new_coord.row_ == coord.row_ ? 1 - pa_ : 0);
             } else {
@@ -153,6 +159,7 @@ struct cellmap_t {
 
     // run execution: action application and observation sampling
     int regress_loc(int new_loc, int action) const {
+        assert(action != -1);
         coord_t coord(new_loc), new_coord(new_loc);
         if( action == up )
             coord = coord_t(new_coord.col_, new_coord.row_ == 0 ? 0 : new_coord.row_ - 1);
@@ -166,23 +173,25 @@ struct cellmap_t {
     }
 
     int sample_loc(int loc, int action) const {
-        coord_t coord(loc), new_coord(loc);
-        if( drand48() < pa_ ) {
-            if( action == up )
-                new_coord = coord_t(coord.col_, coord.row_ + 1 < nrows_ ? coord.row_ + 1 : coord.row_);
-            else if( action == right )
-                new_coord = coord_t(coord.col_ + 1 < ncols_ ? coord.col_ + 1 : coord.col_, coord.row_);
-            else if( action == down )
-                new_coord = coord_t(coord.col_, coord.row_ > 0 ? coord.row_ - 1 : coord.row_);
-            else if( action == left )
-                new_coord = coord_t(coord.col_ > 0 ? coord.col_ - 1 : coord.col_, coord.row_);
+        if( action == -1 ) {
+            return loc;
+        } else {
+            coord_t coord(loc), new_coord(loc);
+            if( drand48() < pa_ ) {
+                if( action == up )
+                    new_coord = coord_t(coord.col_, coord.row_ + 1 < nrows_ ? coord.row_ + 1 : coord.row_);
+                else if( action == right )
+                    new_coord = coord_t(coord.col_ + 1 < ncols_ ? coord.col_ + 1 : coord.col_, coord.row_);
+                else if( action == down )
+                    new_coord = coord_t(coord.col_, coord.row_ > 0 ? coord.row_ - 1 : coord.row_);
+                else if( action == left )
+                    new_coord = coord_t(coord.col_ > 0 ? coord.col_ - 1 : coord.col_, coord.row_);
+            }
+            return new_coord.as_index();
         }
-        return new_coord.as_index();
     }
 
-    int sample_obs(int loc, int /*last_action*/) const {
-        assert((loc >= 0) && (loc < int(cells_.size())));
-        int label = cells_[loc].label_;
+    int sample_obs(int /*loc*/, int label, int /*last_action*/) const {
         if( drand48() > po_ ) {
             int i = lrand48() % (nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {
@@ -195,6 +204,11 @@ struct cellmap_t {
             }
         }
         return label;
+    }
+    int sample_obs(int loc, int last_action) const {
+        assert((loc >= 0) && (loc < int(cells_.size())));
+        int label = cells_[loc].label_;
+        return sample_obs(loc, label, last_action);
     }
 
     void initialize(std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) const {
@@ -223,16 +237,37 @@ struct cellmap_t {
     };
     struct execution_t : public std::vector<execution_step_t> { };
 
-    void run_execution(const int *labels,
-                       int labels_size,
+    int random_action() const {
+        int index = lrand48();
+        if( (ncols_ == 1) || (nrows_ == 1) ) {
+            index = index % 2;
+            return ncols_ == 1 ? index : 2 + index;
+        } else {
+            return index % 4;
+        }
+    }
+
+    void compute_random_execution(const std::vector<int> &labels, int initial_loc, int length, execution_t &execution) const {
+        execution.reserve(length + 1);
+        execution.push_back(execution_step_t(initial_loc, 0, -1));
+        for( int step = 0; step < length; ++step ) {
+            int current_loc = execution.back().loc_;
+            int action = random_action();
+            int new_loc = sample_loc(current_loc, action);
+            int obs = sample_obs(new_loc, labels[new_loc], action);
+            execution.push_back(execution_step_t(new_loc, obs, action));
+        }
+    }
+
+    void run_execution(const std::vector<int> &labels,
                        const execution_t &input_execution,
                        execution_t &output_execution,
                        int nsteps,
                        const action_selection_t<cellmap_t> *policy,
                        std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
         // set labels for callmap
-        if( labels_size > 0 )
-            set_labels(labels, labels_size);
+        if( !labels.empty() )
+            set_labels(labels);
         else
             sample_labels();
 
@@ -267,27 +302,11 @@ struct cellmap_t {
             advance_step(last_action, obs, tracking_algorithms);
         }
     }
-    void run_execution(const int *labels,
-                       int labels_size,
-                       const execution_t &input_execution,
-                       execution_t &output_execution,
-                       std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
-        run_execution(labels, labels_size, input_execution, output_execution, 0, 0, tracking_algorithms);
-    }
-    void run_execution(const int *labels,
-                       int labels_size,
-                       execution_t &output_execution,
-                       int nsteps,
-                       const action_selection_t<cellmap_t> &policy,
-                       std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
-        execution_t empty_execution;
-        run_execution(labels, labels_size, empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
-    }
     void run_execution(const std::vector<int> &labels,
                        const execution_t &input_execution,
                        execution_t &output_execution,
                        std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
-        run_execution(&labels[0], labels.size(), input_execution, output_execution, 0, 0, tracking_algorithms);
+        run_execution(labels, input_execution, output_execution, 0, 0, tracking_algorithms);
     }
     void run_execution(const std::vector<int> &labels,
                        execution_t &output_execution,
@@ -295,7 +314,7 @@ struct cellmap_t {
                        const action_selection_t<cellmap_t> &policy,
                        std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
         execution_t empty_execution;
-        run_execution(&labels[0], labels.size(), empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
+        run_execution(labels, empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
     }
 
     // scoring of tracking algorithms
