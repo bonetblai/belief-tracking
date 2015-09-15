@@ -69,14 +69,15 @@ struct cellmap_t {
     float pa_;
     float po_;
     float pc_;
+    bool special_;
 
     std::vector<cell_t> cells_;
 
     mutable int initial_loc_;
 
-    cellmap_t(int nrows, int ncols, int nlabels, float pa, float po, float pc)
+    cellmap_t(int nrows, int ncols, int nlabels, float pa, float po, float pc, bool special = false)
       : nrows_(nrows), ncols_(ncols), nloc_(nrows * ncols), nvars_(1 + nloc_),
-        nlabels_(nlabels), pa_(pa), po_(po), pc_(pc) {
+        nlabels_(nlabels), pa_(pa), po_(po), pc_(pc), special_(special) {
         cells_ = std::vector<cell_t>(nloc_);
     }
     ~cellmap_t() { }
@@ -192,6 +193,7 @@ struct cellmap_t {
     }
 
     int sample_obs(int /*loc*/, int label, int /*last_action*/) const {
+        assert(!special_);
         if( drand48() > po_ ) {
             int i = lrand48() % (nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {

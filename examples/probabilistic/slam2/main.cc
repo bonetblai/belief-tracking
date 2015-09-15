@@ -175,14 +175,14 @@ int main(int argc, const char **argv) {
         nlabels = 2;
         pa = 0.8;
         po = 0.9;
-    } else if( (gtype >= 0) && (gtype < 4) ) {
+    } else if( (gtype >= 0) && (gtype < 3) ) {
         nrows = 10;
         ncols = 10;
         nlabels = 4;
         pa = 0.8; // CHECK
         po = 0.9; // CHECK
     }
-    cellmap_t cellmap(nrows, ncols, nlabels, pa, po, 0.0);
+    cellmap_t cellmap(nrows, ncols, nlabels, pa, po, 0.0, gtype == 2);
 
     // set static members
     coord_t::ncols_ = ncols;
@@ -257,6 +257,9 @@ int main(int argc, const char **argv) {
     // action selection
     naive_action_selection_t policy(cellmap, .30);
 
+    // set initial loc
+    cellmap.initial_loc_ = 0;
+
     // set labels
     vector<int> labels;
     if( (gtype >= 0) && (gtype < 2) ) {
@@ -266,7 +269,7 @@ int main(int argc, const char **argv) {
         } else { // 1x8 grid with random labels
             cellmap.sample_labels(labels);
         }
-    } else if( (gtype >= 0) && (gtype < 4) ) {
+    } else if( (gtype >= 0) && (gtype < 3) ) {
         if( gtype == 2 ) { // 10x10 grid with fixed labels: 0=empty, 1=wall, 2=opened door, 3=closed door
             int _labels[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                               1, 0, 0, 2, 0, 3, 0, 0, 0, 1,
@@ -279,16 +282,11 @@ int main(int argc, const char **argv) {
                               1, 0, 0, 1, 0, 2, 0, 0, 0, 1,
                               1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
             labels = vector<int>(&_labels[0], &_labels[100]);
-        } else { // 10x10 grid with random labels
-            cellmap.sample_labels(labels);
-            labels[0] = 0;
+            cellmap.initial_loc_ = coord_t(1, 1).as_index();
         }
     } else { // general grid with random labels
         cellmap.sample_labels(labels);
     }
-
-    // set initial loc
-    cellmap.initial_loc_ = 0;
 
     // set execution
     cellmap_t::execution_t fixed_execution;

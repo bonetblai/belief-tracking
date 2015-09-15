@@ -40,17 +40,17 @@ struct base_particle_t {
 
 struct slam_particle_t : public base_particle_t {
     int current_loc_;
-    std::vector<int> map_;
+    std::vector<int> labels_;
 
     void initial_sampling() {
-        map_ = std::vector<int>(base_->nloc_);
+        labels_ = std::vector<int>(base_->nloc_);
         for( int i = 0; i < base_->nloc_; ++i )
-            map_[i] = lrand48() % base_->nlabels_;
+            labels_[i] = lrand48() % base_->nlabels_;
         current_loc_ = base_->initial_loc_;
     }
 
     int value_for(int var) const {
-        return var == base_->nvars_ - 1 ? current_loc_ : map_[var];
+        return var == base_->nvars_ - 1 ? current_loc_ : labels_[var];
     }
 };
 
@@ -58,7 +58,7 @@ struct slam_particle_t : public base_particle_t {
 struct sis_slam_particle_t : public slam_particle_t {
     void update(float &weight, int last_action, int obs) {
         int new_loc = base_->sample_loc(current_loc_, last_action);
-        weight *= base_->obs_probability(obs, new_loc, last_action);
+        weight *= base_->obs_probability(obs, labels_[new_loc], last_action);
         current_loc_ = new_loc;
     }
 };
@@ -71,7 +71,7 @@ struct motion_model_sir2_slam_particle_t : public slam_particle_t {
     }
 
     float importance_weight(const motion_model_sir2_slam_particle_t &np, const motion_model_sir2_slam_particle_t &/*p*/, int last_action, int obs) const {
-        return base_->obs_probability(obs, np.current_loc_, np.map_, last_action);
+        return base_->obs_probability(obs, np.current_loc_, np.labels_, last_action);
     }
 };
 
@@ -82,17 +82,17 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
         int code = 0;
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             code *= base_->nlabels_;
-            code += map_[loc];
+            code += labels_[loc];
         }
         code = code * base_->nloc_ + current_loc_;
         return code;
     }
     void decode(int code) {
-        map_ = std::vector<int>(base_->nloc_, 0);
+        labels_ = std::vector<int>(base_->nloc_, 0);
         current_loc_ = code % base_->nloc_;
         code /= base_->nloc_;
         for( int loc = base_->nloc_ - 1; loc >= 0; --loc ) {
-            map_[loc] = code % base_->nlabels_;
+            labels_[loc] = code % base_->nlabels_;
             code /= base_->nlabels_;
         }
     }
@@ -102,8 +102,8 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
         //                          = P(np,obs|p,last_action) / P(obs|p,last_action)
         //                          = P(obs|np,p,last_action) * P(np|p,last_action) / P(obs|p,last_action)
         //                          = P(obs|np,last_action) * P(np|p,last_action) / P(obs|p,last_action)
-        if( np.map_ == p.map_ ) {
-            float prob = base_->obs_probability(obs, np.current_loc_, np.map_, last_action);
+        if( np.labels_ == p.labels_ ) {
+            float prob = base_->obs_probability(obs, np.current_loc_, np.labels_, last_action);
             prob *= base_->loc_probability(last_action, p.current_loc_, np.current_loc_);
             return prob / importance_weight(np, p, last_action, obs);
         } else {
@@ -123,7 +123,7 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
         float weight = 0;
         int loc = p.current_loc_;
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc )
-            weight += base_->obs_probability(obs, new_loc, p.map_, last_action) * base_->loc_probability(last_action, loc, new_loc);
+            weight += base_->obs_probability(obs, new_loc, p.labels_, last_action) * base_->loc_probability(last_action, loc, new_loc);
         return weight;
     }
 };
