@@ -91,18 +91,15 @@ int main(int argc, const char **argv) {
     float pa = 0.8;
     float po = 0.9;
 
+    int gtype = -1;
     int ptype = 0;
     int execution_length = 10;
 
     --argc;
     ++argv;
     while( (argc > 0) && (**argv == '-') ) {
-        if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
-            ntrials = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-r") || !strcmp(argv[0], "--nrows") ) {
-            nrows = atoi(argv[1]);
+        if( !strcmp(argv[0], "-g") || !strcmp(argv[0], "--grid") ) {
+            gtype = atoi(argv[1]);
             argc -= 2;
             argv += 2;
         } else if( !strcmp(argv[0], "-c") || !strcmp(argv[0], "--ncols") ) {
@@ -113,12 +110,16 @@ int main(int argc, const char **argv) {
             nlabels = atoi(argv[1]);
             argc -= 2;
             argv += 2;
+        } else if( !strcmp(argv[0], "-r") || !strcmp(argv[0], "--nrows") ) {
+            nrows = atoi(argv[1]);
+            argc -= 2;
+            argv += 2;
         } else if( !strcmp(argv[0], "-n") || !strcmp(argv[0], "--nsteps") ) {
             nsteps = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
-            seed = atoi(argv[1]);
+        } else if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
+            ntrials = atoi(argv[1]);
             argc -= 2;
             argv += 2;
         } else if( !strcmp(argv[0], "--pa") ) {
@@ -127,6 +128,15 @@ int main(int argc, const char **argv) {
             argv += 2;
         } else if( !strcmp(argv[0], "--po") ) {
             po = strtod(argv[1], 0);
+            argc -= 2;
+            argv += 2;
+        } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
+            ptype = atoi(argv[1]);
+            execution_length = atoi(argv[2]);
+            argc -= 3;
+            argv += 3;
+        } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
+            seed = atoi(argv[1]);
             argc -= 2;
             argv += 2;
         } else if( !strncmp(argv[0], "--tracking=", 11) ) {
@@ -143,11 +153,6 @@ int main(int argc, const char **argv) {
             verbose = true;
             --argc;
             ++argv;
-        } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
-            ptype = atoi(argv[1]);
-            execution_length = atoi(argv[2]);
-            argc -= 3;
-            argv += 3;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
             usage(cerr);
             exit(-1);
@@ -163,7 +168,20 @@ int main(int argc, const char **argv) {
     seeds[0] = seeds[1] = seeds[2] = seed;
     seed48(seeds);
 
-    // create cellmap and tracking algorithms
+    // create cellmap
+    if( (gtype >= 0) && (gtype < 2) ) {
+        nrows = 1;
+        ncols = 8;
+        nlabels = 2;
+        pa = 0.8;
+        po = 0.9;
+    } else if( (gtype >= 0) && (gtype < 4) ) {
+        nrows = 10;
+        ncols = 10;
+        nlabels = 4;
+        pa = 0.8; // CHECK
+        po = 0.9; // CHECK
+    }
     cellmap_t cellmap(nrows, ncols, nlabels, pa, po, 0.0);
 
     // set static members
@@ -241,43 +259,61 @@ int main(int argc, const char **argv) {
 
     // set labels
     vector<int> labels;
-    if( ptype == 0 || ptype == 1 ) {
-        if( ptype == 0 ) { // 1x8 grid with fixed labels
+    if( (gtype >= 0) && (gtype < 2) ) {
+        if( gtype == 0 ) { // 1x8 grid with fixed labels
             int _labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
-            vector<int> labels(&_labels[0], &_labels[8]);
+            labels = vector<int>(&_labels[0], &_labels[8]);
         } else { // 1x8 grid with random labels
             cellmap.sample_labels(labels);
         }
-    } else if( ptype == 2 || ptype == 3 ) {
-        if( ptype == 2 ) { // X..Y grid with fixed labels
-        } else { // X..Y grid with random labels
+    } else if( (gtype >= 0) && (gtype < 4) ) {
+        if( gtype == 2 ) { // 10x10 grid with fixed labels: 0=empty, 1=wall, 2=opened door, 3=closed door
+            int _labels[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                              1, 0, 0, 2, 0, 3, 0, 0, 0, 1,
+                              1, 0, 0, 1, 0, 1, 0, 0, 0, 1,
+                              1, 3, 1, 1, 0, 1, 1, 1, 2, 1,
+                              1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                              1, 1, 1, 1, 0, 1, 1, 1, 3, 1,
+                              1, 0, 0, 2, 0, 1, 0, 0, 0, 1,
+                              1, 0, 0, 1, 0, 1, 0, 0, 0, 1,
+                              1, 0, 0, 1, 0, 2, 0, 0, 0, 1,
+                              1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+            labels = vector<int>(&_labels[0], &_labels[100]);
+        } else { // 10x10 grid with random labels
             cellmap.sample_labels(labels);
+            labels[0] = 0;
         }
     } else { // general grid with random labels
         cellmap.sample_labels(labels);
     }
 
+    // set initial loc
+    cellmap.initial_loc_ = 0;
+
     // set execution
     cellmap_t::execution_t fixed_execution;
-    cellmap.compute_random_execution(labels, 0, execution_length, fixed_execution);
-#if 0
-    fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, -1));
-    fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::right));
-    fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::right));
-    fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
-    fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
-    fixed_execution.push_back(cellmap_t::execution_step_t(4, 0, cellmap_t::right));
-    fixed_execution.push_back(cellmap_t::execution_step_t(5, 1, cellmap_t::right));
-    fixed_execution.push_back(cellmap_t::execution_step_t(6, 0, cellmap_t::right));
-    fixed_execution.push_back(cellmap_t::execution_step_t(5, 1, cellmap_t::left));
-    fixed_execution.push_back(cellmap_t::execution_step_t(4, 0, cellmap_t::left));
-    fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::left));
-    fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::left));
-    fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::left));
-    fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
-    fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
-    fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
-#endif
+    if( ptype == 0 ) {
+        if( gtype < 2 ) {
+            fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, -1));
+            fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::right));
+            fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::right));
+            fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
+            fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
+            fixed_execution.push_back(cellmap_t::execution_step_t(4, 0, cellmap_t::right));
+            fixed_execution.push_back(cellmap_t::execution_step_t(5, 1, cellmap_t::right));
+            fixed_execution.push_back(cellmap_t::execution_step_t(6, 0, cellmap_t::right));
+            fixed_execution.push_back(cellmap_t::execution_step_t(7, 1, cellmap_t::right));
+            fixed_execution.push_back(cellmap_t::execution_step_t(6, 0, cellmap_t::left));
+            fixed_execution.push_back(cellmap_t::execution_step_t(5, 1, cellmap_t::left));
+            fixed_execution.push_back(cellmap_t::execution_step_t(4, 0, cellmap_t::left));
+            fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::left));
+            fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::left));
+            fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::left));
+            fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
+        }
+    } else {
+        cellmap.compute_random_execution(labels, 0, execution_length, fixed_execution);
+    }
 
     // run for the specified number of trials
     for( int trial = 0; trial < ntrials; ++trial ) {
@@ -285,9 +321,10 @@ int main(int argc, const char **argv) {
         if( (nsteps == 0) && (nrows == 1) && (ncols == 8) )
             cellmap.run_execution(labels, fixed_execution, output_execution, tracking_algorithms);
         else
-            cellmap.run_execution(labels, output_execution, nsteps, policy, tracking_algorithms);
+            cellmap.run_execution(labels, output_execution, cellmap.initial_loc_, nsteps, policy, tracking_algorithms);
 
         // calculate final marginals
+        cout << "#output size = " << output_execution.size() << endl;
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
             tracking_algorithms[i]->calculate_marginals();
 

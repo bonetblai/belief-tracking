@@ -86,7 +86,7 @@ struct cellmap_t {
         for( size_t i = 0; i < size; ++i )
             cells_[i].label_ = labels[i];
     }
-    void set_labels(const std::vector<int> labels) {
+    void set_labels(const std::vector<int> &labels) {
         set_labels(&labels[0], labels.size());
     }
 
@@ -215,8 +215,6 @@ struct cellmap_t {
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             tracking_t<cellmap_t> &tracking = *tracking_algorithms[i];
             tracking.initialize();
-            tracking.calculate_marginals();
-            tracking.store_marginals();
         }
     }
     void advance_step(int last_action, int obs, std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) const {
@@ -235,7 +233,11 @@ struct cellmap_t {
         execution_step_t(int loc = 0, int obs = 0, int last_action = 0)
           : loc_(loc), obs_(obs), last_action_(last_action) { }
     };
-    struct execution_t : public std::vector<execution_step_t> { };
+    struct execution_t : public std::vector<execution_step_t> {
+        execution_t() { }
+        execution_t(int n, const execution_step_t &step)
+          : std::vector<execution_step_t>(n, step) { }
+    };
 
     int random_action() const {
         int index = lrand48();
@@ -249,13 +251,13 @@ struct cellmap_t {
 
     void compute_random_execution(const std::vector<int> &labels, int initial_loc, int length, execution_t &execution) const {
         execution.reserve(length + 1);
-        execution.push_back(execution_step_t(initial_loc, 0, -1));
+        execution.push_back(execution_step_t(initial_loc, sample_obs(initial_loc, labels[initial_loc], -1), -1));
         for( int step = 0; step < length; ++step ) {
             int current_loc = execution.back().loc_;
-            int action = random_action();
-            int new_loc = sample_loc(current_loc, action);
-            int obs = sample_obs(new_loc, labels[new_loc], action);
-            execution.push_back(execution_step_t(new_loc, obs, action));
+            int last_action = random_action();
+            int new_loc = sample_loc(current_loc, last_action);
+            int obs = sample_obs(new_loc, labels[new_loc], last_action);
+            execution.push_back(execution_step_t(new_loc, obs, last_action));
         }
     }
 
@@ -271,31 +273,40 @@ struct cellmap_t {
         else
             sample_labels();
 
-        // initialize tracking algorithms and output execution
-        initialize(tracking_algorithms);
-        output_execution.clear();
-        output_execution.push_back(execution_step_t(0, -1, -1));
+        // input execution must contain at least one initial step
+        assert(!input_execution.empty());
+        const execution_step_t &initial_step = input_execution[0];
+        int hidden_loc = initial_step.loc_;
+        int obs = initial_step.obs_ == -1 ? cells_[hidden_loc].label_ : initial_step.obs_;
+        assert(initial_step.last_action_ == -1);
 
-        int hidden_loc = 0;
-        for( size_t t = 0; true; ++t ) {
-            if( !input_execution.empty() && (t >= input_execution.size()) ) return;
-            if( input_execution.empty() && (t >= size_t(nsteps)) ) return;
+        // initialize tracking algorithms and output execution
+        output_execution.clear();
+        initialize(tracking_algorithms);
+        output_execution.push_back(initial_step);
+        advance_step(-1, obs, tracking_algorithms);
+
+        // unfold execution
+        for( size_t t = 1; true; ++t ) {
+            if( (policy == 0) && (t >= input_execution.size()) ) return;
+            if( (policy != 0) && (t >= size_t(nsteps)) ) return;
+
             int last_action = -1;
             int obs = -1;
 
             // select next action, update hidden loc, and sample observation
-            if( !input_execution.empty() ) {
-                hidden_loc = input_execution[t].loc_;
-                obs = input_execution[t].obs_;
-                last_action = input_execution[t].last_action_;
+            if( policy == 0 ) {
+                const execution_step_t &step = input_execution[t];
+                hidden_loc = step.loc_;
+                obs = step.obs_;
+                last_action = step.last_action_;
             } else {
-                assert(policy != 0);
                 assert(!tracking_algorithms.empty());
                 last_action = policy->select_action(tracking_algorithms[0]);
                 hidden_loc = sample_loc(hidden_loc, last_action);
                 obs = sample_obs(hidden_loc, last_action);
                 std::cerr << "step (t=" << t << "): last_action=" << last_action << ", obs=" << obs << ", loc=" << hidden_loc << std::endl;
-            } 
+            }
 
             // update tracking
             output_execution.push_back(execution_step_t(hidden_loc, obs, last_action));
@@ -310,10 +321,12 @@ struct cellmap_t {
     }
     void run_execution(const std::vector<int> &labels,
                        execution_t &output_execution,
+                       int initial_loc,
                        int nsteps,
                        const action_selection_t<cellmap_t> &policy,
                        std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
-        execution_t empty_execution;
+        execution_step_t initial_step(initial_loc, -1, -1);
+        execution_t empty_execution(1, initial_step);
         run_execution(labels, empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
     }
 

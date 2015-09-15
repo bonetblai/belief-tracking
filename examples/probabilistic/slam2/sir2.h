@@ -45,7 +45,7 @@ template <typename PTYPE, typename BASE> struct SIR2_t : public PF_t<PTYPE, BASE
     bool do_stochastic_universal_sampling_;
     std::vector<std::pair<int, int> > history_;
 
-    SIR2_t(const std::string &name, const BASE &base, int nparticles, bool do_stochastic_universal_sampling = true)
+    SIR2_t(const std::string &name, const BASE &base, int nparticles, bool do_stochastic_universal_sampling = false)
       : PF_t<PTYPE, BASE>(name, base, nparticles), do_stochastic_universal_sampling_(do_stochastic_universal_sampling) {
     }
     virtual ~SIR2_t() { }
