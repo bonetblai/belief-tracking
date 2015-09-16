@@ -29,9 +29,10 @@
 #include <vector>
 #include <stdlib.h>
 
-#include "utils.h"
-
 #include <dai/alldai.h>
+
+#include "cellmap.h"
+#include "utils.h"
 
 // Generic particle for the color-tile SLAM problem
 struct base_particle_t {

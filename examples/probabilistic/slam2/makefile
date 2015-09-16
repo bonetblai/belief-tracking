@@ -7,7 +7,8 @@ DEPS=	    			action_selection.h cellmap.h slam_action_selection.h tracking.h uti
 						sis.h \
 						sir.h motion_model_sir.h optimal_sir.h \
 						rbpf.h motion_model_rbpf.h optimal_rbpf.h \
-						slam_particle_types.h
+						slam_particle_types.h \
+						slam2_particle_types.h 
 
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
 

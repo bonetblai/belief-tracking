@@ -102,6 +102,12 @@ struct cellmap_t {
         set_labels(labels);
     }
 
+    // locations
+    enum { MIDDLE_LOC = 0, EDGE_H_LOC = 1, EDGE_V_LOC = 2, CORNER_LOC = 3 };
+    int loc_type(int loc) const {
+        assert(0);
+    }
+
     // API for particle filters
     int domain_size(int var) const {
         return var == nvars_ - 1 ? nloc_ : nlabels_;

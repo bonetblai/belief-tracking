@@ -205,8 +205,11 @@ struct ms_pbt_t {
         for( int i = 0; i < nrows_ * ncols_; ++i )
             variables_[i] = dai::Var(i, 2);
 
-        // create factors: one factor per cell.
-        // Centers ???
+        // create one factor for each location. The variables
+        // in the factor are the variables for the location
+        // surrounding the factor, including the variable
+        // for the "center" location. Also set up the center
+        // for each factor.
         centers_ = vector<int>(nrows_ * ncols_);
         factors_ = vector<dai::Factor>(nrows_ * ncols_);
         for( int i = 0; i < nrows_ * ncols_; ++i ) {

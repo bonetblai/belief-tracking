@@ -39,7 +39,9 @@
 #include "motion_model_rbpf.h"
 #include "optimal_rbpf.h"
 //#include "ppcbt2.h"
+
 #include "slam_particle_types.h"
+#include "slam2_particle_types.h"
 
 using namespace std;
 
@@ -230,17 +232,17 @@ int main(int argc, const char **argv) {
         } else if( name == "sis" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new SIS_t<sis_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
-        } else if( name == "mm_sir2" ) {
+        } else if( name == "mm_sir" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new motion_model_SIR_t<motion_model_sir_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
-        } else if( name == "opt_sir2" ) {
+        } else if( name == "opt_sir" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf = new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
             tracking_algorithms.push_back(new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(name + "_" + to_string(nparticles), cellmap, *cdf, nparticles));
-        } else if( name == "mm_rbpf2" ) {
+        } else if( name == "mm_rbpf" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new motion_model_RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
-        } else if( name == "opt_rbpf2" ) {
+        } else if( name == "opt_rbpf" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             tracking_algorithms.push_back(new optimal_RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else {
@@ -373,6 +375,7 @@ int main(int argc, const char **argv) {
                 cout << "}" << endl;
             }
         }
+        cout << "# '*' means more than one label in MAP for given position" << endl;
 
         // generate R plots
         cout << "library(\"reshape2\");" << endl << "library(\"ggplot2\");" << endl;
