@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef SIR2_H
-#define SIR2_H
+#ifndef SIR_H
+#define SIR_H
 
 #include <cassert>
 #include <string>
@@ -35,8 +35,8 @@
 #include "particle_filter.h"
 
 
-// Generic Sequential Importance Resampling (SIR2) Particle Filter
-template <typename PTYPE, typename BASE> struct SIR2_t : public PF_t<PTYPE, BASE> {
+// Generic Sequential Importance Resampling (SIR) Particle Filter
+template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE> {
     using tracking_t<BASE>::base_;
     using PF_t<PTYPE, BASE>::nparticles_;
     using PF_t<PTYPE, BASE>::particles_;
@@ -45,10 +45,10 @@ template <typename PTYPE, typename BASE> struct SIR2_t : public PF_t<PTYPE, BASE
     bool do_stochastic_universal_sampling_;
     std::vector<std::pair<int, int> > history_;
 
-    SIR2_t(const std::string &name, const BASE &base, int nparticles, bool do_stochastic_universal_sampling = false)
+    SIR_t(const std::string &name, const BASE &base, int nparticles, bool do_stochastic_universal_sampling = false)
       : PF_t<PTYPE, BASE>(name, base, nparticles), do_stochastic_universal_sampling_(do_stochastic_universal_sampling) {
     }
-    virtual ~SIR2_t() { }
+    virtual ~SIR_t() { }
 
     virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const = 0;
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const = 0;
@@ -110,5 +110,5 @@ template <typename PTYPE, typename BASE> struct SIR2_t : public PF_t<PTYPE, BASE
     }
 };
 
-#endif // David: 305 577 6954
+#endif
 

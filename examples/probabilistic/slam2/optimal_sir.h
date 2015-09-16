@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef OPTIMAL_SIR2_H
-#define OPTIMAL_SIR2_H
+#ifndef OPTIMAL_SIR_H
+#define OPTIMAL_SIR_H
 
 #include <cassert>
 #include <string>
@@ -34,15 +34,15 @@
 
 
 // SIR filter with proposal distribution given by optimal choice
-template <typename PTYPE, typename BASE, typename CDF> struct optimal_SIR2_t : public SIR2_t<PTYPE, BASE> {
+template <typename PTYPE, typename BASE, typename CDF> struct optimal_SIR_t : public SIR_t<PTYPE, BASE> {
     using PF_t<PTYPE, BASE>::sample_from_distribution;
 
     const CDF &cdf_;
 
-    optimal_SIR2_t(const std::string &name, const BASE &base, const CDF &cdf, int nparticles)
-      : SIR2_t<PTYPE, BASE>(name, base, nparticles), cdf_(cdf) {
+    optimal_SIR_t(const std::string &name, const BASE &base, const CDF &cdf, int nparticles)
+      : SIR_t<PTYPE, BASE>(name, base, nparticles), cdf_(cdf) {
     }
-    virtual ~optimal_SIR2_t() { }
+    virtual ~optimal_SIR_t() { }
 
     virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const {
         const float *dist = cdf_.pi_cdf(p.encode(), last_action, obs);

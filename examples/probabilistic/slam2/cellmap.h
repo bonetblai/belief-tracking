@@ -115,34 +115,50 @@ struct cellmap_t {
         float p = 0;
         coord_t coord(old_loc), new_coord(new_loc);
         if( action == -1 ) {
-            p =  old_loc == new_loc ? 1 : 0;
+            p = old_loc == new_loc ? 1 : 0;
         } else if( action == up ) {
-            if( coord.row_ + 1 < nrows_ ) {
-                p = new_coord.row_ == coord.row_ + 1 ? pa_ : (new_coord.row_ == coord.row_ ? 1 - pa_ : 0);
+            if( new_coord.col_ != coord.col_ ) {
+                p = 0;
             } else {
-                assert(coord.row_ + 1 == nrows_);
-                p = new_coord.row_ == coord.row_ ? 1 : 0;
+                if( coord.row_ + 1 < nrows_ ) {
+                    p = new_coord.row_ == coord.row_ + 1 ? pa_ : (new_coord.row_ == coord.row_ ? 1 - pa_ : 0);
+                } else {
+                    assert(coord.row_ + 1 == nrows_);
+                    p = new_coord.row_ == coord.row_ ? 1 : 0;
+                }
             }
         } else if( action == right ) {
-            if( coord.col_ + 1 < ncols_ ) {
-                p = new_coord.col_ == coord.col_ + 1 ? pa_ : (new_coord.col_ == coord.col_ ? 1 - pa_ : 0);
+            if( new_coord.row_ != coord.row_ ) {
+                p = 0;
             } else {
-                assert(coord.col_ + 1 == ncols_);
-                p = new_coord.col_ == coord.col_ ? 1 : 0;
+                if( coord.col_ + 1 < ncols_ ) {
+                    p = new_coord.col_ == coord.col_ + 1 ? pa_ : (new_coord.col_ == coord.col_ ? 1 - pa_ : 0);
+                } else {
+                    assert(coord.col_ + 1 == ncols_);
+                    p = new_coord.col_ == coord.col_ ? 1 : 0;
+                }
             }
         } else if( action == down ) {
-            if( coord.row_ > 0 ) {
-                p = new_coord.row_ + 1 == coord.row_ ? pa_ : (new_coord.row_ == coord.row_ ? 1 - pa_ : 0);
+            if( new_coord.col_ != coord.col_ ) {
+                p = 0;
             } else {
-                assert(coord.row_ == 0);
-                p = new_coord.row_ == coord.row_ ? 1 : 0;
+                if( coord.row_ > 0 ) {
+                    p = new_coord.row_ + 1 == coord.row_ ? pa_ : (new_coord.row_ == coord.row_ ? 1 - pa_ : 0);
+                } else {
+                    assert(coord.row_ == 0);
+                    p = new_coord.row_ == coord.row_ ? 1 : 0;
+                }
             }
         } else if( action == left ) {
-            if( coord.col_ > 0 ) {
-                p = new_coord.col_ + 1 == coord.col_ ? pa_ : (new_coord.col_ == coord.col_ ? 1 - pa_ : 0);
+            if( new_coord.row_ != coord.row_ ) {
+                p = 0;
             } else {
-                assert(coord.col_ == 0);
-                p = new_coord.col_ == coord.col_ ? 1 : 0;
+                if( coord.col_ > 0 ) {
+                    p = new_coord.col_ + 1 == coord.col_ ? pa_ : (new_coord.col_ == coord.col_ ? 1 - pa_ : 0);
+                } else {
+                    assert(coord.col_ == 0);
+                    p = new_coord.col_ == coord.col_ ? 1 : 0;
+                }
             }
         }
         return p;
@@ -226,6 +242,16 @@ struct cellmap_t {
             tracking.calculate_marginals();
             tracking.store_marginals();
         }
+    }
+
+    void print_labels(std::ostream &os) const {
+        os << "[";
+        for( int i = 0; i < nrows_ * ncols_; ++i ) {
+            os << " " << cells_[i].label_;
+            if( (i + 1 < nrows_ * ncols_) && (((i + 1) % ncols_) == 0) )
+                os << " |";
+        }
+        os << "]";
     }
 
     struct execution_step_t {
@@ -388,19 +414,24 @@ struct cellmap_t {
             os << "mar_" << tracking.name_ << "_t" << t << (t + 1 < tracking.marginals_.size() ? ", " : "");
         os << ");" << std::endl;
 
-        os << "dmf <- melt(as.data.frame(t(matrix(mar_" << tracking.name_ << ", ncol=" << ncols_ << ", byrow=T))));" << std::endl
-           << "dmf$y <- rep(1:" << ncols_ << ", " << tracking.marginals_.size() << ");" << std::endl
+        int ncols_in_plot = nrows_ * ncols_;
+        os << "dmf <- melt(as.data.frame(t(matrix(mar_" << tracking.name_ << ", ncol=" << ncols_in_plot << ", byrow=T))));" << std::endl
+           << "dmf$y <- rep(1:" << ncols_in_plot << ", " << tracking.marginals_.size() << ");" << std::endl
            << "plot_" << tracking.name_ << " <- ggplot(dmf,aes(y=variable, x=y)) + "
            << "geom_tile(aes(fill=value)) + "
-           << "geom_text(aes(label=ifelse(value>.01, trunc(100*value, digits=2)/100, \"\")), size=3, angle=0, color=\"white\") +"
+           //<< "geom_text(aes(label=ifelse(value>.01, trunc(100*value, digits=2)/100, \"\")), size=3, angle=0, color=\"white\") +"
            << "labs(y=\"time step\", x=\"location\") + "
            << "theme_minimal() + "
-           << "scale_x_discrete(limits=1:" << ncols_ << ") + "
-           << "scale_y_discrete(labels=paste(\"t=\", 0:" << tracking.marginals_.size() << ", sep=\"\"));" << std::endl;
+           //<< "scale_x_discrete(limits=1:" << ncols_in_plot << ") + "
+           //<< "scale_y_discrete(labels=paste(\"t=\", 0:" << tracking.marginals_.size() << ", sep=\"\"));"
+           //<< "scale_y_discrete(labels=rep(\"\", " << tracking.marginals_.size() << "));"
+           << std::endl;
 
+        // save in plot in pdf
         os << "pdf(\"marginals_" << tracking.name_ << ".pdf\");" << std::endl
            << "show(plot_" << tracking.name_ << ")" << std::endl
-           << "dev.off();" << std::endl;
+           << "dev.off();"
+           << std::endl;
     }
 };
 

@@ -63,20 +63,20 @@ struct sis_slam_particle_t : public slam_particle_t {
     }
 };
 
-// Particle for the motion model SIR2 filter (verified: 09/12/2015)
-struct motion_model_sir2_slam_particle_t : public slam_particle_t {
-    void sample_from_pi(motion_model_sir2_slam_particle_t &np, const motion_model_sir2_slam_particle_t &p, int last_action, int /*obs*/) const {
+// Particle for the motion model SIR filter (verified: 09/12/2015)
+struct motion_model_sir_slam_particle_t : public slam_particle_t {
+    void sample_from_pi(motion_model_sir_slam_particle_t &np, const motion_model_sir_slam_particle_t &p, int last_action, int /*obs*/) const {
         np = p;
         np.current_loc_ = base_->sample_loc(p.current_loc_, last_action);
     }
 
-    float importance_weight(const motion_model_sir2_slam_particle_t &np, const motion_model_sir2_slam_particle_t &/*p*/, int last_action, int obs) const {
+    float importance_weight(const motion_model_sir_slam_particle_t &np, const motion_model_sir_slam_particle_t &/*p*/, int last_action, int obs) const {
         return base_->obs_probability(obs, np.current_loc_, np.labels_, last_action);
     }
 };
 
-// Particle for the optimal SIR2 filter (verified: 09/12/2015)
-struct optimal_sir2_slam_particle_t : public slam_particle_t {
+// Particle for the optimal SIR filter (verified: 09/12/2015)
+struct optimal_sir_slam_particle_t : public slam_particle_t {
     // encode/decode particles into/from integers
     int encode() const {
         int code = 0;
@@ -97,7 +97,7 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
         }
     }
 
-    float pi(const optimal_sir2_slam_particle_t &np, const optimal_sir2_slam_particle_t &p, int last_action, int obs) const {
+    float pi(const optimal_sir_slam_particle_t &np, const optimal_sir_slam_particle_t &p, int last_action, int obs) const {
         // pi(np|p,last_action,obs) = P(np|p,last_action,obs)
         //                          = P(np,obs|p,last_action) / P(obs|p,last_action)
         //                          = P(obs|np,p,last_action) * P(np|p,last_action) / P(obs|p,last_action)
@@ -111,7 +111,7 @@ struct optimal_sir2_slam_particle_t : public slam_particle_t {
         }
     }
 
-    float importance_weight(const optimal_sir2_slam_particle_t &/*np*/, const optimal_sir2_slam_particle_t &p, int last_action, int obs) const {
+    float importance_weight(const optimal_sir_slam_particle_t &/*np*/, const optimal_sir_slam_particle_t &p, int last_action, int obs) const {
         // weight = P(obs|np,last_action) * P(np|p,last_action) / pi(np|p,last_action,obs)
         //        = P(obs|np,last_action) * P(np|p,last_action) / P(np|p,last_action,obs)
         //        = P(obs|p,last_action) [see above derivation in pi(..)]

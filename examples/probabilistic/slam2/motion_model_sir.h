@@ -16,20 +16,20 @@
  *
  */
 
-#ifndef MOTION_MODEL_RBPF2_H
-#define MOTION_MODEL_RBPF2_H
+#ifndef MOTION_MODEL_SIR_H
+#define MOTION_MODEL_SIR_H
 
 #include <cassert>
 #include <string>
 
-#include "rbpf2.h"
+#include "sir.h"
 
-// RBPF filter with proposal distribution given by motion model
-template <typename PTYPE, typename BASE> struct motion_model_RBPF2_t : public RBPF2_t<PTYPE, BASE> {
-    motion_model_RBPF2_t(const std::string &name, const BASE &base, int nparticles)
-      : RBPF2_t<PTYPE, BASE>(name, base, nparticles) {
+// SIR filter with proposal distribution given by motion model
+template <typename PTYPE, typename BASE> struct motion_model_SIR_t : public SIR_t<PTYPE, BASE> {
+    motion_model_SIR_t(const std::string &name, const BASE &base, int nparticles)
+      : SIR_t<PTYPE, BASE>(name, base, nparticles) {
     }
-    virtual ~motion_model_RBPF2_t() { }
+    virtual ~motion_model_SIR_t() { }
 
     virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const {
         p.sample_from_pi(np, p, last_action, obs);

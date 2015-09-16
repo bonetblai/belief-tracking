@@ -5,8 +5,8 @@ MDP_ENGINE_HOME=		$(ROOT)/mdp-engine
 DEPS=	    			action_selection.h cellmap.h slam_action_selection.h tracking.h utils.h \
 						particle_filter.h \
 						sis.h \
-						sir2.h motion_model_sir2.h optimal_sir2.h \
-						rbpf2.h \
+						sir.h motion_model_sir.h optimal_sir.h \
+						rbpf.h motion_model_rbpf.h optimal_rbpf.h \
 						slam_particle_types.h
 
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine

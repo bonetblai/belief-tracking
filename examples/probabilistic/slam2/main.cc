@@ -34,10 +34,10 @@
 #include "pcbt.h"
 
 #include "sis.h"
-#include "motion_model_sir2.h"
-#include "optimal_sir2.h"
-#include "motion_model_rbpf2.h"
-#include "optimal_rbpf2.h"
+#include "motion_model_sir.h"
+#include "optimal_sir.h"
+#include "motion_model_rbpf.h"
+#include "optimal_rbpf.h"
 //#include "ppcbt2.h"
 #include "slam_particle_types.h"
 
@@ -98,7 +98,7 @@ int main(int argc, const char **argv) {
     --argc;
     ++argv;
     while( (argc > 0) && (**argv == '-') ) {
-        if( !strcmp(argv[0], "-g") || !strcmp(argv[0], "--grid") ) {
+        if( !strcmp(argv[0], "-g") || !strcmp(argv[0], "--gtype") ) {
             gtype = atoi(argv[1]);
             argc -= 2;
             argv += 2;
@@ -232,17 +232,17 @@ int main(int argc, const char **argv) {
             tracking_algorithms.push_back(new SIS_t<sis_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "mm_sir2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new motion_model_SIR2_t<motion_model_sir2_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
+            tracking_algorithms.push_back(new motion_model_SIR_t<motion_model_sir_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "opt_sir2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            cdf_for_optimal_sir_t<optimal_sir2_slam_particle_t, cellmap_t> *cdf = new cdf_for_optimal_sir_t<optimal_sir2_slam_particle_t, cellmap_t>(cellmap);
-            tracking_algorithms.push_back(new optimal_SIR2_t<optimal_sir2_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir2_slam_particle_t, cellmap_t> >(name + "_" + to_string(nparticles), cellmap, *cdf, nparticles));
+            cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf = new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
+            tracking_algorithms.push_back(new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(name + "_" + to_string(nparticles), cellmap, *cdf, nparticles));
         } else if( name == "mm_rbpf2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new motion_model_RBPF2_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
+            tracking_algorithms.push_back(new motion_model_RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else if( name == "opt_rbpf2" ) {
             nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new optimal_RBPF2_t<optimal_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
+            tracking_algorithms.push_back(new optimal_RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else {
             cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
         }
@@ -316,7 +316,7 @@ int main(int argc, const char **argv) {
     // run for the specified number of trials
     for( int trial = 0; trial < ntrials; ++trial ) {
         cellmap_t::execution_t output_execution;
-        if( (nsteps == 0) && (nrows == 1) && (ncols == 8) )
+        if( !fixed_execution.empty() )
             cellmap.run_execution(labels, fixed_execution, output_execution, tracking_algorithms);
         else
             cellmap.run_execution(labels, output_execution, cellmap.initial_loc_, nsteps, policy, tracking_algorithms);
@@ -335,10 +335,9 @@ int main(int argc, const char **argv) {
 
         // print final (tracked) map and location
         vector<int> map_values;
-        cout << "# final(" << setw(size_longest_name) << "real" << "): map=[";
-        for( int var = 0; var < nrows * ncols; ++var )
-            cout << " " << cellmap.cells_[var].label_;
-        cout << "], loc=" << output_execution.back().loc_ << endl;
+        cout << "# final(" << setw(size_longest_name) << "real" << "): map=";
+        cellmap.print_labels(cout);
+        cout << ", loc=" << coord_t(output_execution.back().loc_) << endl;
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
             for( int var = 0; var < nrows * ncols; ++var ) {
@@ -346,23 +345,29 @@ int main(int argc, const char **argv) {
                 if( map_values.size() == 1 ) {
                     cout << " " << map_values.back();
                 } else {
+#if 1
+                    cout << " *";
+#else
                     cout << " {";
                     for( size_t k = 0; k < map_values.size(); ++k ) {
                         cout << map_values[k];
                         if( k < map_values.size() - 1 ) cout << ",";
                     }
                     cout << "}";
+#endif
                 }
+                if( (var + 1 < nrows * ncols) && (((var + 1) % ncols) == 0) )
+                    cout << " |";
             }
 
             cout << "], loc=";
             tracking_algorithms[i]->MAP_on_var(nrows * ncols, map_values);
             if( map_values.size() == 1 ) {
-                cout << map_values.back() << endl;
+                cout << coord_t(map_values.back()) << endl;
             } else {
                 cout << " {";
                 for( size_t k = 0; k < map_values.size(); ++k ) {
-                    cout << map_values[k];
+                    cout << coord_t(map_values[k]);
                     if( k < map_values.size() - 1 ) cout << ",";
                 }
                 cout << "}" << endl;

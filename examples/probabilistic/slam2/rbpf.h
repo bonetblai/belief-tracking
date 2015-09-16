@@ -16,37 +16,27 @@
  *
  */
 
-#ifndef RBPF2_H
-#define RBPF2_H
+#ifndef RBPF_H
+#define RBPF_H
 
 #include <cassert>
 #include <string>
 #include <iostream>
 #include <vector>
 
-#include "sir2.h"
+#include "sir.h"
 
 
-template <typename PTYPE, typename BASE> struct RBPF2_t : public SIR2_t<PTYPE, BASE> {
+template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BASE> {
     using tracking_t<BASE>::base_;
     using PF_t<PTYPE, BASE>::nparticles_;
     using PF_t<PTYPE, BASE>::particles_;
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
 
-    RBPF2_t(const std::string &name, const BASE &base, int nparticles)
-      : SIR2_t<PTYPE, BASE>(name, base, nparticles) {
+    RBPF_t(const std::string &name, const BASE &base, int nparticles)
+      : SIR_t<PTYPE, BASE>(name, base, nparticles) {
     }
-    virtual ~RBPF2_t() { }
-
-#if 0
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const {
-        p.sample_from_pi(np, p, last_action, obs);
-    }
-
-    virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
-        return p.importance_weight(np, p, last_action, obs);
-    }
-#endif
+    virtual ~RBPF_t() { }
 
     virtual void calculate_marginals() {
         // initialize marginals

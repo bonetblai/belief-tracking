@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef OPTIMAL_RBPF2_H
-#define OPTIMAL_RBPF2_H
+#ifndef OPTIMAL_RBPF_H
+#define OPTIMAL_RBPF_H
 
 #include <cassert>
 #include <string>
@@ -30,15 +30,14 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include <dai/alldai.h>
-
+#include "rbpf.h"
 
 // RBPF filter with proposal distribution given by optimal choice
-template <typename PTYPE, typename BASE> struct optimal_RBPF2_t : public RBPF2_t<PTYPE, BASE> {
-    optimal_RBPF2_t(const std::string &name, const BASE &base, int nparticles)
-      : RBPF2_t<PTYPE, BASE>(name, base, nparticles) {
+template <typename PTYPE, typename BASE> struct optimal_RBPF_t : public RBPF_t<PTYPE, BASE> {
+    optimal_RBPF_t(const std::string &name, const BASE &base, int nparticles)
+      : RBPF_t<PTYPE, BASE>(name, base, nparticles) {
     }
-    virtual ~optimal_RBPF2_t() { }
+    virtual ~optimal_RBPF_t() { }
 
     virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const {
         p.sample_from_pi(np, p, last_action, obs);
