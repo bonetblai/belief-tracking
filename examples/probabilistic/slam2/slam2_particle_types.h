@@ -77,25 +77,20 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             dai::VarSet varset(vars.begin(), vars.end());
             factors_[loc] = dai::Factor(varset);
         }
- 
-
     }
     virtual ~rbpf_slam2_particle_t() { }
 
     void initial_sampling() {
         assert(base_->nlabels_ == 2);
+
+        // set initial history and reset factors for locations
         loc_history_.push_back(base_->initial_loc_);
-        factors_.reserve(base_->nloc_);
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            int loc_type = base_->loc_type(loc);
-            if( loc_type == cellmap_t::CORNER_LOC ) {
-            } else if( loc_type == cellmap_t::EDGE_H_LOC ) {
-            } else if( loc_type == cellmap_t::EDGE_V_LOC ) {
-            } else {
-                assert(loc_type == cellmap_t::MIDDLE_LOC );
-            }
+            dai::Factor &factor = factors_[loc];
+            float p = 1.0 / (1 << factor.vars().size());
+            for( int i = 0; i < (1 << factor.vars().size()); ++i )
+                factor.set(i, p);
         }
-        //factors_ = std::vector<dai::Factor>(base_->nloc_, dai::Factor(dai::VarSet(dai::Var(0, base_->nlabels_)), 1.0 / float(base_->nlabels_)));
     }
 
 #if 0
@@ -106,7 +101,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         assert(base_->nlabels_ == int(factor.nrStates()));
         float total_mass = 0.0;
         for( int label = 0; label < base_->nlabels_; ++label ) {
-            factor.set(label, factor[label] * base_->obs_probability(obs, label, last_action));
+            factor.set(label, factor[label] * base_->probability_obs(obs, label, last_action));
             total_mass += factor[label];
         }
         assert(total_mass > 0);
@@ -148,7 +143,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     virtual float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
         float weight = 0;
         for( int label = 0; label < base_->nlabels_; ++label ) // marginalize over possible labels at current loc
-            weight += base_->obs_probability(obs, label, last_action) * p.probability(label, np.loc_history_.back());
+            weight += base_->probability_obs(obs, label, last_action) * p.probability(label, np.loc_history_.back());
         return weight;
     }
 };
@@ -167,8 +162,8 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
             for( int label = 0; label < base_->nlabels_; ++label )
-                prob += base_->obs_probability(obs, label, last_action) * p.probability(label, new_loc);
-            cdf_.push_back(previous + base_->loc_probability(last_action, current_loc, new_loc) * prob);
+                prob += base_->probability_obs(obs, label, last_action) * p.probability(label, new_loc);
+            cdf_.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
             previous = cdf_.back();
         }
 
@@ -194,8 +189,8 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
             for( int label = 0; label < base_->nlabels_; ++label )
-                prob += base_->obs_probability(obs, label, last_action) * p.probability(label, new_loc);
-            weight += base_->loc_probability(last_action, current_loc, new_loc) * prob;
+                prob += base_->probability_obs(obs, label, last_action) * p.probability(label, new_loc);
+            weight += base_->probability_tr_loc(last_action, current_loc, new_loc) * prob;
         }
         return weight;
     }

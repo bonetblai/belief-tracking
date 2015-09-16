@@ -93,6 +93,7 @@ int main(int argc, const char **argv) {
     float pa = 0.8;
     float po = 0.9;
 
+    bool special = false;
     int gtype = -1;
     int ptype = 0;
     int execution_length = 10;
@@ -141,6 +142,10 @@ int main(int argc, const char **argv) {
             seed = atoi(argv[1]);
             argc -= 2;
             argv += 2;
+        } else if( !strcmp(argv[0], "--special") ) {
+            special = true;
+            --argc;
+            ++argv;
         } else if( !strncmp(argv[0], "--tracking=", 11) ) {
             char *str = strdup(&argv[0][11]);
             char *token = strtok(str, ",");
@@ -169,6 +174,7 @@ int main(int argc, const char **argv) {
     unsigned short seeds[3];
     seeds[0] = seeds[1] = seeds[2] = seed;
     seed48(seeds);
+    srand48(seed);
 
     // create cellmap
     if( (gtype >= 0) && (gtype < 2) ) {
@@ -184,7 +190,7 @@ int main(int argc, const char **argv) {
         pa = 0.8; // CHECK
         po = 0.9; // CHECK
     }
-    cellmap_t cellmap(nrows, ncols, nlabels, pa, po, 0.0, gtype == 2);
+    cellmap_t cellmap(nrows, ncols, nlabels, pa, po, 0.0, special);
 
     // set static members
     coord_t::ncols_ = ncols;

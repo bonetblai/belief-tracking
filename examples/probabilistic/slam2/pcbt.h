@@ -98,7 +98,7 @@ template <typename BASE> struct pcbt_t : public tracking_t<BASE> {
                 float weight = factor[j];
                 for( int new_loc = 0; new_loc < base_.nloc_; ++new_loc ) {
                     int new_loc_hist = prefix_loc_hist * base_.nloc_ + new_loc;
-                    float new_weight = weight * base_.loc_probability(last_action, loc, new_loc);
+                    float new_weight = weight * base_.probability_tr_loc(last_action, loc, new_loc);
                     int index = new_loc_hist * base_.nlabels_ + label;
                     assert(index < int(new_factor.nrStates()));
                     if( new_weight != 0 ) new_factor.set(index, new_factor[index] + new_weight);
@@ -118,8 +118,9 @@ template <typename BASE> struct pcbt_t : public tracking_t<BASE> {
                 float weight = factor[j];
                 int label = j % base_.nlabels_;
                 int loc_hist = j / base_.nlabels_;
-                if( findex == (loc_hist % base_.nloc_) ) { // findex == "most recent loc in loc_hist"
-                    factor.set(j, weight * base_.obs_probability(obs, label, last_action));
+                int loc = loc_hist % base_.nloc_;
+                if( findex == loc ) { // findex == "most recent loc in loc_hist"
+                    factor.set(j, weight * base_.probability_obs(obs, loc, label, last_action));
                 } else {
                     factor.set(j, weight / float(base_.nlabels_));
                 }
