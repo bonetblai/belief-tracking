@@ -321,6 +321,11 @@ int main(int argc, const char **argv) {
         cellmap.compute_random_execution(labels, 0, execution_length, fixed_execution);
     }
 
+    cout << "======== BEGIN" << endl;
+    rbpf_slam2_particle_t part;
+    part.initial_sampling();
+    cout << "======== END" << endl;
+
     // run for the specified number of trials
     for( int trial = 0; trial < ntrials; ++trial ) {
         cellmap_t::execution_t output_execution;
@@ -330,7 +335,6 @@ int main(int argc, const char **argv) {
             cellmap.run_execution(labels, output_execution, cellmap.initial_loc_, nsteps, policy, tracking_algorithms);
 
         // calculate final marginals
-        cout << "#output size = " << output_execution.size() << endl;
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
             tracking_algorithms[i]->calculate_marginals();
 

@@ -90,6 +90,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             float p = 1.0 / (1 << factor.vars().size());
             for( int i = 0; i < (1 << factor.vars().size()); ++i )
                 factor.set(i, p);
+            std::cout << "factor-size: loc=" << loc << ":" << coord_t(loc) << ", sz=" << factor.vars().size() << std::endl;
         }
     }
 
@@ -124,9 +125,11 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     }
 
     int value_for(int /*var*/) const { return -1; }
+#endif
 
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const = 0;
-    virtual float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const = 0;
+#if 0
+    virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
+    virtual float importance_weight(const rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
 #endif
 };
 

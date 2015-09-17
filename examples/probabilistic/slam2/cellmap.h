@@ -49,7 +49,9 @@ inline bool same_row(int i, int j, int ncols) {
 }
 
 inline int calculate_index(int slabels, int obs, int loc_type) {
-    return slabels * 40 + obs * 9 + loc_type;
+    int index = slabels * 90 + obs * 9 + loc_type;
+    assert((index >= 0) && (index < 512 * 90));
+    return index;
 }
 
 struct coord_t {
@@ -89,7 +91,7 @@ struct cellmap_t {
     bool special_;
     std::vector<int> num_bits_;
     std::vector<int> loc_type_;
-    std::vector<std::vector<int> > inactive_locs_;
+    std::vector<std::set<int> > inactive_locs_;
     std::vector<float> probability_obs_special_;
 
     std::vector<cell_t> cells_;
@@ -126,9 +128,9 @@ struct cellmap_t {
     }
 
     // location types
-    enum { LOC_CORNER_LO_LE, LOC_CORNER_LO_RI, LOC_CORNER_UP_LE, LOC_CORNER_UP_RI,
-           LOC_EDGE_LO, LOC_EDGE_LE, LOC_EDGE_RI, LOC_EDGE_UP,
-           LOC_MIDDLE };
+    enum { LOC_CORNER_LO_LE = 0, LOC_CORNER_LO_RI = 1, LOC_CORNER_UP_LE = 2, LOC_CORNER_UP_RI = 3,
+           LOC_EDGE_LO = 4, LOC_EDGE_LE = 5, LOC_EDGE_RI = 6, LOC_EDGE_UP = 7,
+           LOC_MIDDLE = 8 };
 
     // API for particle filters
     int domain_size(int var) const {
@@ -252,17 +254,19 @@ struct cellmap_t {
     }
 
     // observation model for the special model
+    bool incompatible_loc(int loc, int loc_type) const {
+        return inactive_locs_[loc_type].find(loc) != inactive_locs_[loc_type].end();
+    }
+
     bool incompatible_slabels(int slabels, int loc_type) const {
-        for( int i = 0; i < int(inactive_locs_[loc_type].size()); ++i ) {
-            int rloc = inactive_locs_[loc_type][i];
-            if( bit(slabels, rloc) == 1 )
+        for( std::set<int>::const_iterator it = inactive_locs_[loc_type].begin(); it != inactive_locs_[loc_type].end(); ++it ) {
+            if( bit(slabels, *it) == 1 )
                 return true;
         }
         return false;
     }
 
     void precompute_stored_information_special() {
-        std::cout << "BEGIN: precompute" << std::endl;
         // num bits
         num_bits_ = std::vector<int>(512, 0);
         for( int n = 0; n < 512; ++n ) {
@@ -299,39 +303,39 @@ struct cellmap_t {
         }
 
         // inactive locs
-        inactive_locs_ = std::vector<std::vector<int> >(9);
-        inactive_locs_[LOC_CORNER_LO_LE].push_back(0);
-        inactive_locs_[LOC_CORNER_LO_LE].push_back(1);
-        inactive_locs_[LOC_CORNER_LO_LE].push_back(2);
-        inactive_locs_[LOC_CORNER_LO_LE].push_back(3);
-        inactive_locs_[LOC_CORNER_LO_LE].push_back(6);
-        inactive_locs_[LOC_CORNER_LO_RI].push_back(0);
-        inactive_locs_[LOC_CORNER_LO_RI].push_back(1);
-        inactive_locs_[LOC_CORNER_LO_RI].push_back(2);
-        inactive_locs_[LOC_CORNER_LO_RI].push_back(5);
-        inactive_locs_[LOC_CORNER_LO_RI].push_back(8);
-        inactive_locs_[LOC_CORNER_UP_LE].push_back(0);
-        inactive_locs_[LOC_CORNER_UP_LE].push_back(3);
-        inactive_locs_[LOC_CORNER_UP_LE].push_back(6);
-        inactive_locs_[LOC_CORNER_UP_LE].push_back(7);
-        inactive_locs_[LOC_CORNER_UP_LE].push_back(8);
-        inactive_locs_[LOC_CORNER_UP_RI].push_back(2);
-        inactive_locs_[LOC_CORNER_UP_RI].push_back(5);
-        inactive_locs_[LOC_CORNER_UP_RI].push_back(6);
-        inactive_locs_[LOC_CORNER_UP_RI].push_back(7);
-        inactive_locs_[LOC_CORNER_UP_RI].push_back(8);
-        inactive_locs_[LOC_EDGE_LO].push_back(0);
-        inactive_locs_[LOC_EDGE_LO].push_back(1);
-        inactive_locs_[LOC_EDGE_LO].push_back(2);
-        inactive_locs_[LOC_EDGE_LE].push_back(0);
-        inactive_locs_[LOC_EDGE_LE].push_back(3);
-        inactive_locs_[LOC_EDGE_LE].push_back(6);
-        inactive_locs_[LOC_EDGE_RI].push_back(2);
-        inactive_locs_[LOC_EDGE_RI].push_back(5);
-        inactive_locs_[LOC_EDGE_RI].push_back(8);
-        inactive_locs_[LOC_EDGE_UP].push_back(6);
-        inactive_locs_[LOC_EDGE_UP].push_back(7);
-        inactive_locs_[LOC_EDGE_UP].push_back(8);
+        inactive_locs_ = std::vector<std::set<int> >(9);
+        inactive_locs_[LOC_CORNER_LO_LE].insert(0);
+        inactive_locs_[LOC_CORNER_LO_LE].insert(1);
+        inactive_locs_[LOC_CORNER_LO_LE].insert(2);
+        inactive_locs_[LOC_CORNER_LO_LE].insert(3);
+        inactive_locs_[LOC_CORNER_LO_LE].insert(6);
+        inactive_locs_[LOC_CORNER_LO_RI].insert(0);
+        inactive_locs_[LOC_CORNER_LO_RI].insert(1);
+        inactive_locs_[LOC_CORNER_LO_RI].insert(2);
+        inactive_locs_[LOC_CORNER_LO_RI].insert(5);
+        inactive_locs_[LOC_CORNER_LO_RI].insert(8);
+        inactive_locs_[LOC_CORNER_UP_LE].insert(0);
+        inactive_locs_[LOC_CORNER_UP_LE].insert(3);
+        inactive_locs_[LOC_CORNER_UP_LE].insert(6);
+        inactive_locs_[LOC_CORNER_UP_LE].insert(7);
+        inactive_locs_[LOC_CORNER_UP_LE].insert(8);
+        inactive_locs_[LOC_CORNER_UP_RI].insert(2);
+        inactive_locs_[LOC_CORNER_UP_RI].insert(5);
+        inactive_locs_[LOC_CORNER_UP_RI].insert(6);
+        inactive_locs_[LOC_CORNER_UP_RI].insert(7);
+        inactive_locs_[LOC_CORNER_UP_RI].insert(8);
+        inactive_locs_[LOC_EDGE_LO].insert(0);
+        inactive_locs_[LOC_EDGE_LO].insert(1);
+        inactive_locs_[LOC_EDGE_LO].insert(2);
+        inactive_locs_[LOC_EDGE_LE].insert(0);
+        inactive_locs_[LOC_EDGE_LE].insert(3);
+        inactive_locs_[LOC_EDGE_LE].insert(6);
+        inactive_locs_[LOC_EDGE_RI].insert(2);
+        inactive_locs_[LOC_EDGE_RI].insert(5);
+        inactive_locs_[LOC_EDGE_RI].insert(8);
+        inactive_locs_[LOC_EDGE_UP].insert(6);
+        inactive_locs_[LOC_EDGE_UP].insert(7);
+        inactive_locs_[LOC_EDGE_UP].insert(8);
 
         // probability for obs
         //
@@ -354,27 +358,30 @@ struct cellmap_t {
                         if( num_bits_[valuation] != obs ) continue;
                         float p = 1;
                         for( int rloc = 0; rloc < 9; ++rloc ) {
+                            if( incompatible_loc(rloc, loc_type) ) continue;
                             float q = po_ * (same_column(rloc, 4, 3) ? 1 : 0.9) * (same_row(rloc, 4, 3) ? 1 : 0.9);
                             p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
                         }
                         probability_obs_special_[index] += p;
                     }
-                    std::cout << "prob[obs" << obs << ",lt=" << loc_type << ",labels=" << slabels << "] = " << probability_obs_special_[index] << std::endl;
+                    //std::cout << "prob[obs" << obs << ",lt=" << loc_type << ",labels=" << slabels << "] = " << probability_obs_special_[index] << std::endl;
                     assert(probability_obs_special_[index] <= 1);
                 }
             }
         }
-
+#if 0
+        // check probabilities for observation: \sum_{obs} P( obs | slabels ) = 1 for all slabels
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
             for( int slabels = 0; slabels < 512; ++slabels ) {
+                if( incompatible_slabels(slabels, loc_type) ) continue;
                 float sum = 0;
                 for( int obs = 0; obs < 10; ++obs )
                     sum += probability_obs_special_[calculate_index(slabels, obs, loc_type)];
-                std::cout << "total mass = " << sum << std::endl;
-                assert(sum == 1);
+                std::cout << "total-mass[lt=" << loc_type << ",labels=" << slabels << "] = " << sum << std::endl;
+                assert(fabs(sum - 1) < 0.000001);
             }
         }
-        std::cout << "END: precompute" << std::endl;
+#endif
     }
 
     float probability_obs_special(int obs, int loc, int slabels, int /*last_action*/) const {
@@ -383,8 +390,7 @@ struct cellmap_t {
     }
 
     float probability_obs_special(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        float p = 0;
-#if 0
+        int slabels = 0;
         int row = loc / ncols_, col = loc % ncols_;
         for( int dr = -1; dr < 2; ++dr ) {
             int nrow = row + dr;
@@ -392,13 +398,14 @@ struct cellmap_t {
             for( int dc = -1; dc < 2; ++dc ) {
                 int ncol = col + dc;
                 if( (ncol < 0) || (ncol >= ncols_) ) continue;
-                int new_loc = nrow * ncols_ + ncol;
-                int label = labels[new_loc];
-                int manhattan_distance = abs(dr) + abs(dc);
+                int bit = (dr + 1) * 3 + (dc + 1);
+                int off_loc = nrow * ncols_ + ncol;
+                int label = labels[off_loc];
+                slabels += (label << bit);
             }
         }
-#endif
-        return p;
+        assert((slabels >= 0) && (slabels < 512));
+        return probability_obs_special(obs, loc, slabels, last_action);
     }
 
     int sample_obs_special(int loc, int /*last_action*/) const {
