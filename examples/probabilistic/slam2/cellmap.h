@@ -42,6 +42,11 @@ inline int bit(int n, int k) {
     return (n >> k) & 0x1;
 }
 
+inline void print_bits(std::ostream &os, int n, int num_bits) {
+    for( int i = num_bits - 1; i >= 0; --i )
+        os << bit(n, i);
+}
+
 inline bool same_column(int i, int j, int ncols) {
     return (i % ncols) == (j % ncols);
 }
@@ -95,6 +100,7 @@ struct cellmap_t {
     std::vector<int> loc_type_;
     std::vector<std::set<int> > inactive_locs_;
     std::vector<float> probability_obs_special_;
+    std::vector<int> var_offset_;
 
     std::vector<cell_t> cells_;
 
@@ -234,7 +240,11 @@ struct cellmap_t {
         return probability_obs(obs, loc, labels[loc], last_action);
     }
 
-    int sample_obs(int /*loc*/, int label, int /*last_action*/) const {
+    int sample_obs(int loc, int last_action) const {
+        return !special_ ? sample_obs_standard(loc, last_action) : sample_obs_special(loc, last_action);
+    }
+
+    int sample_obs_standard(int /*loc*/, int label, int /*last_action*/) const {
         assert(!special_);
         if( drand48() > po_ ) {
             int i = lrand48() % (nlabels_ - 1);
@@ -249,10 +259,10 @@ struct cellmap_t {
         }
         return label;
     }
-    int sample_obs(int loc, int last_action) const {
+    int sample_obs_standard(int loc, int last_action) const {
         assert((loc >= 0) && (loc < nloc_));
         int label = cells_[loc].label_;
-        return sample_obs(loc, label, last_action);
+        return sample_obs_standard(loc, label, last_action);
     }
 
     // observation model for the special model
@@ -269,6 +279,8 @@ struct cellmap_t {
     }
 
     void precompute_stored_information_special() {
+        assert(special_);
+
         // num bits
         num_bits_ = std::vector<int>(512, 0);
         for( int n = 0; n < 512; ++n ) {
@@ -366,7 +378,6 @@ struct cellmap_t {
                         }
                         probability_obs_special_[index] += p;
                     }
-                    //std::cout << "prob[obs" << obs << ",lt=" << loc_type << ",labels=" << slabels << "] = " << probability_obs_special_[index] << std::endl;
                     assert(probability_obs_special_[index] <= 1);
                 }
             }
@@ -385,6 +396,27 @@ struct cellmap_t {
             }
         }
 #endif
+
+        // 678
+        // 345
+        // 012
+
+        // calculate var offsets
+        var_offset_ = std::vector<int>(nloc_ * nloc_, 0);
+        for( int loc = 0; loc < nloc_; ++loc ) {
+            int row = loc / ncols_, col = loc % ncols_;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nrow = row + dr;
+                if( (nrow < 0) || (nrow >= nrows_) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int ncol = col + dc;
+                    if( (ncol < 0) || (ncol >= ncols_) ) continue;
+                    int new_loc = nrow * ncols_ + ncol;
+                    int offset = (dr + 1) * 3 + (dc + 1);
+                    var_offset_[loc * nloc_ + new_loc] = offset;
+                }
+            }
+        }
     }
 
     float probability_obs_special(int obs, int loc, int slabels, int /*last_action*/) const {
@@ -393,6 +425,7 @@ struct cellmap_t {
     }
 
     float probability_obs_special(int obs, int loc, const std::vector<int> &labels, int last_action) const {
+        assert(special_);
         int slabels = 0;
         int row = loc / ncols_, col = loc % ncols_;
         for( int dr = -1; dr < 2; ++dr ) {
@@ -431,7 +464,14 @@ struct cellmap_t {
         assert((obs >= 0) && (obs < 10));
         return obs;
     }
-   
+
+    int num_bits(int n) const {
+        return num_bits_[n];
+    }
+
+    int var_offset(int loc, int var_id) const {
+        return var_offset_[loc * nloc_ + var_id];
+    }
 
     void initialize(std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) const {
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
@@ -481,30 +521,24 @@ struct cellmap_t {
         }
     }
 
-    void compute_random_execution(const std::vector<int> &labels, int initial_loc, int length, execution_t &execution) const {
+    void compute_random_execution(int initial_loc, int length, execution_t &execution) const {
+        std::cout << "length=" << length << std::endl;
         execution.reserve(length + 1);
-        execution.push_back(execution_step_t(initial_loc, sample_obs(initial_loc, labels[initial_loc], -1), -1));
+        execution.push_back(execution_step_t(initial_loc, sample_obs(initial_loc, -1), -1));
         for( int step = 0; step < length; ++step ) {
             int current_loc = execution.back().loc_;
             int last_action = random_action();
             int new_loc = sample_loc(current_loc, last_action);
-            int obs = sample_obs(new_loc, labels[new_loc], last_action);
+            int obs = sample_obs(new_loc, last_action);
             execution.push_back(execution_step_t(new_loc, obs, last_action));
         }
     }
 
-    void run_execution(const std::vector<int> &labels,
-                       const execution_t &input_execution,
+    void run_execution(const execution_t &input_execution,
                        execution_t &output_execution,
                        int nsteps,
                        const action_selection_t<cellmap_t> *policy,
                        std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
-        // set labels for callmap
-        if( !labels.empty() )
-            set_labels(labels);
-        else
-            sample_labels();
-
         // input execution must contain at least one initial step
         assert(!input_execution.empty());
         const execution_step_t &initial_step = input_execution[0];
@@ -545,21 +579,19 @@ struct cellmap_t {
             advance_step(last_action, obs, tracking_algorithms);
         }
     }
-    void run_execution(const std::vector<int> &labels,
-                       const execution_t &input_execution,
+    void run_execution(const execution_t &input_execution,
                        execution_t &output_execution,
                        std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
-        run_execution(labels, input_execution, output_execution, 0, 0, tracking_algorithms);
+        run_execution(input_execution, output_execution, 0, 0, tracking_algorithms);
     }
-    void run_execution(const std::vector<int> &labels,
-                       execution_t &output_execution,
+    void run_execution(execution_t &output_execution,
                        int initial_loc,
                        int nsteps,
                        const action_selection_t<cellmap_t> &policy,
                        std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
         execution_step_t initial_step(initial_loc, -1, -1);
         execution_t empty_execution(1, initial_step);
-        run_execution(labels, empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
+        run_execution(empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
     }
 
     // scoring of tracking algorithms

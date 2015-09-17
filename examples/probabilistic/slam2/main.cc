@@ -142,7 +142,7 @@ int main(int argc, const char **argv) {
             seed = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "--special") ) {
+        } else if( !strcmp(argv[0], "-S") || !strcmp(argv[0], "--special") ) {
             special = true;
             --argc;
             ++argv;
@@ -206,21 +206,22 @@ int main(int argc, const char **argv) {
         char *str = strdup(tracking_algorithms_str[i].c_str());
         string name = strtok(str, ":");
         char *token = strtok(0, ":");
+        tracking_t<cellmap_t> *t = 0;
         if( name == "jt" ) {
             memory = token != 0 ? atoi(token) : memory;
             pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
-            tracking_algorithms.push_back(pcbt);
+            t = pcbt;
         } else if( name == "bp" ) {
             memory = token != 0 ? atoi(token) : memory;
             pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
-            tracking_algorithms.push_back(pcbt);
+            t = pcbt;
         } else if( name == "hak" ) {
             memory = token != 0 ? atoi(token) : memory;
             pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
-            tracking_algorithms.push_back(pcbt);
+            t = pcbt;
 #if 0 // ppcbt2_t
         } else if( name == "ppcbt_jt" ) {
             ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 1000);
@@ -235,26 +236,33 @@ int main(int argc, const char **argv) {
             pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
             tracking_algorithms.push_back(pcbt);
 #endif
-        } else if( name == "sis" ) {
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new SIS_t<sis_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
-        } else if( name == "mm_sir" ) {
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new motion_model_SIR_t<motion_model_sir_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
-        } else if( name == "opt_sir" ) {
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf = new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
-            tracking_algorithms.push_back(new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(name + "_" + to_string(nparticles), cellmap, *cdf, nparticles));
-        } else if( name == "mm_rbpf" ) {
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new motion_model_RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
-        } else if( name == "opt_rbpf" ) {
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            tracking_algorithms.push_back(new optimal_RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name + "_" + to_string(nparticles), cellmap, nparticles));
         } else {
-            cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
+            // the tracking algorithm is a particle filter algorithm
+            nparticles = token != 0 ? atoi(token) : nparticles;
+            std::string full_name = name + "_" + to_string(nparticles);
+            if( name == "sis" ) {
+                t = new SIS_t<sis_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+            } else if( name == "mm_sir" ) {
+                t = new motion_model_SIR_t<motion_model_sir_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+            } else if( name == "opt_sir" ) {
+                cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf = new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
+                t = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(full_name, cellmap, *cdf, nparticles);
+            } else if( name == "mm_rbpf" ) {
+                if( !special )
+                    t = new motion_model_RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                else
+                    t = new motion_model_RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+            } else if( name == "opt_rbpf" ) {
+                if( !special )
+                    t = new optimal_RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                else
+                    t = 0; // CHECK
+            } else {
+                cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
+            }
         }
         free(str);
+        if( t != 0 ) tracking_algorithms.push_back(t);
     }
 
     // compute longest name
@@ -295,6 +303,7 @@ int main(int argc, const char **argv) {
     } else { // general grid with random labels
         cellmap.sample_labels(labels);
     }
+    cellmap.set_labels(labels);
 
     // set execution
     cellmap_t::execution_t fixed_execution;
@@ -318,21 +327,16 @@ int main(int argc, const char **argv) {
             fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
         }
     } else {
-        cellmap.compute_random_execution(labels, 0, execution_length, fixed_execution);
+        cellmap.compute_random_execution(0, execution_length, fixed_execution);
     }
-
-    cout << "======== BEGIN" << endl;
-    motion_model_rbpf_slam2_particle_t part;
-    part.initial_sampling();
-    cout << "======== END" << endl;
 
     // run for the specified number of trials
     for( int trial = 0; trial < ntrials; ++trial ) {
         cellmap_t::execution_t output_execution;
         if( !fixed_execution.empty() )
-            cellmap.run_execution(labels, fixed_execution, output_execution, tracking_algorithms);
+            cellmap.run_execution(fixed_execution, output_execution, tracking_algorithms);
         else
-            cellmap.run_execution(labels, output_execution, cellmap.initial_loc_, nsteps, policy, tracking_algorithms);
+            cellmap.run_execution(output_execution, cellmap.initial_loc_, nsteps, policy, tracking_algorithms);
 
         // calculate final marginals
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
