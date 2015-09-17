@@ -322,7 +322,7 @@ int main(int argc, const char **argv) {
     }
 
     cout << "======== BEGIN" << endl;
-    rbpf_slam2_particle_t part;
+    motion_model_rbpf_slam2_particle_t part;
     part.initial_sampling();
     cout << "======== END" << endl;
 

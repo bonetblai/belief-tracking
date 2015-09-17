@@ -35,6 +35,8 @@
 #include "tracking.h"
 #include "action_selection.h"
 
+//#define DEBUG
+
 
 inline int bit(int n, int k) {
     return (n >> k) & 0x1;
@@ -369,7 +371,8 @@ struct cellmap_t {
                 }
             }
         }
-#if 0
+
+#ifdef DEBUG
         // check probabilities for observation: \sum_{obs} P( obs | slabels ) = 1 for all slabels
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
             for( int slabels = 0; slabels < 512; ++slabels ) {
@@ -635,6 +638,8 @@ struct cellmap_t {
            << std::endl;
     }
 };
+
+#undef DEBUG
 
 #endif
 

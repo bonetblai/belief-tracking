@@ -94,8 +94,8 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         }
     }
 
-#if 0
     void update_factors(int last_action, int obs) {
+#if 0
         int current_loc = loc_history_.back();
         assert(current_loc < int(factors_.size()));
         dai::Factor &factor = factors_[current_loc];
@@ -107,50 +107,54 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         }
         assert(total_mass > 0);
         factor /= total_mass;
+#endif
     }
 
+#if 0
     float probability(int label, int loc) const {
         assert(loc < int(factors_.size()));
         assert(label < int(factors_[loc].nrStates()));
         return factors_[loc][label];
     }
+#endif
 
     void update_marginal(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
+#if 0
         int current_loc = loc_history_.back();
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             for( int label = 0; label < base_->nlabels_; ++label )
                 marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * probability(label, loc));
         }
         marginals_on_vars[base_->nloc_].set(current_loc, marginals_on_vars[base_->nloc_][current_loc] + weight);
+#endif
     }
 
     int value_for(int /*var*/) const { return -1; }
-#endif
 
-#if 0
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
     virtual float importance_weight(const rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
-#endif
 };
 
-#if 0
-// Particle for the motion model RBPF filter (verified: 09/12/2015)
-struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+// Particle for the motion model RBPF filter (slam2)
+struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
+    virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
         np = p;
         int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
         np.update_factors(last_action, obs);
     }
 
-    virtual float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+    virtual float importance_weight(const rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
         float weight = 0;
-        for( int label = 0; label < base_->nlabels_; ++label ) // marginalize over possible labels at current loc
-            weight += base_->probability_obs(obs, label, last_action) * p.probability(label, np.loc_history_.back());
+        int np_current_loc = np.loc_history_.back();
+        const dai::Factor &p_marginal = p.factors_[np_current_loc];
+        for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
+            weight += p_marginal[slabels] * base_->probability_obs_special(obs, np_current_loc, slabels, last_action);
         return weight;
     }
 };
 
+#if 0
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
 struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     mutable std::vector<float> cdf_;
