@@ -175,6 +175,7 @@ int main(int argc, const char **argv) {
     seeds[0] = seeds[1] = seeds[2] = seed;
     seed48(seeds);
     srand48(seed);
+    cout << "RANDOM=" << seed << endl;
 
     // create cellmap
     if( (gtype >= 0) && (gtype < 2) ) {

@@ -40,6 +40,7 @@ inline void stochastic_sampling(int n, const float *cdf, int k, std::vector<int>
             }
         }
     }
+    assert(k == int(indices.size()));
 }
 
 inline void stochastic_universal_sampling(int n, const float *cdf, int k, std::vector<int> &indices) {
@@ -51,6 +52,7 @@ inline void stochastic_universal_sampling(int n, const float *cdf, int k, std::v
         indices.push_back(i == n ? n - 1 : i);
         u += 1.0 / float(k);
     }
+    assert(k == int(indices.size()));
 }
 
 inline int sample_from_distribution(int n, const float *cdf) {

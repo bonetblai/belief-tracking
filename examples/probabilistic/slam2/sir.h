@@ -67,7 +67,6 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             PF_t<PTYPE, BASE>::stochastic_universal_sampling(nparticles_, indices);
         else
             PF_t<PTYPE, BASE>::stochastic_sampling(nparticles_, indices);
-        assert(indices.size() == size_t(nparticles_));
 
         float total_mass = 0.0;
         std::vector<std::pair<float, PTYPE> > new_particles;
@@ -81,8 +80,13 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             total_mass += weight;
             new_particles.push_back(std::make_pair(weight, np));
         }
-        for( int i = 0; i < nparticles_; ++i )
-            new_particles[i].first /= total_mass;
+
+        for( int i = 0; i < nparticles_; ++i ) {
+            if( total_mass == 0 )
+                new_particles[i].first = 1.0 / float(nparticles_);
+            else
+                new_particles[i].first /= total_mass;
+        }
         particles_ = new_particles;
 
         history_.push_back(std::make_pair(last_action, obs));

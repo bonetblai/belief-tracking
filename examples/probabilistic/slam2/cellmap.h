@@ -522,7 +522,6 @@ struct cellmap_t {
     }
 
     void compute_random_execution(int initial_loc, int length, execution_t &execution) const {
-        std::cout << "length=" << length << std::endl;
         execution.reserve(length + 1);
         execution.push_back(execution_step_t(initial_loc, sample_obs(initial_loc, -1), -1));
         for( int step = 0; step < length; ++step ) {

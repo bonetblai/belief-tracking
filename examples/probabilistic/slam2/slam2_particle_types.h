@@ -35,7 +35,7 @@
 #include "slam_particle_types.h"
 #include "utils.h"
 
-#define DEBUG
+//#define DEBUG
 
 // Abstract Particle for the 2nd Rao-Blackwellised filter
 struct rbpf_slam2_particle_t : public base_particle_t {
@@ -162,6 +162,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             factor.set(j, factor[j] * base_->probability_obs_special(obs, current_loc, slabels, last_action));
             total_mass += factor[j];
         }
+std::cout << "loc=" << current_loc << ", coord=" << coord_t(current_loc) << ", obs=" << obs << std::endl;
         assert(total_mass > 0);
         factor /= total_mass;
         need_to_recalculate_marginals_ = true;
@@ -173,23 +174,26 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     void calculate_marginals() const {
         if( need_to_recalculate_marginals_ ) {
-            std::cout << "junction tree: BEGIN" << std::endl;
+            //CHECK std::cout << "junction tree: BEGIN" << std::endl;
             apply_junction_tree();
             extract_marginals_from_junction_tree();
             need_to_recalculate_marginals_ = false;
-            std::cout << "junction tree: END" << std::endl;
+            //CHECK std::cout << "junction tree: END" << std::endl;
         }
     }
 
     void update_marginal(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
-#if 0
+        //CHECK std::cout << "HOLA: weight=" << weight << std::endl;
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            for( int label = 0; label < base_->nlabels_; ++label )
-                marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * marginals_[loc][label]);
+            //CHECK print_factor(std::cout, loc, marginals_[loc], "marginals_");
+            dai::Factor marginal = marginals_[loc].marginal(variables_[loc]);
+            for( int label = 0; label < base_->nlabels_; ++label ) {
+                marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * marginal[label]);
+                //CHECK std::cout << "marginal[loc=" << loc << ", label=" << label << "]=" << marginal[label] << std::endl;
+            }
         }
         int current_loc = loc_history_.back();
         marginals_on_vars[base_->nloc_].set(current_loc, marginals_on_vars[base_->nloc_][current_loc] + weight);
-#endif
     }
 
     int value_for(int /*var*/) const { return -1; }
@@ -220,7 +224,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     void extract_marginals_from_junction_tree() const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             marginals_[loc] = jt_.belief(factors_[loc].vars());
-            print_factor(std::cout, loc, marginals_[loc], "marginals_");
         }
     }
 };
@@ -246,7 +249,7 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
     }
 };
 
-#if 0
+#if 0 // optimal RBPF filter
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
 struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
     mutable std::vector<float> cdf_;

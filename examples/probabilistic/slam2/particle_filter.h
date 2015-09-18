@@ -50,7 +50,8 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
         cdf[0] = particles_[0].first;
         for( int i = 1; i < nparticles_; ++i )
             cdf[i] = cdf[i - 1] + particles_[i].first;
-        return Utils::stochastic_sampling(cdf.size(), &cdf[0], k, indices);
+        Utils::stochastic_sampling(cdf.size(), &cdf[0], k, indices);
+        assert(nparticles_ == int(indices.size()));
     }
 
     void stochastic_universal_sampling(int k, std::vector<int> &indices) const {
@@ -58,7 +59,8 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
         cdf[0] = particles_[0].first;
         for( int i = 1; i < nparticles_; ++i )
             cdf[i] = cdf[i - 1] + particles_[i].first;
-        return Utils::stochastic_universal_sampling(cdf.size(), &cdf[0], k, indices);
+        Utils::stochastic_universal_sampling(cdf.size(), &cdf[0], k, indices);
+        assert(nparticles_ == int(indices.size()));
     }
 
     int sample_from_distribution(int n, const float *cdf) const {
