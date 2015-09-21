@@ -175,7 +175,7 @@ int main(int argc, const char **argv) {
     seeds[0] = seeds[1] = seeds[2] = seed;
     seed48(seeds);
     srand48(seed);
-    cout << "RANDOM=" << seed << endl;
+    cout << "# seed=" << seed << endl;
 
     // create cellmap
     if( (gtype >= 0) && (gtype < 2) ) {
@@ -257,7 +257,7 @@ int main(int argc, const char **argv) {
                 if( !special )
                     t = new optimal_RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
                 else
-                    t = 0; // CHECK
+                    t = new motion_model_RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
             } else {
                 cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
             }
@@ -391,6 +391,45 @@ int main(int argc, const char **argv) {
             }
         }
         cout << "# '*' means more than one label in MAP for given position" << endl;
+
+
+
+        cout << "library(ggplot2)\nlibrary(reshape)\nlibrary(zoo)" << endl;
+        cout << "random_matrix<-matrix(c(";
+        for( int loc = 0; loc < nrows * ncols; ++loc ) {
+            assert(loc < int(tracking_algorithms.back()->marginals_.back().size()));
+            cout << tracking_algorithms.back()->marginals_.back()[loc][1];
+            if( loc + 1 < nrows * ncols ) cout << ", ";
+        }
+        cout << "),ncol=" << ncols << ",byrow=T)" << endl;
+cout << 
+"quantile_range <- c(0,.48,.52,1) #quantile(random_matrix, probs = c(0, .48, .52, 1))\n\
+## use http://colorbrewer2.org/ to find optimal divergent color palette (or set own)\n\
+color_palette <- colorRampPalette(c(\"#e9a3c9\", \"#f7f7f7\", \"#a1d76a\"))(length(quantile_range) - 1)\n\
+## prepare label text (use two adjacent values for range text)\n\
+label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = function(i) paste(i, collapse = \" : \"))\n\
+## discretize matrix; this is the most important step, where for each value we find category of predefined ranges (modify probs argument of quantile to detail the colors)\n\
+mod_mat <- matrix(findInterval(random_matrix, quantile_range, all.inside = TRUE), nrow = nrow(random_matrix))\n\
+## remove background and axis from plot\n\
+theme_change <- theme(\n\
+ plot.background = element_blank(),\n\
+ panel.grid.minor = element_blank(),\n\
+ panel.grid.major = element_blank(),\n\
+ panel.background = element_blank(),\n\
+ panel.border = element_blank(),\n\
+ axis.line = element_blank(),\n\
+ axis.ticks = element_blank(),\n\
+ axis.text.x = element_blank(),\n\
+ axis.text.y = element_blank(),\n\
+ axis.title.x = element_blank(),\n\
+ axis.title.y = element_blank()\n\
+)\n\
+## output the graphics\n\
+ggplot(melt(mod_mat), aes(x = X2, y = X1, fill = factor(value))) + geom_tile(color = \"black\") + scale_fill_manual(values = color_palette, name = \"X\", labels = label_text)" << endl;
+//ggplot(melt(random_matrix), aes(x = X2, y = X1, fill = factor(value))) + geom_tile(aes(fill=value)) + theme_change" << endl;
+
+
+
 
         // generate R plots
         cout << "library(\"reshape2\");" << endl << "library(\"ggplot2\");" << endl;

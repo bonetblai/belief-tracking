@@ -202,6 +202,13 @@ struct cellmap_t {
         return p;
     }
 
+#if 0
+    float probability_tr_loc_special(int action, int old_loc, int new_loc) const {
+        //return probability_tr_loc_special_[old_loc * 4 * nloc_ + new_loc * 4 + action];
+        return 0;
+    }
+#endif
+
     int sample_loc(int loc, int action) const {
         if( action == -1 ) {
             return loc;
@@ -365,16 +372,19 @@ struct cellmap_t {
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
             for( int obs = 0; obs < 10; ++obs ) {
                 for( int slabels = 0; slabels < 512; ++slabels ) {
-                    if( incompatible_slabels(slabels, loc_type) ) continue;
+                    //if( incompatible_slabels(slabels, loc_type) ) continue;
                     int index = calculate_index(slabels, obs, loc_type);
                     for( int valuation = 0; valuation < 512; ++valuation ) {
-                        if( incompatible_slabels(valuation, loc_type) ) continue;
+                        //if( incompatible_slabels(valuation, loc_type) ) continue;
                         if( num_bits_[valuation] != obs ) continue;
                         float p = 1;
                         for( int rloc = 0; rloc < 9; ++rloc ) {
-                            if( incompatible_loc(rloc, loc_type) ) continue;
+                            //if( incompatible_loc(rloc, loc_type) ) continue;
                             float q = po_ * (same_column(rloc, 4, 3) ? 1 : 0.9) * (same_row(rloc, 4, 3) ? 1 : 0.9);
-                            p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
+                            if( incompatible_loc(rloc, loc_type) )
+                                p *= bit(valuation, rloc) == 0 ? 0.9 : 0.1;
+                            else
+                                p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
                         }
                         probability_obs_special_[index] += p;
                     }
@@ -387,7 +397,7 @@ struct cellmap_t {
         // check probabilities for observation: \sum_{obs} P( obs | slabels ) = 1 for all slabels
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
             for( int slabels = 0; slabels < 512; ++slabels ) {
-                if( incompatible_slabels(slabels, loc_type) ) continue;
+                //if( incompatible_slabels(slabels, loc_type) ) continue;
                 float sum = 0;
                 for( int obs = 0; obs < 10; ++obs )
                     sum += probability_obs_special_[calculate_index(slabels, obs, loc_type)];
@@ -396,10 +406,6 @@ struct cellmap_t {
             }
         }
 #endif
-
-        // 678
-        // 345
-        // 012
 
         // calculate var offsets
         var_offset_ = std::vector<int>(nloc_ * nloc_, 0);
@@ -551,8 +557,10 @@ struct cellmap_t {
         output_execution.push_back(initial_step);
         advance_step(-1, obs, tracking_algorithms);
 
-        // unfold execution
+        // run execution
+        std::cout << "steps:";
         for( size_t t = 1; true; ++t ) {
+            std::cout << " " << t << std::flush;
             if( (policy == 0) && (t >= input_execution.size()) ) return;
             if( (policy != 0) && (t >= size_t(nsteps)) ) return;
 
@@ -577,6 +585,7 @@ struct cellmap_t {
             output_execution.push_back(execution_step_t(hidden_loc, obs, last_action));
             advance_step(last_action, obs, tracking_algorithms);
         }
+        std::cout << std::endl;
     }
     void run_execution(const execution_t &input_execution,
                        execution_t &output_execution,
