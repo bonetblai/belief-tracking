@@ -41,16 +41,13 @@
 struct rbpf_slam2_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
 
-    // variables, factors, and centers
-    std::vector<dai::Var> variables_;
+    // variables and factors
     std::vector<dai::Factor> factors_;
-    std::vector<int> centers_;  // not clear for what?
 
     // computation of marginal in factor model
     mutable bool need_to_recalculate_marginals_;
     mutable std::vector<dai::Factor> marginals_;
-    mutable dai::FactorGraph factor_graph_;
-    mutable dai::InfAlg *inference_algorithm_;
+    dai::InfAlg *inference_algorithm_;
 
     rbpf_slam2_particle_t() : inference_algorithm_(0) {
         assert(base_ != 0);
@@ -58,9 +55,9 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
         // create binary variables for each cell in the grid
         int nloc = base_->nloc_;
-        variables_ = std::vector<dai::Var>(nloc);
+        std::vector<dai::Var> variables(nloc);
         for( int loc = 0; loc < nloc; ++loc ) {
-            variables_[loc] = dai::Var(loc, 2);
+            variables[loc] = dai::Var(loc, 2);
             //std::cout << "loc=" << loc << ", coord=" << coord_t(loc) << std::endl;
         }
 
@@ -69,7 +66,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         // surrounding the factor, including the variable
         // for the "center" location. Also set up the center
         // for each factor.
-        centers_ = std::vector<int>(nloc);
         factors_ = std::vector<dai::Factor>(nloc);
         marginals_ = std::vector<dai::Factor>(nloc);
         for( int loc = 0; loc < nloc; ++loc ) {
@@ -81,8 +77,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                 for( int dc = -1; dc < 2; ++dc ) {
                     int nc = col + dc;
                     if( (nc < 0) || (nc >= base_->ncols_) ) continue;
-                    if( (dr == 0) && (dc == 0) ) centers_[loc] = vars.size();
-                    vars.push_back(variables_[nr * base_->ncols_ + nc]);
+                    vars.push_back(variables[nr * base_->ncols_ + nc]);
                 }
             }
             std::sort(vars.begin(), vars.end());
@@ -98,8 +93,89 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
         // computation of marginal
         need_to_recalculate_marginals_ = true;
+
+        // create algorithm
+        create_and_initialize_inference_algorithm();
     }
-    virtual ~rbpf_slam2_particle_t() { }
+    virtual ~rbpf_slam2_particle_t() {
+        destroy_inference_algorithm();
+    }
+
+    rbpf_slam2_particle_t(const rbpf_slam2_particle_t &p) {
+        *this = p;
+    }
+
+    rbpf_slam2_particle_t(rbpf_slam2_particle_t &&p)
+      : loc_history_(p.loc_history_), factors_(p.factors_),
+        need_to_recalculate_marginals_(p.need_to_recalculate_marginals_),
+        marginals_(p.marginals_) {
+        inference_algorithm_ = p.inference_algorithm_;
+        p.inference_algorithm_ = 0;
+    }
+
+    const rbpf_slam2_particle_t& operator=(const rbpf_slam2_particle_t &p) {
+        p.TEST(std::cout, "COPY1");
+        loc_history_ = p.loc_history_;
+        factors_ = p.factors_;
+        need_to_recalculate_marginals_ = p.need_to_recalculate_marginals_;
+        marginals_ = p.marginals_;
+        if( p.inference_algorithm_ != 0 )
+            inference_algorithm_ = p.inference_algorithm_->clone();
+        else
+            inference_algorithm_ = 0;
+        TEST(std::cout, "COPY2");
+        return *this;
+    }
+
+    bool operator==(const rbpf_slam2_particle_t &p) const {
+        return (loc_history_ == p.loc_history_) && (factors_ == p.factors_) &&
+               (need_to_recalculate_marginals_ == p.need_to_recalculate_marginals_) &&
+               (marginals_ == p.marginals_) &&
+               (((inference_algorithm_ == 0) && (p.inference_algorithm_ == 0)) ||
+                ((inference_algorithm_ != 0) && (p.inference_algorithm_ != 0)));
+    }
+
+    void create_and_initialize_inference_algorithm() {
+        dai::FactorGraph factor_graph(factors_);
+
+#if 0
+        // compute junction tree using min-fill heuristic
+        size_t maxstates = 1e6;
+        try {
+            dai::boundTreewidth(factor_graph, &dai::eliminationCost_MinFill, maxstates);
+        } catch( dai::Exception &e ) {
+            if( e.getCode() == dai::Exception::OUT_OF_MEMORY )
+                std::cout << "error: cannot compute junction tree (need more than " << maxstates << " states)" << std::endl;
+        }
+#endif
+
+        // junction tree
+        dai::PropertySet opts;
+        //opts = dai::PropertySet()("updates", std::string("HUGIN"))("verbose", (size_t)0);
+        //inference_algorithm_ = new dai::JTree(factor_graph, opts);
+
+        opts = dai::PropertySet()("updates", std::string("SEQRND"))("logdomain", false)("tol", 1e-3)("maxiter", (size_t)20)("maxtime", double(1))("damping", double(.2))("verbose", (size_t)0);
+        inference_algorithm_ = new dai::BP(factor_graph, opts);
+
+        //opts = dai::PropertySet()("updates", std::string("SEQRND"))("clamp", std::string("CLAMP_VAR"))("choose", std::string("CHOOSE_RANDOM"))("min_max_adj", double(10))("bbp_props", std::string(""))("bbp_cfn", std::string(""))("recursion", std::string("REC_FIXED"))("tol", 1e-3)("rec_tol", 1e-3)("maxiter", (size_t)100)("verbose", (size_t)0);
+        //inference_algorithm_ = new dai::CBP(factor_graph, opts);
+
+        //opts = dai::PropertySet()("updates", std::string("SEQRND"))("cavity", std::string("FULL"))("logdomain", false)("tol", 1e-3)("maxiter", (size_t)100)("maxtime", double(1))("damping", double(.2))("verbose", (size_t)0);
+        //inference_algorithm_ = new dai::LC(factor_graph, opts);
+
+        //opts = dai::PropertySet()("updates", std::string("LINEAR"))("inits", std::string("RESPPROP"))("logdomain", false)("tol", 1e-3)("maxiter", (size_t)100)("maxtime", double(1))("damping", double(.2))("verbose", (size_t)10);
+        //inference_algorithm_ = new dai::MR(factor_graph, opts);
+
+        //opts = dai::PropertySet()("doubleloop", true)("clusters", std::string("MIN"))("init", std::string("UNIFORM"))("tol", 1e-3)("maxiter", (size_t)100)("maxtime", double(1));
+        //inference_algorithm_ = new dai::HAK(factor_graph, opts);
+
+        std::cout << "Properties: " << inference_algorithm_->printProperties() << std::endl;
+        inference_algorithm_->init();
+    }
+
+    void destroy_inference_algorithm() {
+        delete inference_algorithm_;
+    }
 
     void print_factor(std::ostream &os, int loc, const dai::Factor &factor, const std::string &name) const {
         os << "variables[loc=" << loc << "]=";
@@ -115,7 +191,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         }
     }
 
-    void initial_sampling() {
+    void initial_sampling_in_place() {
         assert(base_->nlabels_ == 2);
 
         // set initial history and reset factors for locations
@@ -125,9 +201,21 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             float p = 1.0 / (1 << factor.vars().size());
             for( int i = 0; i < (1 << factor.vars().size()); ++i )
                 factor.set(i, p);
-            //std::cout << "factor-size: loc=" << loc << ":" << coord_t(loc) << ", sz=" << factor.vars().size() << std::endl;
         }
         calculate_marginals();
+        TEST(std::cout, "INITIAL");
+    }
+
+    void TEST(std::ostream &os, const std::string &str, bool do_endl = true) const {
+#if 0
+        //os << str << ": p=" << this << ", t=" << std::flush;
+        assert(inference_algorithm_->fg().nrFactors() == factors_.size());
+        for( int i = 0; i < int(factors_.size()); ++i ) {
+            //os << " " << i << std::flush;
+            assert(inference_algorithm_->fg().factor(i) == factors_[i]);
+        }
+        //if( do_endl ) os << std::endl;
+#endif
     }
 
     int get_slabels(int loc, int value) const {
@@ -147,7 +235,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         return slabels;
     }
 
-    void update_factors(int last_action, int obs) {
+    int update_factors(int last_action, int obs) {
         int current_loc = loc_history_.back();
 #ifdef DEBUG
         //std::cout << "update_factors: loc=" << current_loc << ", coord=" << coord_t(current_loc) << ", obs=" << obs << std::endl;
@@ -170,27 +258,22 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         std::cout << "factor after  update: loc=" << current_loc << ", obs=" << obs << std::endl;
         print_factor(std::cout, current_loc, factors_[current_loc], "factors_");
 #endif
+        return current_loc;
     }
 
-    void calculate_marginals() const {
+    void calculate_marginals(int factor_index = -1) const {
         if( need_to_recalculate_marginals_ ) {
-            //CHECK std::cout << "junction tree: BEGIN" << std::endl;
-            apply_junction_tree();
-            extract_marginals_from_junction_tree();
+            apply_inference(factor_index);
+            extract_marginals_from_inference();
             need_to_recalculate_marginals_ = false;
-            //CHECK std::cout << "junction tree: END" << std::endl;
         }
     }
 
     void update_marginal(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
-        //CHECK std::cout << "HOLA: weight=" << weight << std::endl;
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            //CHECK print_factor(std::cout, loc, marginals_[loc], "marginals_");
-            dai::Factor marginal = marginals_[loc].marginal(variables_[loc]);
-            for( int label = 0; label < base_->nlabels_; ++label ) {
+            dai::Factor marginal = marginals_[loc].marginal(factors_[loc].vars());
+            for( int label = 0; label < base_->nlabels_; ++label )
                 marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * marginal[label]);
-                //CHECK std::cout << "marginal[loc=" << loc << ", label=" << label << "]=" << marginal[label] << std::endl;
-            }
         }
         int current_loc = loc_history_.back();
         marginals_on_vars[base_->nloc_].set(current_loc, marginals_on_vars[base_->nloc_][current_loc] + weight);
@@ -202,45 +285,34 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     virtual float importance_weight(const rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
 
 
-    void apply_junction_tree() const {
-        factor_graph_ = dai::FactorGraph(factors_);
-
-#if 0
-        // compute junction tree using min-fill heuristic
-        size_t maxstates = 1e6;
-        try {
-            dai::boundTreewidth(factor_graph_, &dai::eliminationCost_MinFill, maxstates);
-        } catch( dai::Exception &e ) {
-            if( e.getCode() == dai::Exception::OUT_OF_MEMORY )
-                std::cout << "error: cannot compute junction tree (need more than " << maxstates << " states)" << std::endl;
+    void apply_inference(int factor_index) const {
+        assert(inference_algorithm_ != 0);
+        if( factor_index == -1 ) {
+            for( int i = 0; i < int(factors_.size()); ++i )
+                inference_algorithm_->fg().setFactor(i, factors_[i]);
+            inference_algorithm_->init();
+        } else {
+            //std::cout << "p=" << this << ": index=" << factor_index << ", ";
+            inference_algorithm_->fg().setFactor(factor_index, factors_[factor_index]);
+            assert(inference_algorithm_->fg().factor(factor_index) == factors_[factor_index]);
+            TEST(std::cout, "APPLY", false);
+            inference_algorithm_->init(factors_[factor_index].vars());
+            //std::cout << std::endl;
         }
-#endif
-
-        // run junction tree
-        //inference_algorithm_ = new dai::JTree(factor_graph_, opts("updates", std::string("HUGIN")));
-
-        dai::PropertySet opts = dai::PropertySet()("updates", std::string("SEQRND"))("logdomain", false)("tol", 1e-5)("maxiter", (size_t)10000);
-        inference_algorithm_ = new dai::BP(factor_graph_, opts);
-
-        //dai::PropertySet opts = dai::PropertySet()("doubleloop", true)("clusters", std::string("MIN"))("init", std::string("UNIFORM"))("tol", 1e-5)("maxiter", (size_t)10000)("maxtime", double(0.5));
-        //inference_algorithm_ = new dai::HAK(factor_graph_, opts);
-
-        inference_algorithm_->init();
         inference_algorithm_->run();
     }
 
-    void extract_marginals_from_junction_tree() const {
+    void extract_marginals_from_inference() const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             marginals_[loc] = inference_algorithm_->belief(factors_[loc].vars());
         }
-        delete inference_algorithm_;
     }
 };
 
 // Particle for the motion model RBPF filter (slam2)
 struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
-        np = p;
+        assert(np == p);
         int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
         np.update_factors(last_action, obs);
@@ -256,17 +328,21 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             weight += p_marginal[slabels] * base_->probability_obs_special(obs, np_current_loc, slabels, last_action);
         return weight;
     }
+
+    motion_model_rbpf_slam2_particle_t* initial_sampling() {
+        motion_model_rbpf_slam2_particle_t *p = new motion_model_rbpf_slam2_particle_t;
+        p->initial_sampling_in_place();
+        return p;
+    }
 };
 
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
 struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
-    mutable std::vector<float> cdf_;
-
-    void calculate_cdf(const rbpf_slam2_particle_t &p, int last_action, int obs) const {
+    void calculate_cdf(const rbpf_slam2_particle_t &p, int last_action, int obs, std::vector<float> &cdf) const {
         assert(!p.need_to_recalculate_marginals_);
 
-        cdf_.clear();
-        cdf_.reserve(base_->nloc_);
+        cdf.clear();
+        cdf.reserve(base_->nloc_);
 
         int current_loc = p.loc_history_.back();
         float previous = 0;
@@ -276,25 +352,28 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             float prob = 0;
             for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
                 prob += p_marginal[slabels] * base_->probability_obs_special(obs, new_loc, slabels, last_action);
-            cdf_.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
-            previous = cdf_.back();
+            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
+            previous = cdf.back();
         }
 
         // normalize
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
-            cdf_[new_loc] /= cdf_.back();
+            cdf[new_loc] /= cdf.back();
         }
-        assert(cdf_.back() == 1.0);
+        assert(cdf.back() == 1.0);
     }
 
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
-        // sample new_loc w.p. P(new_loc|curr_loc,last_action) * SUM_{slabels} P(obs|new_loc,SLabels[new_loc]=c) P(slabels|history)
-        np = p;
-        calculate_cdf(p, last_action, obs);
-        int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);
+        assert(np == p);
+        p.TEST(std::cout, "SAMPLE1");
+        np.TEST(std::cout, "SAMPLE2");
+        std::vector<float> cdf;
+        calculate_cdf(p, last_action, obs, cdf);
+        int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf[0]);
         np.loc_history_.push_back(next_loc);
-        np.update_factors(last_action, obs);
-        np.calculate_marginals();
+        int factor_index = np.update_factors(last_action, obs);
+        np.calculate_marginals(factor_index);
+        np.TEST(std::cout, "SAMPLE3");
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &/*np*/, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
@@ -309,6 +388,12 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             weight += base_->probability_tr_loc(last_action, current_loc, new_loc) * prob;
         }
         return weight;
+    }
+
+    optimal_rbpf_slam2_particle_t* initial_sampling() {
+        optimal_rbpf_slam2_particle_t *p = new optimal_rbpf_slam2_particle_t;
+        p->initial_sampling_in_place();
+        return p;
     }
 };
 

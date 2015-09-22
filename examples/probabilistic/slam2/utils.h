@@ -25,11 +25,12 @@
 namespace Utils {
 
 inline void stochastic_sampling(int n, const float *cdf, int k, std::vector<int> &indices) {
+    assert(cdf[n-1] != 0);
     indices.clear();
     indices.reserve(k);
     for( int j = 0; j < k; ++j ) {
         float u = drand48();
-        if( u > cdf[n - 1] ) {
+        if( u >= cdf[n - 1] ) {
             indices.push_back(n - 1);
         } else {
             for( int i = 0; i < n; ++i ) {

@@ -36,9 +36,10 @@
 #include "sis.h"
 #include "motion_model_sir.h"
 #include "optimal_sir.h"
-#include "motion_model_rbpf.h"
-#include "optimal_rbpf.h"
-//#include "ppcbt2.h"
+#include "rbpf.h"
+//#include "motion_model_rbpf.h"
+//#include "optimal_rbpf.h"
+////#include "ppcbt2.h"
 
 #include "slam_particle_types.h"
 #include "slam2_particle_types.h"
@@ -250,14 +251,14 @@ int main(int argc, const char **argv) {
                 t = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(full_name, cellmap, *cdf, nparticles);
             } else if( name == "mm_rbpf" ) {
                 if( !special )
-                    t = new motion_model_RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                    t = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
                 else
-                    t = new motion_model_RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                    t = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
             } else if( name == "opt_rbpf" ) {
                 if( !special )
-                    t = new optimal_RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                    t = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
                 else
-                    t = new motion_model_RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                    t = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
             } else {
                 cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
             }

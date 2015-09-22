@@ -48,9 +48,17 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         // aggregate info from particles into marginals
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
-            const PTYPE &p = particles_[i].second;
+            const PTYPE &p = *particles_[i].second;
             p.update_marginal(weight, marginals_on_vars_);
         }
+    }
+
+    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const {
+        p.sample_from_pi(np, p, last_action, obs);
+    }
+
+    virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
+        return p.importance_weight(np, p, last_action, obs);
     }
 };
 

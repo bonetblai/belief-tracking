@@ -43,7 +43,7 @@ struct slam_particle_t : public base_particle_t {
     int current_loc_;
     std::vector<int> labels_;
 
-    void initial_sampling() {
+    void initial_sampling_in_place() {
         labels_ = std::vector<int>(base_->nloc_);
         for( int i = 0; i < base_->nloc_; ++i )
             labels_[i] = lrand48() % base_->nlabels_;
@@ -62,6 +62,12 @@ struct sis_slam_particle_t : public slam_particle_t {
         weight *= base_->probability_obs(obs, new_loc, labels_[new_loc], last_action);
         current_loc_ = new_loc;
     }
+
+    sis_slam_particle_t* initial_sampling() {
+        sis_slam_particle_t *p = new sis_slam_particle_t;
+        p->initial_sampling_in_place();
+        return p;
+    }
 };
 
 // Particle for the motion model SIR filter (verified: 09/12/2015)
@@ -73,6 +79,12 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
 
     float importance_weight(const motion_model_sir_slam_particle_t &np, const motion_model_sir_slam_particle_t &/*p*/, int last_action, int obs) const {
         return base_->probability_obs(obs, np.current_loc_, np.labels_, last_action);
+    }
+
+    motion_model_sir_slam_particle_t* initial_sampling() {
+        motion_model_sir_slam_particle_t *p = new motion_model_sir_slam_particle_t;
+        p->initial_sampling_in_place();
+        return p;
     }
 };
 
@@ -127,6 +139,12 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
             weight += base_->probability_obs(obs, new_loc, p.labels_, last_action) * base_->probability_tr_loc(last_action, loc, new_loc);
         return weight;
     }
+
+    optimal_sir_slam_particle_t* initial_sampling() {
+        optimal_sir_slam_particle_t *p = new optimal_sir_slam_particle_t;
+        p->initial_sampling_in_place();
+        return p;
+    }
 };
 
 // Abstract Particle for the Rao-Blackwellised filter
@@ -134,7 +152,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
     std::vector<dai::Factor> factors_;
 
-    void initial_sampling() {
+    void initial_sampling_in_place() {
         loc_history_.push_back(base_->initial_loc_);
         factors_ = std::vector<dai::Factor>(base_->nloc_, dai::Factor(dai::VarSet(dai::Var(0, base_->nlabels_)), 1.0 / float(base_->nlabels_)));
     }
@@ -190,6 +208,12 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
             weight += base_->probability_obs(obs, np_current_loc, label, last_action) * p.probability(label, np_current_loc);
         return weight;
     }
+
+    motion_model_rbpf_slam_particle_t* initial_sampling() {
+        motion_model_rbpf_slam_particle_t *p = new motion_model_rbpf_slam_particle_t;
+        p->initial_sampling_in_place();
+        return p;
+    }
 };
 
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
@@ -237,6 +261,12 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
             weight += base_->probability_tr_loc(last_action, current_loc, new_loc) * prob;
         }
         return weight;
+    }
+
+    optimal_rbpf_slam_particle_t* initial_sampling() {
+        optimal_rbpf_slam_particle_t *p = new optimal_rbpf_slam_particle_t;
+        p->initial_sampling_in_place();
+        return p;
     }
 };
 

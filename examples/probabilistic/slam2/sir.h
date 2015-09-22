@@ -54,10 +54,12 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const = 0;
 
     virtual void initialize() {
-        particles_ = std::vector<std::pair<float, PTYPE> >(nparticles_);
+        PTYPE sampler;
+        particles_.reserve(nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
-            particles_[i].first = 1.0 / float(nparticles_);
-            particles_[i].second.initial_sampling();
+            float weight = 1.0 / float(nparticles_);
+            PTYPE *p = sampler.initial_sampling();
+            particles_.push_back(std::make_pair(weight, p));
         }
     }
 
@@ -69,14 +71,13 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             PF_t<PTYPE, BASE>::stochastic_sampling(nparticles_, indices);
 
         float total_mass = 0.0;
-        std::vector<std::pair<float, PTYPE> > new_particles;
+        std::vector<std::pair<float, PTYPE*> > new_particles;
         new_particles.reserve(nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
             int index = indices[i];
-            const PTYPE &p = particles_[index].second;
-            PTYPE np;
-            sample_from_pi(np, p, last_action, obs);
-            float weight = importance_weight(np, p, last_action, obs);
+            const PTYPE &p = *particles_[index].second;
+            PTYPE *np = sample_from_pi(p, last_action, obs);
+            float weight = importance_weight(*np, p, last_action, obs);
             total_mass += weight;
             new_particles.push_back(std::make_pair(weight, np));
         }
@@ -87,6 +88,9 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             else
                 new_particles[i].first /= total_mass;
         }
+
+        for( int i = 0; i < nparticles_; ++i )
+            delete particles_[i].second;
         particles_ = new_particles;
 
         history_.push_back(std::make_pair(last_action, obs));
@@ -102,7 +106,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         // aggregate info from particles into marginals
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
-            const PTYPE &p = particles_[i].second;
+            const PTYPE &p = *particles_[i].second;
             for( int var = 0; var < base_.nvars_; ++var ) {
                 marginals_on_vars_[var].set(p.value_for(var), marginals_on_vars_[var][p.value_for(var)] + weight);
             }
@@ -111,6 +115,12 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
     virtual void get_marginal(int var, dai::Factor &marginal) const {
         marginal = marginals_on_vars_[var];
+    }
+
+    PTYPE* sample_from_pi(const PTYPE &p, int last_action, int obs) const {
+        PTYPE *np = new PTYPE(p);
+        sample_from_pi(*np, p, last_action, obs);
+        return np;
     }
 };
 

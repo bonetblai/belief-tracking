@@ -37,7 +37,7 @@
 // Generic Particle Filter
 template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
     int nparticles_;
-    std::vector<std::pair<float, PTYPE> > particles_;
+    std::vector<std::pair<float, PTYPE*> > particles_;
     std::vector<dai::Factor> marginals_on_vars_;
 
     PF_t(const std::string &name, const BASE &base, int nparticles)

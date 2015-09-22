@@ -552,10 +552,12 @@ struct cellmap_t {
         assert(initial_step.last_action_ == -1);
 
         // initialize tracking algorithms and output execution
+        std::cout << "# initializing... " << std::flush;
         output_execution.clear();
         initialize(tracking_algorithms);
         output_execution.push_back(initial_step);
         advance_step(-1, obs, tracking_algorithms);
+        std::cout << "done!" << std::endl;
 
         // run execution
         std::cout << "steps:";

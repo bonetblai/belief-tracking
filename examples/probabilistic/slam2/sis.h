@@ -48,17 +48,18 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
     virtual ~SIS_t() { }
 
     virtual void initialize() {
-        particles_ = std::vector<std::pair<float, PTYPE> >(nparticles_);
+        PTYPE sampler;
+        particles_.reserve(nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
-            particles_[i].first = 1;
-            particles_[i].second.initial_sampling();
+            PTYPE *p = sampler.initial_sampling();
+            particles_.push_back(std::make_pair(float(1), p));
         }
     }
 
     virtual void update(int last_action, int obs) {
         for( int i = 0; i < nparticles_; ++i ) {
             float &weight = particles_[i].first;
-            PTYPE &p = particles_[i].second;
+            PTYPE &p = *particles_[i].second;
             p.update(weight, last_action, obs); // changes "weight" which is passed as ref
         }
     }
@@ -77,7 +78,7 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
         // aggregate info from particles into marginals
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
-            const PTYPE &p = particles_[i].second;
+            const PTYPE &p = *particles_[i].second;
             for( int var = 0; var < base_.nvars_; ++var ) {
                 marginals_on_vars_[var].set(p.value_for(var), marginals_on_vars_[var][p.value_for(var)] + weight / total_mass);
             }
