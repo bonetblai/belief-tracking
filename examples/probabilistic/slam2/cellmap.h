@@ -485,12 +485,14 @@ struct cellmap_t {
             tracking.initialize();
         }
     }
-    void advance_step(int last_action, int obs, std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) const {
+    void advance_step(int last_action, int obs, std::vector<tracking_t<cellmap_t>*> &tracking_algorithms, bool print_marginals = false) const {
+        //std::cout << "ADVANCE STEP: last_action=" << last_action << ", obs=" << obs << std::endl;
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             tracking_t<cellmap_t> &tracking = *tracking_algorithms[i];
             tracking.update(last_action, obs);
             tracking.calculate_marginals();
             tracking.store_marginals();
+            if( print_marginals ) tracking.print_marginals(std::cout);
         }
     }
 
@@ -543,7 +545,8 @@ struct cellmap_t {
                        execution_t &output_execution,
                        int nsteps,
                        const action_selection_t<cellmap_t> *policy,
-                       std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
+                       std::vector<tracking_t<cellmap_t>*> &tracking_algorithms,
+                       bool print_marginals = false) {
         // input execution must contain at least one initial step
         assert(!input_execution.empty());
         const execution_step_t &initial_step = input_execution[0];
@@ -556,15 +559,15 @@ struct cellmap_t {
         output_execution.clear();
         initialize(tracking_algorithms);
         output_execution.push_back(initial_step);
-        advance_step(-1, obs, tracking_algorithms);
+        advance_step(-1, obs, tracking_algorithms, print_marginals);
         std::cout << "done!" << std::endl;
 
         // run execution
         std::cout << "steps:";
         for( size_t t = 1; true; ++t ) {
             std::cout << " " << t << std::flush;
-            if( (policy == 0) && (t >= input_execution.size()) ) return;
-            if( (policy != 0) && (t >= size_t(nsteps)) ) return;
+            if( (policy == 0) && (t >= input_execution.size()) ) break;
+            if( (policy != 0) && (t >= size_t(nsteps)) ) break;
 
             int last_action = -1;
             int obs = -1;
@@ -585,23 +588,25 @@ struct cellmap_t {
 
             // update tracking
             output_execution.push_back(execution_step_t(hidden_loc, obs, last_action));
-            advance_step(last_action, obs, tracking_algorithms);
+            advance_step(last_action, obs, tracking_algorithms, print_marginals);
         }
         std::cout << std::endl;
     }
     void run_execution(const execution_t &input_execution,
                        execution_t &output_execution,
-                       std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
-        run_execution(input_execution, output_execution, 0, 0, tracking_algorithms);
+                       std::vector<tracking_t<cellmap_t>*> &tracking_algorithms,
+                       bool print_marginals = false) {
+        run_execution(input_execution, output_execution, 0, 0, tracking_algorithms, print_marginals);
     }
     void run_execution(execution_t &output_execution,
                        int initial_loc,
                        int nsteps,
                        const action_selection_t<cellmap_t> &policy,
-                       std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) {
+                       std::vector<tracking_t<cellmap_t>*> &tracking_algorithms,
+                       bool print_marginals = false) {
         execution_step_t initial_step(initial_loc, -1, -1);
         execution_t empty_execution(1, initial_step);
-        run_execution(empty_execution, output_execution, nsteps, &policy, tracking_algorithms);
+        run_execution(empty_execution, output_execution, nsteps, &policy, tracking_algorithms, print_marginals);
     }
 
     // scoring of tracking algorithms

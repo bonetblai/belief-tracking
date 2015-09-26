@@ -152,6 +152,9 @@ struct rbpf_slam_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
     std::vector<dai::Factor> factors_;
 
+    rbpf_slam_particle_t() { }
+    virtual ~rbpf_slam_particle_t() { }
+
     void initial_sampling_in_place() {
         loc_history_.push_back(base_->initial_loc_);
         factors_ = std::vector<dai::Factor>(base_->nloc_, dai::Factor(dai::VarSet(dai::Var(0, base_->nlabels_)), 1.0 / float(base_->nlabels_)));

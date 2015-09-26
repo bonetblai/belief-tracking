@@ -64,9 +64,8 @@ template <typename BASE> struct tracking_t {
     }
 
     void MAP_on_var(int var, std::vector<int> &map_values, float epsilon = EPSILON) const {
+        const dai::Factor &marginal = marginals_.back()[var];
         map_values.clear();
-        dai::Factor marginal;
-        get_marginal(var, marginal);
         float max_probability = 0;
         for( size_t value = 0; value < marginal.nrStates(); ++value ) {
             if( (marginal[value] - max_probability > epsilon) || (fabs(max_probability - marginal[value]) < epsilon) ) {
@@ -75,6 +74,19 @@ template <typename BASE> struct tracking_t {
                 max_probability = marginal[value];
                 map_values.push_back(value);
             }
+        }
+    }
+
+    void print_marginals(std::ostream &os) const {
+        assert(!marginals_.empty());
+        const std::vector<dai::Factor> &last_marginals = marginals_.back();
+        assert(base_.nvars_ == int(last_marginals.size()));
+        for( int var = 0; var < base_.nvars_; ++var ) {
+            const dai::Factor &factor = last_marginals[var];
+            os << "var " << var << " [dsz=" << factor.nrStates() << "]:";
+            for( int j = 0; j < int(factor.nrStates()); ++j )
+                os << " " << factor[j];
+            os << std::endl;
         }
     }
 };

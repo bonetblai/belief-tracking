@@ -20,6 +20,7 @@
 #define SLAM2_PARTICLE_TYPES_H
 
 #include <cassert>
+#include <cstdlib>
 #include <string>
 #include <iostream>
 #include <iomanip>
@@ -27,7 +28,6 @@
 #include <string.h>
 #include <set>
 #include <vector>
-#include <stdlib.h>
 
 #include <dai/alldai.h>
 
@@ -88,7 +88,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
 #ifdef DEBUG
         for( int loc = 0; loc < nloc; ++loc )
-            ;//print_factor(std::cout, loc, factors_[loc], "factors_");
+            print_factor(std::cout, loc, factors_[loc], "factors_");
 #endif
 
         // computation of marginal
@@ -114,7 +114,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     }
 
     const rbpf_slam2_particle_t& operator=(const rbpf_slam2_particle_t &p) {
-        p.TEST(std::cout, "COPY1");
         loc_history_ = p.loc_history_;
         factors_ = p.factors_;
         need_to_recalculate_marginals_ = p.need_to_recalculate_marginals_;
@@ -123,7 +122,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             inference_algorithm_ = p.inference_algorithm_->clone();
         else
             inference_algorithm_ = 0;
-        TEST(std::cout, "COPY2");
         return *this;
     }
 
@@ -191,6 +189,13 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         }
     }
 
+    void print_factor_edbp(std::ostream &os, const dai::Factor &factor) const {
+        os << factor.nrStates() << std::endl;
+        for( int j = 0; j < int(factor.nrStates()); ++j )
+            os << " " << factor[j];
+        os << std::endl;
+    }
+
     void initial_sampling_in_place() {
         assert(base_->nlabels_ == 2);
 
@@ -203,19 +208,17 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                 factor.set(i, p);
         }
         calculate_marginals();
-        TEST(std::cout, "INITIAL");
+        //TEST(std::cout, "INITIAL");
     }
 
     void TEST(std::ostream &os, const std::string &str, bool do_endl = true) const {
-#if 0
-        //os << str << ": p=" << this << ", t=" << std::flush;
+        os << str << ": p=" << this << ", t=" << std::flush;
         assert(inference_algorithm_->fg().nrFactors() == factors_.size());
         for( int i = 0; i < int(factors_.size()); ++i ) {
-            //os << " " << i << std::flush;
+            os << " " << i << std::flush;
             assert(inference_algorithm_->fg().factor(i) == factors_[i]);
         }
-        //if( do_endl ) os << std::endl;
-#endif
+        if( do_endl ) os << std::endl;
     }
 
     int get_slabels(int loc, int value) const {
@@ -246,7 +249,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         dai::Factor &factor = factors_[current_loc];
         float total_mass = 0.0;
         for( int j = 0; j < int(factor.nrStates()); ++j ) {
-            //std::cout << "case j=" << std::setw(3) << j << std::endl;
+            //std::cout << "CASE j=" << std::setw(3) << j << std::endl;
             int slabels = get_slabels(current_loc, j);
             factor.set(j, factor[j] * base_->probability_obs_special(obs, current_loc, slabels, last_action));
             total_mass += factor[j];
@@ -261,17 +264,20 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         return current_loc;
     }
 
-    void calculate_marginals(int factor_index = -1) const {
+    void calculate_marginals(int factor_index = -1, bool print_marginals = false) const {
         if( need_to_recalculate_marginals_ ) {
-            apply_inference(factor_index);
-            extract_marginals_from_inference();
+            apply_inference_libdai(factor_index);
+            extract_marginals_from_inference_libdai(print_marginals);
+            //if( print_marginals ) apply_inference_edbp();
             need_to_recalculate_marginals_ = false;
         }
     }
 
     void update_marginal(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            dai::Factor marginal = marginals_[loc].marginal(factors_[loc].vars());
+            //dai::Factor marginal = marginals_[loc].marginal(factors_[loc].vars());
+            dai::Factor marginal = marginals_[loc].marginal(dai::VarSet(dai::Var(loc, 2))); // CHECK
+            assert(base_->nlabels_ == int(marginal.nrStates()));
             for( int label = 0; label < base_->nlabels_; ++label )
                 marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * marginal[label]);
         }
@@ -284,8 +290,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
     virtual float importance_weight(const rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
 
-
-    void apply_inference(int factor_index) const {
+    void apply_inference_libdai(int factor_index) const {
         assert(inference_algorithm_ != 0);
         if( factor_index == -1 ) {
             for( int i = 0; i < int(factors_.size()); ++i )
@@ -295,17 +300,51 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             //std::cout << "p=" << this << ": index=" << factor_index << ", ";
             inference_algorithm_->fg().setFactor(factor_index, factors_[factor_index]);
             assert(inference_algorithm_->fg().factor(factor_index) == factors_[factor_index]);
-            TEST(std::cout, "APPLY", false);
+            //TEST(std::cout, "APPLY", false);
             inference_algorithm_->init(factors_[factor_index].vars());
             //std::cout << std::endl;
         }
         inference_algorithm_->run();
     }
 
-    void extract_marginals_from_inference() const {
+    void extract_marginals_from_inference_libdai(bool print_marginals = false) const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             marginals_[loc] = inference_algorithm_->belief(factors_[loc].vars());
+            if( print_marginals )
+                print_factor(std::cout, loc, marginals_[loc], "marginals_");
         }
+    }
+
+    void apply_inference_edbp() const {
+        // create model in file dummy.uai
+        std::ofstream ofs("dummy.uai");
+        ofs << "MARKOV"
+            << std::endl
+            << base_->nloc_
+            << std::endl;
+        for( int loc = 0; loc < base_->nloc_; ++loc )
+            ofs << 2 << (loc < base_->nloc_ - 1 ? " " : "");
+        ofs << std::endl << base_->nloc_ << std::endl;
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            const dai::Factor &factor = inference_algorithm_->fg().factor(loc);
+            ofs << factor.vars().size();
+            for( dai::VarSet::const_reverse_iterator it = factor.vars().rbegin(); it != factor.vars().rend(); ++it ) {
+                ofs << " " << it->label();
+            }
+            ofs << std::endl;
+        }
+        ofs << std::endl;
+        for( int loc = 0; loc < int(factors_.size()); ++loc ) {
+            print_factor_edbp(ofs, inference_algorithm_->fg().factor(loc));
+            ofs << std::endl;
+        }
+        ofs.close();
+
+        // call edbp solver
+        //system("~/software/edbp/solver dummy.uai dummy.evid 0 MAR 2>/dev/null");
+    }
+
+    void extract_marginals_from_inference_edbp(bool print_marginals = false) const {
     }
 };
 
@@ -315,8 +354,8 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         assert(np == p);
         int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
-        np.update_factors(last_action, obs);
-        np.calculate_marginals();
+        int factor_index = np.update_factors(last_action, obs);
+        np.calculate_marginals(factor_index, false);
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
@@ -365,15 +404,15 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
 
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
         assert(np == p);
-        p.TEST(std::cout, "SAMPLE1");
-        np.TEST(std::cout, "SAMPLE2");
+        //p.TEST(std::cout, "SAMPLE1");
+        //np.TEST(std::cout, "SAMPLE2");
         std::vector<float> cdf;
         calculate_cdf(p, last_action, obs, cdf);
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf[0]);
         np.loc_history_.push_back(next_loc);
         int factor_index = np.update_factors(last_action, obs);
-        np.calculate_marginals(factor_index);
-        np.TEST(std::cout, "SAMPLE3");
+        np.calculate_marginals(factor_index, false);
+        //np.TEST(std::cout, "SAMPLE3");
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &/*np*/, const rbpf_slam2_particle_t &p, int last_action, int obs) const {

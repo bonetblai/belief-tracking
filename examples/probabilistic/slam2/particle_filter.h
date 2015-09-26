@@ -43,7 +43,7 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
     PF_t(const std::string &name, const BASE &base, int nparticles)
       : tracking_t<BASE>(name, base), nparticles_(nparticles) {
     }
-    virtual ~PF_t() { }
+    ~PF_t() { }
 
     void stochastic_sampling(int k, std::vector<int> &indices) const {
         std::vector<float> cdf(nparticles_, 0);
