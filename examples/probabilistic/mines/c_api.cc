@@ -10,8 +10,10 @@ extern "C" {
 inline float read_time_in_seconds() {
     struct rusage r_usage;
     getrusage(RUSAGE_SELF, &r_usage);
-    return (float)r_usage.ru_utime.tv_sec +
-           (float)r_usage.ru_utime.tv_usec / (float)1000000;
+    float time = (float)r_usage.ru_utime.tv_sec + (float)r_usage.ru_utime.tv_usec / (float)1000000;
+    getrusage(RUSAGE_CHILDREN, &r_usage);
+    time += (float)r_usage.ru_utime.tv_sec + (float)r_usage.ru_utime.tv_usec / (float)1000000;
+    return time;
 }
 
 using namespace std;

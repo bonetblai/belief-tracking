@@ -411,23 +411,32 @@ struct ms_pbt_t {
         string buff;
         ifs >> buff;
         assert(buff == "MAR");
-        int nlines = 0;
-        ifs >> nlines;
-        assert(nlines == 1);
 
-        int nfactors = 0;
-        ifs >> nfactors;
-        assert(nfactors == nrows_ * ncols_);
-        for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
-            int nstates = 0;
-            ifs >> nstates;
-            assert(nstates == 2); // binary variables
-            for( int j = 0; j < nstates; ++j ) {
-                float p = 0;
-                ifs >> p;
-                marginals_[loc].set(j, p);
+        bool more_results = true;
+        while( more_results ) {
+            int nlines = 0;
+            ifs >> nlines;
+            assert(nlines == 1);
+
+            int nfactors = 0;
+            ifs >> nfactors;
+            assert(nfactors == nrows_ * ncols_);
+            for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
+                int nstates = 0;
+                ifs >> nstates;
+                assert(nstates == 2); // binary variables
+                for( int j = 0; j < nstates; ++j ) {
+                    float p = 0;
+                    ifs >> p;
+                    marginals_[loc].set(j, p);
+                }
+                if( print_marginals ) print_factor(cout, loc, marginals_[loc], "edbp_marginals_");
             }
-            if( print_marginals ) print_factor(cout, loc, marginals_[loc], "edbp_marginals_");
+
+            // check if there are more results
+            string marker;
+            ifs >> marker;
+            more_results = marker == "-BEGIN-";
         }
         ifs.close();
     }
@@ -653,7 +662,7 @@ int main(int argc, const char **argv) {
     seed48(seeds);
 
     // create distributions
-    ms_pbt_t pbt(nrows, ncols, nmines, 0, false);
+    ms_pbt_t pbt(nrows, ncols, nmines, 1, false);
     //ms_pbt_t pbt(nrows, ncols, nmines, true);
 
     // run for the specified number of trials
