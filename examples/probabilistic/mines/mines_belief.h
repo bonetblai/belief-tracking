@@ -47,7 +47,6 @@ class mines_belief_t {
         flag_ = bel.flag_;
         uncovered_ = bel.uncovered_;
     }
-#if 0
     mines_belief_t(mines_belief_t &&bel)
       : nflags_(bel.nflags_), ncovered_(bel.ncovered_), belief_(bel.belief_) {
         bel.belief_ = 0;
@@ -57,7 +56,6 @@ class mines_belief_t {
         flag_ = std::move(bel.flag_);
         uncovered_ = std::move(bel.uncovered_);
     }
-#endif
     virtual ~mines_belief_t() {
         delete belief_;
     }

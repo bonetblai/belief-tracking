@@ -180,7 +180,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
         return factors_[loc][label];
     }
 
-    void update_marginal(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
+    void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
         int current_loc = loc_history_.back();
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             for( int label = 0; label < base_->nlabels_; ++label )

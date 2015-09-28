@@ -49,7 +49,7 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = particles_[i].first;
             const PTYPE &p = *particles_[i].second;
-            p.update_marginal(weight, marginals_on_vars_);
+            p.update_marginals(weight, marginals_on_vars_);
         }
     }
 
