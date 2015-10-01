@@ -54,6 +54,9 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     dai::InfAlg *inference_algorithm_;
 
+    // conversion between libdai and edbp factors
+    static std::vector<std::vector<int> > edbp_factor_indices_;
+
     rbpf_slam2_particle_t() : inference_algorithm_(0) {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
@@ -144,6 +147,31 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                (marginals_ == p.marginals_) &&
                (((inference_algorithm_ == 0) && (p.inference_algorithm_ == 0)) ||
                 ((inference_algorithm_ != 0) && (p.inference_algorithm_ != 0)));
+    }
+
+    static void compute_edbp_factor_indices() {
+        edbp_factor_indices_ = std::vector<std::vector<int> >(10);
+
+        // define indices to compute
+        std::vector<int> number_vars;
+        number_vars.push_back(2);
+        number_vars.push_back(3);
+        number_vars.push_back(4);
+        number_vars.push_back(5);
+        number_vars.push_back(6);
+        number_vars.push_back(9);
+
+        for( int i = 0; i < int(number_vars.size()); ++i ) {
+            int nvars = number_vars_[i];
+        }
+
+        // factors with 6 variables
+        for( int i = 0; i < (1 << 6); ++i ) {
+        }
+
+        // factors with 9 variables
+        for( int i = 0; i < (1 << 9); ++i ) {
+        }
     }
 
     void create_and_initialize_inference_algorithm() {

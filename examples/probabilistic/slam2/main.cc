@@ -48,6 +48,7 @@ using namespace std;
 // static members
 int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
+vector<vector<int> > rbpf_slam2_particle_t::edbp_factor_indices_;
 
 
 void usage(ostream &os) {
@@ -195,6 +196,7 @@ int main(int argc, const char **argv) {
     // set static members
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
+    rbpf_slam2_particle_t::compute_edbp_factor_indices();
 
     // tracking algorithms
     vector<tracking_t<cellmap_t>*> tracking_algorithms;
