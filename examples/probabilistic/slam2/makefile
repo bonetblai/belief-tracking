@@ -18,11 +18,11 @@ CXXEXT2=		-std=c++11 -DMACOSX -I ~/software/libdai/include -Wno-deprecated -Wall
 
 #c++ -std=c++11 -I ~/software/libdai/include -Wno-deprecated -Wall -W -Wextra -fPIC -DMACOSX -arch x86_64 -O3 -g -DDAI_DEBUG  -L ~/software/libdai/lib -o mines2 main2.cc c_api.o -ldai -lgmpxx -lgmp -arch x86_64
 
-CFLAGS=			-Wall -O3 $(CXXEXT2) $(INCLUDES) -DNDEBUG
+CFLAGS=			-Wall -O3 $(CXXEXT2) $(INCLUDES) #-DNDEBUG
 
 colorslam:		main.cc $(DEPS)
 				$(CXX) $(CFLAGS) -o colorslam main.cc -ldai -lgmpxx -lgmp
 
 clean:
-				rm -f colorslam *~
+				rm -f colorslam dummy.uai* *~
 

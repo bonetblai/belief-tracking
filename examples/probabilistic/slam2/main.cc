@@ -329,6 +329,7 @@ int main(int argc, const char **argv) {
     } else {
         cellmap.compute_random_execution(0, execution_length, fixed_execution);
     }
+    cout << "# Fixed-execution=" << fixed_execution << endl;
 
     // run for the specified number of trials
     for( int trial = 0; trial < ntrials; ++trial ) {
@@ -393,16 +394,18 @@ int main(int argc, const char **argv) {
 
 
 
-        cout << "library(ggplot2)" << endl << "library(reshape)" << endl << "library(zoo)" << endl;
-        cout << "marginals<-matrix(c(";
-        for( int loc = 0; loc < nrows * ncols; ++loc ) {
-            assert(loc < int(tracking_algorithms.back()->marginals_.back().size()));
-            cout << tracking_algorithms.back()->marginals_.back()[loc][1];
-            if( loc + 1 < nrows * ncols ) cout << ", ";
-        }
-        cout << "),ncol=" << ncols << ",byrow=T)" << endl;
-cout << 
-"quantile_range <- c(0,.48,.52,1) #quantile(marginals, probs = c(0, .48, .52, 1))\n\
+        if( !tracking_algorithms.empty() ) {
+            cout << "library(ggplot2)" << endl << "library(reshape)" << endl << "library(zoo)" << endl;
+            cout << "marginals<-matrix(c(";
+            for( int loc = 0; loc < nrows * ncols; ++loc ) {
+                assert(loc < int(tracking_algorithms.back()->marginals_.back().size()));
+                cout << tracking_algorithms.back()->marginals_.back()[loc][1];
+                if( loc + 1 < nrows * ncols ) cout << ", ";
+            }
+            cout << "),ncol=" << ncols << ",byrow=T)" << endl;
+
+            cout << 
+                "quantile_range <- c(0,.48,.52,1) #quantile(marginals, probs = c(0, .48, .52, 1))\n\
 ## use http://colorbrewer2.org/ to find optimal divergent color palette (or set own)\n\
 color_palette <- colorRampPalette(c(\"#e9a3c9\", \"#f7f7f7\", \"#a1d76a\"))(length(quantile_range) - 1)\n\
 ## prepare label text (use two adjacent values for range text)\n\
@@ -411,26 +414,28 @@ label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = funct
 mod_mat <- matrix(findInterval(marginals, quantile_range, all.inside = TRUE), nrow = nrow(marginals))\n\
 ## remove background and axis from plot\n\
 theme_change <- theme(\n\
- plot.background = element_blank(),\n\
- panel.grid.minor = element_blank(),\n\
- panel.grid.major = element_blank(),\n\
- panel.background = element_blank(),\n\
- panel.border = element_blank(),\n\
- axis.line = element_blank(),\n\
- axis.ticks = element_blank(),\n\
- axis.text.x = element_blank(),\n\
- axis.text.y = element_blank(),\n\
- axis.title.x = element_blank(),\n\
- axis.title.y = element_blank()\n\
+  plot.background = element_blank(),\n\
+  panel.grid.minor = element_blank(),\n\
+  panel.grid.major = element_blank(),\n\
+  panel.background = element_blank(),\n\
+  panel.border = element_blank(),\n\
+  axis.line = element_blank(),\n\
+  axis.ticks = element_blank(),\n\
+  axis.text.x = element_blank(),\n\
+  axis.text.y = element_blank(),\n\
+  axis.title.x = element_blank(),\n\
+  axis.title.y = element_blank()\n\
 )\n\
 ## output the graphics\n\
-ggplot(melt(mod_mat), aes(x = X2, y = X1, fill = factor(value))) + geom_tile(color = \"black\") + scale_fill_manual(values = color_palette, name = \"X\", labels = label_text)" << endl;
+ggplot(melt(mod_mat), aes(x = X2, y = X1, fill = factor(value))) + geom_tile(color = \"black\") + scale_fill_manual(values = color_palette, name = \"X\", labels = label_text)"
 //ggplot(melt(marginals), aes(x = X2, y = X1, fill = factor(value))) + geom_tile(aes(fill=value)) + theme_change" << endl;
+                 << endl;
 
-        // generate R plots
-        cout << "library(\"reshape2\");" << endl << "library(\"ggplot2\");" << endl;
-        for( size_t i = 0; i < tracking_algorithms.size(); ++i )
-            cellmap.generate_R_plot(cout, *tracking_algorithms[i]);
+            // generate R plots
+            cout << "library(\"reshape2\");" << endl << "library(\"ggplot2\");" << endl;
+            for( size_t i = 0; i < tracking_algorithms.size(); ++i )
+                cellmap.generate_R_plot(cout, *tracking_algorithms[i]);
+        }
     }
 
     return 0;

@@ -196,11 +196,18 @@ struct ms_pbt_t {
     mutable dai::Factor full_joint_;
     mutable dai::InfAlg *inference_algorithm_;
     mutable vector<dai::Factor> marginals_;
-    mutable bool need_to_recalculate_marginals_;
+    mutable vector<int> indices_for_updated_factors_;
 
     // variables for game play
     set<int> plays_;
     int nflags_;
+
+    // action selection
+    mutable int nguesses_;
+    mutable float best_prob_for_open_;
+    mutable float best_prob_for_flag_;
+    mutable vector<int> best_for_open_;
+    mutable vector<int> best_for_flag_;
 
     ms_pbt_t(int nrows, int ncols, int nmines, int inference_type = 0, bool noisy = false)
       : nrows_(nrows), ncols_(ncols), nmines_(nmines),
@@ -240,9 +247,6 @@ struct ms_pbt_t {
              << " #variables=" << variables_.size()
              << ", #factors=" << factors_.size()
              << endl;
-
-        // computation of marginal
-        need_to_recalculate_marginals_ = true;
 
         // create inference algorithm
         create_and_initialize_inference_algorithm();
@@ -323,15 +327,20 @@ struct ms_pbt_t {
 
     // reset all factors and game-play variables
     void reset() {
-        for( int i = 0; i < nrows_ * ncols_; ++i ) {
-            dai::Factor &factor = factors_[i];
+        indices_for_updated_factors_.clear();
+        indices_for_updated_factors_.reserve(nrows_ * ncols_);
+        for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
+            dai::Factor &factor = factors_[loc];
             float p = 1.0 / (1 << factor.vars().size());
             for( int j = 0; j < (1 << factor.vars().size()); ++j )
                 factor.set(j, p);
+            indices_for_updated_factors_.push_back(loc);
         }
         plays_.clear();
         nflags_ = 0;
-        need_to_recalculate_marginals_ = true;
+        nguesses_ = 0;
+        best_for_open_.clear();
+        best_for_flag_.clear();
     }
 
     // update factors for obtained obs for cell
@@ -363,7 +372,7 @@ struct ms_pbt_t {
                 }
                 if( (j & (1 << center)) != 0 ) factor.set(j, 0);
             }
-            need_to_recalculate_marginals_ = true;
+            indices_for_updated_factors_.push_back(cell);
             return cell;
         } else {
             ++nflags_;
@@ -371,16 +380,16 @@ struct ms_pbt_t {
         }
     }
 
-    void calculate_marginals(int factor_index = -1, bool print_marginals = false) const {
-        if( need_to_recalculate_marginals_ ) {
+    void calculate_marginals(bool print_marginals = false) const {
+        if( !indices_for_updated_factors_.empty() ) {
             if( inference_type_ == 0 ) {
-                apply_inference_libdai(factor_index);
+                apply_inference_libdai();
                 extract_marginals_from_inference_libdai(print_marginals);
             } else {
                 apply_inference_edbp();
                 extract_marginals_from_inference_edbp(print_marginals);
             }
-            need_to_recalculate_marginals_ = false;
+            indices_for_updated_factors_.clear();
         }
     }
 
@@ -388,20 +397,20 @@ struct ms_pbt_t {
         for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
             marginals_[loc] = inference_algorithm_->belief(variables_[loc]);
             if( print_marginals )
-                print_factor(cout, loc, marginals_[loc], "libdai_marginals_");
+                print_factor(cout, loc, marginals_[loc], "libdai::marginals_");
         }
     }
 
-    void apply_inference_libdai(int factor_index) const {
+    void apply_inference_libdai() const {
         assert(inference_algorithm_ != 0);
-        if( factor_index == -1 ) {
-            for( int i = 0; i < int(factors_.size()); ++i )
-                inference_algorithm_->fg().setFactor(i, factors_[i]);
-            inference_algorithm_->init();
-        } else {
-            inference_algorithm_->fg().setFactor(factor_index, factors_[factor_index]);
-            inference_algorithm_->init(factors_[factor_index].vars());
+        assert(!indices_for_updated_factors_.empty());
+        dai::VarSet variables;
+        for( int i = 0; i < int(indices_for_updated_factors_.size()); ++i ) {
+            int index = indices_for_updated_factors_[i];
+            inference_algorithm_->fg().setFactor(index, factors_[index]);
+            variables |= factors_[index].vars();
         }
+        inference_algorithm_->init(variables);
         inference_algorithm_->run();
     }
 
@@ -430,7 +439,7 @@ struct ms_pbt_t {
                     ifs >> p;
                     marginals_[loc].set(j, p);
                 }
-                if( print_marginals ) print_factor(cout, loc, marginals_[loc], "edbp_marginals_");
+                if( print_marginals ) print_factor(cout, loc, marginals_[loc], "edbp::marginals_");
             }
 
             // check if there are more results
@@ -485,79 +494,84 @@ struct ms_pbt_t {
         return make_pair(float(marginal[0]), float(marginal[1]));
     }
 
-#if 0
-    void full_joint_marginal(int cell, dai::Factor &marginal) const {
-        marginal = full_joint_.marginal(dai::VarSet(variables_[cell]));
-    }
-
-    // use junction tree algorithm to compute the exact marginals for each factor
-    void apply_junction_tree() const {
-        dai::PropertySet opts;
-        factor_graph_ = dai::FactorGraph(factors_);
-        //size_t maxstates = 1e8;
-        //dai::boundTreewidth(factor_graph_, &dai::eliminationCost_MinFill, maxstates);
-        jt_ = dai::JTree(factor_graph_, opts("updates", string("HUGIN")));
-        jt_.init();
-        jt_.run();
-    }
-    void apply_junction_tree(vector<float> &P) const {
-        P.clear();
-        apply_junction_tree();
-        float mass = 0;
-        for( int i = 0; i < nrows_ * ncols_; ++i ) {
-            P.push_back(jt_.belief(factor_graph_.var(i))[0]);
-            mass = P.back();
-        }
-        for( int i = 0; i < nrows_ * ncols_; ++i ) P[i] /= mass;
-    }
-    pair<float, float> jt_marginal(int cell) const {
-        return make_pair(float(jt_.belief(factor_graph_.var(cell))[0]), float(jt_.belief(factor_graph_.var(cell))[1]));
-    }
-#endif
-
     // recommend action using information in the marginals
     int agent_get_action() const {
-        assert(!need_to_recalculate_marginals_);
-        float best_prob_for_open = 0, best_prob_for_flag = 0;
-        vector<int> best_for_open, best_for_flag;
-        for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
-            if( plays_.find(loc) != plays_.end() ) continue; // cell had been already played
-            const dai::Factor &marginal = marginals_[loc];
-            assert(marginal.nrStates() == 2);
-            //pair<float, float> p((this->*marginal)(loc));    // get marginal on cell
-            if( best_for_open.empty() || (marginal[0] >= best_prob_for_open) ) {
-                if( best_for_open.empty() || (marginal[0] > best_prob_for_open) ) {
-                    best_prob_for_open = marginal[0];
-                    best_for_open.clear();
-                }
-                best_for_open.push_back(loc);
-            }
-            if( (nflags_ < nmines_) && (best_for_flag.empty() || (marginal[1] >= best_prob_for_flag)) ) {
-                if( best_for_flag.empty() || (marginal[1] > best_prob_for_flag) ) {
-                    best_prob_for_flag = marginal[1];
-                    best_for_flag.clear();
-                }
-                best_for_flag.push_back(loc);
-            }
-        }
-
-        // prioritize open over flag actions
-        if( !best_for_open.empty() && (best_prob_for_open >= best_prob_for_flag) ) {
-            int cell = best_for_open[lrand48() % best_for_open.size()];
+        if( (best_prob_for_open_ == 1) && !best_for_open_.empty() ) {
+            int index = lrand48() % best_for_open_.size();
+            int cell = best_for_open_[index];
+            best_for_open_[index] = best_for_open_.back();
+            best_for_open_.pop_back();
             return cell + (nrows_ * ncols_);
-        } else if( !best_for_flag.empty() && (best_prob_for_open < best_prob_for_flag) ) {
-            int cell = best_for_flag[lrand48() % best_for_flag.size()];
-            return cell;
-        } else if( !best_for_open.empty() ) {
-            int cell = best_for_open[lrand48() % best_for_open.size()];
-            return cell + (nrows_ * ncols_);
-        } else if( nflags_ < nmines_ ) {
-            assert(!best_for_flag.empty());
-            int cell = best_for_flag[lrand48() % best_for_flag.size()];
+        } else if( (best_prob_for_flag_ == 1) && !best_for_flag_.empty() ) {
+            int index = lrand48() % best_for_flag_.size();
+            int cell = best_for_flag_[index];
+            best_for_flag_[index] = best_for_flag_.back();
+            best_for_flag_.pop_back();
             return cell;
         } else {
-            assert(0);
-            return 0;
+            calculate_marginals(false);
+            best_for_open_.clear();
+            best_for_flag_.clear();
+            best_prob_for_open_ = 0;
+            best_prob_for_flag_ = 0;
+            for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
+                if( plays_.find(loc) != plays_.end() ) continue; // cell had been already played
+                const dai::Factor &marginal = marginals_[loc];
+                assert(marginal.nrStates() == 2);
+                if( best_for_open_.empty() || (marginal[0] >= best_prob_for_open_) ) {
+                    if( best_for_open_.empty() || (marginal[0] > best_prob_for_open_) ) {
+                        best_prob_for_open_ = marginal[0];
+                        best_for_open_.clear();
+                    }
+                    best_for_open_.push_back(loc);
+                }
+                if( (nflags_ < nmines_) && (best_for_flag_.empty() || (marginal[1] >= best_prob_for_flag_)) ) {
+                    if( best_for_flag_.empty() || (marginal[1] > best_prob_for_flag_) ) {
+                        best_prob_for_flag_ = marginal[1];
+                        best_for_flag_.clear();
+                    }
+                    best_for_flag_.push_back(loc);
+                }
+            }
+
+            cout << "best for open: p=" << best_prob_for_open_ << ", sz=" << best_for_open_.size() << ", loc=";
+            for( int i = 0; i < int(best_for_open_.size()); ++i )
+                cout << best_for_open_[i] << ",";
+            cout << endl << "best for flag: p=" << best_prob_for_flag_ << ", sz=" << best_for_flag_.size() << ", loc=";
+            for( int i = 0; i < int(best_for_flag_.size()); ++i )
+                cout << best_for_flag_[i] << ",";
+            cout << endl;
+
+            // prioritize open over flag actions
+            if( !best_for_open_.empty() && (best_prob_for_open_ >= best_prob_for_flag_) ) {
+                nguesses_ += best_prob_for_open_ < 1;
+                int index = lrand48() % best_for_open_.size();
+                int cell = best_for_open_[index];
+                best_for_open_[index] = best_for_open_.back();
+                best_for_open_.pop_back();
+                return cell + (nrows_ * ncols_);
+            } else if( !best_for_flag_.empty() && (best_prob_for_open_ < best_prob_for_flag_) ) {
+                nguesses_ += best_prob_for_flag_ < 1;
+                int index = lrand48() % best_for_flag_.size();
+                int cell = best_for_flag_[index];
+                best_for_flag_[index] = best_for_flag_.back();
+                best_for_flag_.pop_back();
+                return cell;
+            } else if( !best_for_open_.empty() ) {
+                assert(0);
+                int cell = best_for_open_[lrand48() % best_for_open_.size()];
+                best_for_open_.clear();
+                return cell + (nrows_ * ncols_);
+            } else if( nflags_ < nmines_ ) {
+                assert(0);
+                assert(!best_for_flag_.empty());
+                int cell = best_for_flag_[lrand48() % best_for_flag_.size()];
+                best_for_flag_.clear();
+                return cell;
+            } else {
+                assert(0);
+                return 0;
+            }
         }
     }
 
@@ -566,21 +580,6 @@ struct ms_pbt_t {
     }
     int agent_get_cell(int action) {
         return is_flag_action(action) ? action : action - (nrows_ * ncols_);
-    }
-
-    void print_marginals(ostream &os, pair<float, float> (ms_pbt_t::*marginal)(int) const, int prec = 2) {
-        int old_prec = os.precision();
-        os << setprecision(prec);
-        for( int row = 0; row < nrows_; ++row ) {
-            os << "|";
-            for( int col = 0; col < ncols_; ++col ) {
-                int cell = row * ncols_ + col;
-                pair<float, float> p = (this->*marginal)(cell);
-                os << " " << setw(4) << 1 - p.first << (plays_.find(cell) != plays_.end() ? "*" : " ") << "|";
-            }
-            os << endl;
-        }
-        os << setprecision(old_prec);
     }
 };
 
@@ -672,13 +671,11 @@ int main(int argc, const char **argv) {
 
         // inference and print marginals
         pbt.reset();
-        pbt.calculate_marginals(-1, false);
 
         bool win = true;
         vector<pair<int,int> > execution(nrows * ncols);
         for( int play = 0; play < nrows * ncols; ++play ) {
             int action = pbt.agent_get_action();
-
             bool is_flag_action = pbt.is_flag_action(action);
             int cell = pbt.agent_get_cell(action);
             cout << "Play: n=" << play
@@ -704,7 +701,7 @@ int main(int argc, const char **argv) {
             assert((obs == 0) || (play > 0));
             if( play > 0 ) cout << ", obs=" << obs << endl;
             if( obs == 9 ) {
-                cout << "BOOM" << endl;
+                cout << "**** BOOM!!! ****" << endl;
                 win = false;
                 break;
             }
@@ -714,14 +711,15 @@ int main(int argc, const char **argv) {
 
             // update agent's belief
             agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
-            int factor_index = pbt.update_factors(pbt.is_flag_action(action), agent_get_cell(action), obs);
-            pbt.calculate_marginals(factor_index, false);
+            pbt.update_factors(pbt.is_flag_action(action), agent_get_cell(action), obs);
         }
-        if( win ) {
+
+        agent_increase_nguesses(pbt.nguesses_);
+        if( win )
             agent_declare_win(true);
-        } else {
+        else
             agent_declare_lose(true);
-        }
+
         ++trial;
     }
     agent_finalize();

@@ -512,11 +512,20 @@ struct cellmap_t {
         int last_action_;
         execution_step_t(int loc = 0, int obs = 0, int last_action = 0)
           : loc_(loc), obs_(obs), last_action_(last_action) { }
+        void print(std::ostream &os) const {
+            os << "(" << loc_ << "," << obs_ << "," << last_action_ << ")";
+        }
     };
     struct execution_t : public std::vector<execution_step_t> {
         execution_t() { }
         execution_t(int n, const execution_step_t &step)
           : std::vector<execution_step_t>(n, step) { }
+        void print(std::ostream &os) const {
+            for( int i = 0; i < int(size()); ++i ) {
+                (*this)[i].print(os);
+                if( i < int(size()) - 1 ) os << ",";
+            }
+        }
     };
 
     int random_action() const {
@@ -685,6 +694,11 @@ struct cellmap_t {
            << std::endl;
     }
 };
+
+inline std::ostream& operator<<(std::ostream &os, const cellmap_t::execution_t &execution) {
+    execution.print(os);
+    return os;
+}
 
 #undef DEBUG
 

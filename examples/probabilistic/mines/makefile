@@ -20,5 +20,5 @@ c_api.o:		c_api.cc c_api.h mines_agent.h mines_belief.h mines_grid_belief.h
 				$(CXX) $(CFLAGS) -c c_api.cc
 
 clean:
-				rm -f prob_mines c_api.o *~
+				rm -f prob_mines c_api.o dummy.uai* *~
 
