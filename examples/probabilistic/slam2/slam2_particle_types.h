@@ -162,16 +162,32 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         number_vars.push_back(9);
 
         for( int i = 0; i < int(number_vars.size()); ++i ) {
-            int nvars = number_vars_[i];
-        }
+            int nvars = number_vars[i];
+            edbp_factor_indices_[nvars] = std::vector<int>(1 << nvars);
 
-        // factors with 6 variables
-        for( int i = 0; i < (1 << 6); ++i ) {
-        }
+            std::vector<dai::Var> variables(nvars);
+            std::vector<dai::Var> r_variables(nvars);
+            for( int j = 0; j < nvars; ++j ) {
+                variables[j] = dai::Var(j, 2);
+                r_variables[j] = dai::Var(nvars - j - 1, 2);
+            }
+            dai::VarSet vars(variables.begin(), variables.end());
+            dai::VarSet r_vars(variables.rbegin(), variables.rend());
 
-        // factors with 9 variables
-        for( int i = 0; i < (1 << 9); ++i ) {
+            dai::IndexFor j(vars, r_vars);
+            size_t iter = 0;
+            for( ; j.valid(); ++j, ++iter ) {
+                std::cout << "State of r_vars(index=" << iter << "): " //<< dai::calcState(r_vars, iter)
+                          << "; state of vars(index=" << size_t(j) << "): " //<< dai::calcState(vars, size_t(index))
+                          << std::endl;
+                edbp_factor_indices_[nvars][iter] = size_t(j);
+            }
         }
+    }
+    static int edbp_factor_index(int nvars, int index) {
+        assert(nvars < int(edbp_factor_indices_.size()));
+        assert(index < int(edbp_factor_indices_[nvars].size()));
+        return edbp_factor_indices_[nvars][index];
     }
 
     void create_and_initialize_inference_algorithm() {
@@ -419,6 +435,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             assert(nfactors == base_->nloc_);
             std::cout << "**** nfactors=" << nfactors << std::endl;
             for( int loc = 0; loc < base_->nloc_; ++loc ) {
+                int nvars = factors_[loc].vars().size();
                 dai::Factor marginal(factors_[loc].vars());
                 int nstates = 0;
                 ifs >> nstates;
@@ -428,7 +445,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                     float p = 0;
                     ifs >> p;
                     //CHECK marginals_[loc].set(j, p);
-                    marginal.set(j, p);
+                    marginal.set(edbp_factor_index(nvars, j), p);
                 }
                 if( true || print_marginals ) {
                     print_factor(std::cout, loc, factors_[loc], "factors_"); // CHECK
