@@ -42,8 +42,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
 
     // inference type and tmp filenames
-    int inference_type_;
-    std::string edbp_tmp_fn_;
+    std::string edbp_factors_fn_;
     std::string edbp_evid_fn_;
 
     // variables and factors
@@ -56,6 +55,9 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     // conversion between libdai and edbp factors
     static std::vector<std::vector<int> > edbp_factor_indices_;
+    static dai::PropertySet libdai_options_;
+    static std::string algorithm_;
+    static std::string options_;
 
     rbpf_slam2_particle_t() : inference_algorithm_(0) {
         assert(base_ != 0);
@@ -112,8 +114,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     rbpf_slam2_particle_t(rbpf_slam2_particle_t &&p)
       : loc_history_(p.loc_history_),
-        inference_type_(p.inference_type_),
-        edbp_tmp_fn_(p.edbp_tmp_fn_),
+        edbp_factors_fn_(p.edbp_factors_fn_),
         edbp_evid_fn_(p.edbp_evid_fn_),
         factors_(p.factors_),
         indices_for_updated_factors_(p.indices_for_updated_factors_),
@@ -124,8 +125,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     const rbpf_slam2_particle_t& operator=(const rbpf_slam2_particle_t &p) {
         loc_history_ = p.loc_history_;
-        inference_type_ = p.inference_type_;
-        edbp_tmp_fn_ = p.edbp_tmp_fn_;
+        edbp_factors_fn_ = p.edbp_factors_fn_;
         edbp_evid_fn_ = p.edbp_evid_fn_;
         factors_ = p.factors_;
         indices_for_updated_factors_ = p.indices_for_updated_factors_;
@@ -139,8 +139,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     bool operator==(const rbpf_slam2_particle_t &p) const {
         return (loc_history_ == p.loc_history_) && (factors_ == p.factors_) &&
-               (inference_type_ == p.inference_type_) &&
-               (edbp_tmp_fn_ == p.edbp_tmp_fn_) &&
+               (edbp_factors_fn_ == p.edbp_factors_fn_) &&
                (edbp_evid_fn_ == p.edbp_evid_fn_) &&
                (factors_ == p.factors_) &&
                (indices_for_updated_factors_ == p.indices_for_updated_factors_) &&
@@ -195,11 +194,95 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         return edbp_factor_indices_[nvars][index];
     }
 
-    void create_and_initialize_inference_algorithm() {
-        inference_type_ = 0;
-        dai::FactorGraph factor_graph(factors_);
+    static void set_inference_algorithm(const std::string &inference_algorithm) {
+        std::cout << "setting inference algorithm to '" << inference_algorithm << "'" << std::endl;
+        parse_inference_algorithm(inference_algorithm);
+    }
+    static void parse_inference_algorithm(const std::string &inference_algorithm) {
+        size_t first_par = inference_algorithm.find_first_of('(');
+        size_t last_par = inference_algorithm.find_first_of(')');
+        assert(first_par != std::string::npos);
+        assert(last_par != std::string::npos);
+        assert(last_par == inference_algorithm.size() - 1);
 
-        if( inference_type_ == 0 ) {
+        algorithm_ = std::string(inference_algorithm, 0, first_par);
+        //std::cout << "Algorithm=|" << algorithm_ << "|" << std::endl;
+        std::string options(inference_algorithm, first_par + 1, last_par - first_par - 1);
+        //std::cout << "Options=|" << options << "|" << std::endl;
+
+        // parameter types
+        std::map<std::string, std::string> parameter_type;
+        parameter_type["bbp_props"] = "string";
+        parameter_type["bbp_cfn"] = "string";
+        parameter_type["cavity"] = "string";
+        parameter_type["choose"] = "string";
+        parameter_type["clamp"] = "string";
+        parameter_type["clusters"] = "string";
+        parameter_type["damping"] = "double";
+        parameter_type["doubleloop"] = "boolean";
+        parameter_type["init"] = "string";
+        parameter_type["inits"] = "string";
+        parameter_type["logdomain"] = "boolean";
+        parameter_type["maxiter"] = "size_t";
+        parameter_type["maxtime"] = "double";
+        parameter_type["min_max_adj"] = "double";
+        parameter_type["rec_tol"] = "double";
+        parameter_type["recursion"] = "string";
+        parameter_type["tol"] = "double";
+        parameter_type["updates"] = "string";
+        parameter_type["verbose"] = "size_t";
+
+        // set parameters
+        std::vector<std::string> tokens = dai::tokenizeString(options, false, ", ");
+        for( int i = 0; i < int(tokens.size()); ++i ) {
+            size_t equal_pos = tokens[i].find_first_of('=');
+            assert(equal_pos != std::string::npos);
+            std::string parameter(tokens[i], 0, equal_pos);
+            std::string value(tokens[i], equal_pos + 1);
+            //std::cout << parameter << "=" << value << std::endl;
+
+            // string paramenters
+            if( parameter_type.find(parameter) == parameter_type.end() ) {
+                std::cout << "warning: parameter '" << parameter << "' not recognized" << std::endl;
+            } else {
+                const std::string &type = parameter_type[parameter];
+                if( type == "string" )
+                    libdai_options_ = libdai_options_(parameter, value);
+                else if( type == "double" )
+                    libdai_options_ = libdai_options_(parameter, atof(value.c_str()));
+                else if( type == "boolean" )
+                    libdai_options_ = libdai_options_(parameter, value == "true");
+                else if( type == "size_t" )
+                    libdai_options_ = libdai_options_(parameter, size_t(atol(value.c_str())));
+                else
+                    std::cout << "warning: type '" << type << "' not supported" << std::endl;
+            }
+        }
+    }
+
+    void create_and_initialize_inference_algorithm() {
+        dai::FactorGraph factor_graph(factors_);
+        if( algorithm_ == "edbp" ) {
+            int pid = getpid();
+            edbp_factors_fn_ = std::string("dummy") + std::to_string(pid);
+            edbp_evid_fn_ = std::string("dummy.evid");
+        } else {
+            if( algorithm_ == "jt" ) {
+                inference_algorithm_ = new dai::JTree(factor_graph, libdai_options_);
+            } else if( algorithm_ == "bp" ) {
+                inference_algorithm_ = new dai::BP(factor_graph, libdai_options_);
+            } else if( algorithm_ == "cbp" ) {
+                inference_algorithm_ = new dai::CBP(factor_graph, libdai_options_);
+            } else if( algorithm_ == "lc" ) {
+                inference_algorithm_ = new dai::LC(factor_graph, libdai_options_);
+            } else if( algorithm_ == "mr" ) {
+                inference_algorithm_ = new dai::MR(factor_graph, libdai_options_);
+            } else if( algorithm_ == "hak" ) {
+                inference_algorithm_ = new dai::HAK(factor_graph, libdai_options_);
+            }
+            std::cout << "Properties: " << inference_algorithm_->printProperties() << std::endl;
+            inference_algorithm_->init();
+            
 #if 0
             // compute junction tree using min-fill heuristic
             size_t maxstates = 1e6;
@@ -209,7 +292,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                 if( e.getCode() == dai::Exception::OUT_OF_MEMORY )
                     std::cout << "error: cannot compute junction tree (need more than " << maxstates << " states)" << std::endl;
             }
-#endif
 
             // junction tree
             dai::PropertySet opts;
@@ -233,9 +315,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
             std::cout << "Properties: " << inference_algorithm_->printProperties() << std::endl;
             inference_algorithm_->init();
-        } else if( inference_type_ == 1 ) {
-            edbp_tmp_fn_ = std::string("dummy.uai");
-            edbp_evid_fn_ = std::string("dummy.evid");
+#endif
         }
     }
 
@@ -339,14 +419,14 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     void calculate_marginals(bool print_marginals = false) const {
         if( !indices_for_updated_factors_.empty() ) {
-            if( inference_type_ == 0 ) {
-                apply_inference_libdai();
-                extract_marginals_from_inference_libdai(print_marginals);
-            } else {
+            if( algorithm_ == "edbp" ) {
                 //apply_inference_libdai(); // CHECK
                 //extract_marginals_from_inference_libdai(print_marginals); // CHECK
                 apply_inference_edbp();
                 extract_marginals_from_inference_edbp(print_marginals);
+            } else {
+                apply_inference_libdai();
+                extract_marginals_from_inference_libdai(print_marginals);
             }
             indices_for_updated_factors_.clear();
         }
@@ -392,7 +472,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     void apply_inference_edbp() const {
         // create model in file dummy.uai
-        std::ofstream ofs(edbp_tmp_fn_);
+        std::ofstream ofs(edbp_factors_fn_ + ".factors");
         ofs << "MARKOV"
             << std::endl
             << base_->nloc_
@@ -416,19 +496,19 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         ofs.close();
 
         // call edbp solver
-        std::string edbp_cmd = std::string("~/software/edbp/solver") + " " + edbp_tmp_fn_ + " " + edbp_evid_fn_ + " 0 BEL 2>/dev/null";
+        std::string edbp_cmd = std::string("~/software/edbp/solver") + " " + edbp_factors_fn_ + ".factors " + edbp_evid_fn_ + " 0 BEL 2>/dev/null";
         system(edbp_cmd.c_str());
     }
 
     void extract_marginals_from_inference_edbp(bool print_marginals = false) const {
 #if 0
         std::cout << "----------FILE-----------" << std::endl;
-        std::string cmd = std::string("cat ") + edbp_tmp_fn_ + ".BEL";
+        std::string cmd = std::string("cat ") + edbp_factors_fn_ + ".factors.BEL";
         system(cmd.c_str());
 #endif
         //std::vector<dai::Factor> edbp_marginals = marginals_;
 
-        std::ifstream ifs(edbp_tmp_fn_ + ".BEL");
+        std::ifstream ifs(edbp_factors_fn_ + ".factors.BEL");
 
         std::string buff;
         ifs >> buff;

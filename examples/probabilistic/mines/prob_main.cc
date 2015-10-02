@@ -184,7 +184,7 @@ struct ms_pbt_t {
 
     // inference type and tmp filenames
     int inference_type_;
-    string edbp_tmp_fn_;
+    string edbp_factors_fn_;
     string edbp_evid_fn_;
 
     // variables, factors, and centers for each beam.
@@ -253,7 +253,8 @@ struct ms_pbt_t {
 
         // create tmp file for edbp inference
         if( inference_type_ == 1 ) {
-            edbp_tmp_fn_ = "dummy.uai";
+            int pid = getpid();
+            edbp_factors_fn_ = "dummy" + std::to_string(pid);
             edbp_evid_fn_ = "dummy.evid";
         }
     }
@@ -415,7 +416,7 @@ struct ms_pbt_t {
     }
 
     void extract_marginals_from_inference_edbp(bool print_marginals = false) const {
-        ifstream ifs(edbp_tmp_fn_ + ".MAR");
+        ifstream ifs(edbp_factors_fn_ + ".factors.MAR");
 
         string buff;
         ifs >> buff;
@@ -452,7 +453,7 @@ struct ms_pbt_t {
 
     void apply_inference_edbp() const {
         // create model in given file
-        ofstream ofs(edbp_tmp_fn_);
+        ofstream ofs(edbp_factors_fn_ + ".factors");
         ofs << "MARKOV"
             << endl
             << nrows_ * ncols_
@@ -476,7 +477,7 @@ struct ms_pbt_t {
         ofs.close();
 
         // call edbp solver
-        string edbp_cmd = string("~/software/edbp/solver") + " " + edbp_tmp_fn_ + " " + edbp_evid_fn_ + " 0 MAR 2>/dev/null";
+        string edbp_cmd = string("~/software/edbp/solver") + " " + edbp_factors_fn_ + ".factors " + edbp_evid_fn_ + " 0 MAR 2>/dev/null";
         system(edbp_cmd.c_str());
     }
 

@@ -24,5 +24,5 @@ colorslam:		main.cc $(DEPS)
 				$(CXX) $(CFLAGS) -o colorslam main.cc -ldai -lgmpxx -lgmp
 
 clean:
-				rm -f colorslam dummy.uai* *~
+				rm -f colorslam dummy*factors dummy*factors.BEL *~
 
