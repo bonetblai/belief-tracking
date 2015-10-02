@@ -165,22 +165,27 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             int nvars = number_vars[i];
             edbp_factor_indices_[nvars] = std::vector<int>(1 << nvars);
 
-            std::vector<dai::Var> variables(nvars);
-            std::vector<dai::Var> r_variables(nvars);
+            dai::VarSet vars, r_vars;
             for( int j = 0; j < nvars; ++j ) {
-                variables[j] = dai::Var(j, 2);
-                r_variables[j] = dai::Var(nvars - j - 1, 2);
+                vars |= dai::Var(j, 2);
+                r_vars |= dai::Var(nvars - j - 1, 2);
             }
-            dai::VarSet vars(variables.begin(), variables.end());
-            dai::VarSet r_vars(variables.rbegin(), variables.rend());
+            //std::cout << "vars=" << vars << ", r_vars=" << r_vars << std::endl;
 
-            dai::IndexFor j(vars, r_vars);
-            size_t iter = 0;
-            for( ; j.valid(); ++j, ++iter ) {
-                std::cout << "State of r_vars(index=" << iter << "): " //<< dai::calcState(r_vars, iter)
-                          << "; state of vars(index=" << size_t(j) << "): " //<< dai::calcState(vars, size_t(index))
+            for( int j = 0; j < (1 << nvars); ++j ) {
+                std::map<dai::Var, size_t> state = dai::calcState(vars, j);
+                std::map<dai::Var, size_t> r_state;
+                for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it ) {
+                    int label = nvars - 1 - it->first.label();
+                    r_state[dai::Var(label, 2)] = it->second;
+                }
+                int r_index = dai::calcLinearState(r_vars, r_state);
+                edbp_factor_indices_[nvars][r_index] = j;
+#if 0
+                std::cout << "State of vars(index=" << j << "): " //<< state
+                          << "; state of r_vars(index=" << r_index << "): " //<< dai::calcState(r_vars, r_index)
                           << std::endl;
-                edbp_factor_indices_[nvars][iter] = size_t(j);
+#endif
             }
         }
     }
@@ -191,10 +196,10 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     }
 
     void create_and_initialize_inference_algorithm() {
-        inference_type_ = 1;
+        inference_type_ = 0;
         dai::FactorGraph factor_graph(factors_);
 
-        if( true || inference_type_ == 0 ) { // CHECK
+        if( inference_type_ == 0 ) {
 #if 0
             // compute junction tree using min-fill heuristic
             size_t maxstates = 1e6;
@@ -208,11 +213,11 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
             // junction tree
             dai::PropertySet opts;
-            opts = dai::PropertySet()("updates", std::string("HUGIN"))("verbose", (size_t)0);
-            inference_algorithm_ = new dai::JTree(factor_graph, opts);
+            //opts = dai::PropertySet()("updates", std::string("HUGIN"))("verbose", (size_t)0);
+            //inference_algorithm_ = new dai::JTree(factor_graph, opts);
 
-            //opts = dai::PropertySet()("updates", std::string("SEQRND"))("logdomain", false)("tol", 1e-3)("maxiter", (size_t)20)("maxtime", double(1))("damping", double(.2))("verbose", (size_t)0);
-            //inference_algorithm_ = new dai::BP(factor_graph, opts);
+            opts = dai::PropertySet()("updates", std::string("SEQRND"))("logdomain", false)("tol", 1e-3)("maxiter", (size_t)20)("maxtime", double(1))("damping", double(.2))("verbose", (size_t)0);
+            inference_algorithm_ = new dai::BP(factor_graph, opts);
 
             //opts = dai::PropertySet()("updates", std::string("SEQRND"))("clamp", std::string("CLAMP_VAR"))("choose", std::string("CHOOSE_RANDOM"))("min_max_adj", double(10))("bbp_props", std::string(""))("bbp_cfn", std::string(""))("recursion", std::string("REC_FIXED"))("tol", 1e-3)("rec_tol", 1e-3)("maxiter", (size_t)100)("verbose", (size_t)0);
             //inference_algorithm_ = new dai::CBP(factor_graph, opts);
@@ -228,7 +233,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
             std::cout << "Properties: " << inference_algorithm_->printProperties() << std::endl;
             inference_algorithm_->init();
-        } /*else*/ if( inference_type_ == 1 ) { // CHECK removed else
+        } else if( inference_type_ == 1 ) {
             edbp_tmp_fn_ = std::string("dummy.uai");
             edbp_evid_fn_ = std::string("dummy.evid");
         }
@@ -249,7 +254,10 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             std::map<dai::Var, size_t> states = dai::calcState(factor.vars(), j);
             for( dai::VarSet::const_iterator it = factor.vars().begin(); it != factor.vars().end(); ++it )
                 os << " " << std::setw(2) << *it << "=" << states[*it];
-            os << ":  j=" << std::setw(3) << j << ",  nbits=" << base_->num_bits(j) << ",  value=" << factor[j] << std::endl;
+            os << ":  j=" << std::setw(3) << j
+               << ",  nbits=" << base_->num_bits(j)
+               << ",  value=" << factor[j]
+               << std::endl;
         }
     }
 
@@ -335,8 +343,8 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                 apply_inference_libdai();
                 extract_marginals_from_inference_libdai(print_marginals);
             } else {
-                apply_inference_libdai(); // CHECK
-                extract_marginals_from_inference_libdai(print_marginals); // CHECK
+                //apply_inference_libdai(); // CHECK
+                //extract_marginals_from_inference_libdai(print_marginals); // CHECK
                 apply_inference_edbp();
                 extract_marginals_from_inference_edbp(print_marginals);
             }
@@ -368,7 +376,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             int loc = indices_for_updated_factors_[i];
             inference_algorithm_->fg().setFactor(loc, factors_[loc]);
             variables |= factors_[loc].vars();
-            std::cout << "libdai: updated factor for loc=" << loc << std::endl;
+            //std::cout << "libdai: updated factor for loc=" << loc << std::endl;
         }
         inference_algorithm_->init(variables);
         inference_algorithm_->run();
@@ -408,50 +416,47 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         ofs.close();
 
         // call edbp solver
-        std::string edbp_cmd = std::string("~/software/edbp/solver") + " " + edbp_tmp_fn_ + " " + edbp_evid_fn_ + " 0 BEL"; // 2>/dev/null";
+        std::string edbp_cmd = std::string("~/software/edbp/solver") + " " + edbp_tmp_fn_ + " " + edbp_evid_fn_ + " 0 BEL 2>/dev/null";
         system(edbp_cmd.c_str());
     }
 
     void extract_marginals_from_inference_edbp(bool print_marginals = false) const {
+#if 0
         std::cout << "----------FILE-----------" << std::endl;
         std::string cmd = std::string("cat ") + edbp_tmp_fn_ + ".BEL";
         system(cmd.c_str());
+#endif
+        //std::vector<dai::Factor> edbp_marginals = marginals_;
+
         std::ifstream ifs(edbp_tmp_fn_ + ".BEL");
 
         std::string buff;
         ifs >> buff;
         assert(buff == "BEL");
 
-        std::cout << "----------BEGIN----------" << std::endl;
+        //std::cout << "----------BEGIN----------" << std::endl;
         bool more_results = true;
         while( more_results ) {
             int nlines = 0;
             ifs >> nlines;
             assert(nlines == 1);
-            std::cout << "**** nlines=" << nlines << std::endl;
+            //std::cout << "**** nlines=" << nlines << std::endl;
 
             int nfactors = 0;
             ifs >> nfactors;
             assert(nfactors == base_->nloc_);
-            std::cout << "**** nfactors=" << nfactors << std::endl;
+            //std::cout << "**** nfactors=" << nfactors << std::endl;
             for( int loc = 0; loc < base_->nloc_; ++loc ) {
                 int nvars = factors_[loc].vars().size();
-                dai::Factor marginal(factors_[loc].vars());
                 int nstates = 0;
                 ifs >> nstates;
-                std::cout << "**** loc=" << loc << ", nstates=" << nstates << std::endl;
-                assert(1);
+                //std::cout << "**** loc=" << loc << ", nstates=" << nstates << std::endl;
+                assert(nstates == (1 << nvars));
                 for( int j = 0; j < nstates; ++j ) {
                     float p = 0;
                     ifs >> p;
-                    //CHECK marginals_[loc].set(j, p);
-                    marginal.set(edbp_factor_index(nvars, j), p);
-                }
-                if( true || print_marginals ) {
-                    print_factor(std::cout, loc, factors_[loc], "factors_"); // CHECK
-                    print_factor(std::cout, loc, marginals_[loc], "libdai::marginals_"); // CHECK
-                    print_factor(std::cout, loc, marginal, "edbp::marginals_");
-                    assert(marginal == marginals_[loc]); // CHECK
+                    marginals_[loc].set(edbp_factor_index(nvars, j), p);
+                    //edbp_marginals[loc].set(edbp_factor_index(nvars, j), p);
                 }
             }
 
@@ -459,10 +464,23 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             std::string marker;
             ifs >> marker;
             more_results = marker == "-BEGIN-";
-            std::cout << "**** marker=" << marker << ", more-results=" << more_results << std::endl;
+            //std::cout << "**** marker=" << marker << ", more-results=" << more_results << std::endl;
         }
-        std::cout << "-----------END-----------" << std::endl;
+        //std::cout << "-----------END-----------" << std::endl;
         ifs.close();
+
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            if( print_marginals ) {
+                //print_factor(std::cout, loc, factors_[loc], "factors_"); // CHECK
+                //print_factor(std::cout, loc, marginals_[loc], "libdai::marginals_"); // CHECK
+                print_factor(std::cout, loc, marginals_[loc], "edbp::marginals_");
+#if 0
+                dai::Factor diff = edbp_marginals[loc] - marginals_[loc];
+                std::cout << "diff=" << diff.maxAbs() << std::endl;
+                assert(diff.maxAbs() < 1e-5); // CHECK
+#endif
+            }
+        }
     }
 };
 
@@ -522,15 +540,12 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
 
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
         assert(np == p);
-        //p.TEST(std::cout, "SAMPLE1");
-        //np.TEST(std::cout, "SAMPLE2");
         std::vector<float> cdf;
         calculate_cdf(p, last_action, obs, cdf);
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf[0]);
         np.loc_history_.push_back(next_loc);
         np.update_factors(last_action, obs);
         np.calculate_marginals(false);
-        //np.TEST(std::cout, "SAMPLE3");
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &/*np*/, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
