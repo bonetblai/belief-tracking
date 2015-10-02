@@ -41,23 +41,26 @@
 struct rbpf_slam2_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
 
-    // inference type and tmp filenames
-    std::string edbp_factors_fn_;
-    std::string edbp_evid_fn_;
-
     // variables and factors
     std::vector<dai::Factor> factors_;
 
-    // computation of marginal in factor model
+    // computation of marginals in factor model
     mutable std::vector<int> indices_for_updated_factors_;
     mutable std::vector<dai::Factor> marginals_;
     dai::InfAlg *inference_algorithm_;
 
     // conversion between libdai and edbp factors
     static std::vector<std::vector<int> > edbp_factor_indices_;
-    static dai::PropertySet libdai_options_;
+
+    // inference algorithm and parameters
     static std::string algorithm_;
     static std::string options_;
+
+    // data for inference algorithms
+    static dai::PropertySet libdai_options_;
+    static std::string edbp_factors_fn_;
+    static std::string edbp_evid_fn_;
+    static std::string edbp_output_fn_;
 
     rbpf_slam2_particle_t() : inference_algorithm_(0) {
         assert(base_ != 0);
@@ -114,8 +117,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     rbpf_slam2_particle_t(rbpf_slam2_particle_t &&p)
       : loc_history_(p.loc_history_),
-        edbp_factors_fn_(p.edbp_factors_fn_),
-        edbp_evid_fn_(p.edbp_evid_fn_),
         factors_(p.factors_),
         indices_for_updated_factors_(p.indices_for_updated_factors_),
         marginals_(p.marginals_) {
@@ -125,8 +126,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     const rbpf_slam2_particle_t& operator=(const rbpf_slam2_particle_t &p) {
         loc_history_ = p.loc_history_;
-        edbp_factors_fn_ = p.edbp_factors_fn_;
-        edbp_evid_fn_ = p.edbp_evid_fn_;
         factors_ = p.factors_;
         indices_for_updated_factors_ = p.indices_for_updated_factors_;
         marginals_ = p.marginals_;
@@ -139,8 +138,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     bool operator==(const rbpf_slam2_particle_t &p) const {
         return (loc_history_ == p.loc_history_) && (factors_ == p.factors_) &&
-               (edbp_factors_fn_ == p.edbp_factors_fn_) &&
-               (edbp_evid_fn_ == p.edbp_evid_fn_) &&
                (factors_ == p.factors_) &&
                (indices_for_updated_factors_ == p.indices_for_updated_factors_) &&
                (marginals_ == p.marginals_) &&
@@ -194,10 +191,31 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         return edbp_factor_indices_[nvars][index];
     }
 
-    static void set_inference_algorithm(const std::string &inference_algorithm) {
+    static void set_inference_algorithm(const std::string &inference_algorithm, const std::string &tmp_path = "") {
         std::cout << "setting inference algorithm to '" << inference_algorithm << "'" << std::endl;
         parse_inference_algorithm(inference_algorithm);
+
+        // if edbp algorithm, create evidence file and set filenames
+        if( algorithm_ == "edbp" ) {
+            int pid = getpid();
+            assert(tmp_path.empty() || (tmp_path.back() == '/'));
+            edbp_factors_fn_ = tmp_path + "dummy" + std::to_string(pid) + ".factors";
+            edbp_evid_fn_ = tmp_path + "dummy" + std::to_string(pid) + ".evid";
+            edbp_output_fn_ = "/dev/null";
+            system((std::string("echo 0 > ") + edbp_evid_fn_).c_str());
+        }
     }
+
+    static void clean_inference_algorithm() {
+        if( algorithm_ == "edbp" ) {
+            unlink(edbp_factors_fn_.c_str());
+            unlink((edbp_factors_fn_ + ".MAR").c_str());
+            unlink(edbp_evid_fn_.c_str());
+            if( edbp_output_fn_ != "/dev/null" )
+                unlink(edbp_output_fn_.c_str());
+        }
+    }
+
     static void parse_inference_algorithm(const std::string &inference_algorithm) {
         size_t first_par = inference_algorithm.find_first_of('(');
         size_t last_par = inference_algorithm.find_first_of(')');
@@ -206,9 +224,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         assert(last_par == inference_algorithm.size() - 1);
 
         algorithm_ = std::string(inference_algorithm, 0, first_par);
-        //std::cout << "Algorithm=|" << algorithm_ << "|" << std::endl;
         std::string options(inference_algorithm, first_par + 1, last_par - first_par - 1);
-        //std::cout << "Options=|" << options << "|" << std::endl;
 
         // parameter types
         std::map<std::string, std::string> parameter_type;
@@ -261,12 +277,8 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     }
 
     void create_and_initialize_inference_algorithm() {
-        dai::FactorGraph factor_graph(factors_);
-        if( algorithm_ == "edbp" ) {
-            int pid = getpid();
-            edbp_factors_fn_ = std::string("dummy") + std::to_string(pid);
-            edbp_evid_fn_ = std::string("dummy.evid");
-        } else {
+        if( algorithm_ != "edbp" ) {
+            dai::FactorGraph factor_graph(factors_);
             if( algorithm_ == "jt" ) {
                 inference_algorithm_ = new dai::JTree(factor_graph, libdai_options_);
             } else if( algorithm_ == "bp" ) {
@@ -279,6 +291,9 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                 inference_algorithm_ = new dai::MR(factor_graph, libdai_options_);
             } else if( algorithm_ == "hak" ) {
                 inference_algorithm_ = new dai::HAK(factor_graph, libdai_options_);
+            } else {
+                std::cout << "error: unrecognized inference algorithm '" << algorithm_ << "'" << std::endl;
+                exit(-1);
             }
             std::cout << "Properties: " << inference_algorithm_->printProperties() << std::endl;
             inference_algorithm_->init();
@@ -420,8 +435,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     void calculate_marginals(bool print_marginals = false) const {
         if( !indices_for_updated_factors_.empty() ) {
             if( algorithm_ == "edbp" ) {
-                //apply_inference_libdai(); // CHECK
-                //extract_marginals_from_inference_libdai(print_marginals); // CHECK
                 apply_inference_edbp();
                 extract_marginals_from_inference_edbp(print_marginals);
             } else {
@@ -472,7 +485,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     void apply_inference_edbp() const {
         // create model in file dummy.uai
-        std::ofstream ofs(edbp_factors_fn_ + ".factors");
+        std::ofstream ofs(edbp_factors_fn_);
         ofs << "MARKOV"
             << std::endl
             << base_->nloc_
@@ -496,7 +509,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         ofs.close();
 
         // call edbp solver
-        std::string edbp_cmd = std::string("~/software/edbp/solver") + " " + edbp_factors_fn_ + ".factors " + edbp_evid_fn_ + " 0 BEL 2>/dev/null";
+        std::string edbp_cmd = std::string("~/software/edbp/solver") + " " + edbp_factors_fn_ + " " + edbp_evid_fn_ + " 0 BEL 2>" + edbp_output_fn_;
         system(edbp_cmd.c_str());
     }
 
@@ -508,7 +521,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 #endif
         //std::vector<dai::Factor> edbp_marginals = marginals_;
 
-        std::ifstream ifs(edbp_factors_fn_ + ".factors.BEL");
+        std::ifstream ifs(edbp_factors_fn_ + ".BEL");
 
         std::string buff;
         ifs >> buff;

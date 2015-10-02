@@ -182,21 +182,27 @@ struct ms_pbt_t {
     int nmines_;
     bool noisy_;
 
-    // inference type and tmp filenames
-    int inference_type_;
-    string edbp_factors_fn_;
-    string edbp_evid_fn_;
-
-    // variables, factors, and centers for each beam.
+    // variables, factors and centers for each beam
     vector<dai::Var> variables_;
     vector<dai::Factor> factors_;
     vector<int> centers_;
 
-    // for belief inference
+    // computation of marginals in factor model
+    mutable vector<int> indices_for_updated_factors_;
+    mutable vector<dai::Factor> marginals_;
     mutable dai::Factor full_joint_;
     mutable dai::InfAlg *inference_algorithm_;
-    mutable vector<dai::Factor> marginals_;
-    mutable vector<int> indices_for_updated_factors_;
+
+    // inference algorithm and parameters
+    string algorithm_;
+    string options_;
+
+    // data for inference algorithms
+    dai::PropertySet libdai_options_;
+    string edbp_tmp_path_;
+    string edbp_factors_fn_;
+    string edbp_evid_fn_;
+    string edbp_output_fn_;
 
     // variables for game play
     set<int> plays_;
@@ -209,9 +215,8 @@ struct ms_pbt_t {
     mutable vector<int> best_for_open_;
     mutable vector<int> best_for_flag_;
 
-    ms_pbt_t(int nrows, int ncols, int nmines, int inference_type = 0, bool noisy = false)
-      : nrows_(nrows), ncols_(ncols), nmines_(nmines),
-        noisy_(noisy), inference_type_(inference_type) {
+    ms_pbt_t(int nrows, int ncols, int nmines, bool noisy, const string &inference_algorithm, const std::string &edbp_tmp_path = "")
+      : nrows_(nrows), ncols_(ncols), nmines_(nmines), noisy_(noisy), edbp_tmp_path_(edbp_tmp_path) {
         // create binary variables for each cell in the grid
         variables_ = vector<dai::Var>(nrows_ * ncols_);
         for( int loc = 0; loc < nrows_ * ncols_; ++loc )
@@ -248,56 +253,121 @@ struct ms_pbt_t {
              << ", #factors=" << factors_.size()
              << endl;
 
+        set_inference_algorithm(inference_algorithm);
+
         // create inference algorithm
         create_and_initialize_inference_algorithm();
-
-        // create tmp file for edbp inference
-        if( inference_type_ == 1 ) {
-            int pid = getpid();
-            edbp_factors_fn_ = "dummy" + std::to_string(pid);
-            edbp_evid_fn_ = "dummy.evid";
-        }
     }
     ~ms_pbt_t() {
         destroy_inference_algorithm();
     }
 
-    void create_and_initialize_inference_algorithm() {
-        dai::FactorGraph factor_graph(factors_);
+    void set_inference_algorithm(const string &inference_algorithm) {
+        cout << "setting inference algorithm to '" << inference_algorithm << "'" << endl;
+        parse_inference_algorithm(inference_algorithm);
 
-#if 0
-        // compute junction tree using min-fill heuristic
-        size_t maxstates = 1e6;
-        try {
-            dai::boundTreewidth(factor_graph, &dai::eliminationCost_MinFill, maxstates);
-        } catch( dai::Exception &e ) {
-            if( e.getCode() == dai::Exception::OUT_OF_MEMORY )
-                cout << "error: cannot compute junction tree (need more than " << maxstates << " states)" << endl;
+        // if edbp algorithm, create evidence file and set filenames
+        if( algorithm_ == "edbp" ) {
+            int pid = getpid();
+            assert(edbp_tmp_path_.empty() || (edbp_tmp_path_.back() == '/'));
+            edbp_factors_fn_ = edbp_tmp_path_ + "dummy" + to_string(pid) + ".factors";
+            edbp_evid_fn_ = edbp_tmp_path_ + "dummy" + to_string(pid) + ".evid";
+            edbp_output_fn_ = "/dev/null";
+            system((string("echo 0 > ") + edbp_evid_fn_).c_str());
         }
-#endif
+    }
 
-        // junction tree
-        dai::PropertySet opts;
-        //opts = dai::PropertySet()("updates", string("HUGIN"))("verbose", (size_t)0);
-        //inference_algorithm_ = new dai::JTree(factor_graph, opts);
+    void clean_inference_algorithm() {
+        if( algorithm_ == "edbp" ) {
+            unlink(edbp_factors_fn_.c_str());
+            unlink((edbp_factors_fn_ + ".MAR").c_str());
+            unlink(edbp_evid_fn_.c_str());
+            if( edbp_output_fn_ != "/dev/null" )
+                unlink(edbp_output_fn_.c_str());
+        }
+    }
 
-        opts = dai::PropertySet()("updates", string("SEQRND"))("logdomain", false)("tol", 1e-3)("maxiter", (size_t)20)("maxtime", double(1))("damping", double(.2))("verbose", (size_t)0);
-        inference_algorithm_ = new dai::BP(factor_graph, opts);
+    void parse_inference_algorithm(const string &inference_algorithm) {
+        size_t first_par = inference_algorithm.find_first_of('(');
+        size_t last_par = inference_algorithm.find_first_of(')');
+        assert(first_par != string::npos);
+        assert(last_par != string::npos);
+        assert(last_par == inference_algorithm.size() - 1);
 
-        //opts = dai::PropertySet()("updates", string("SEQRND"))("clamp", string("CLAMP_VAR"))("choose", string("CHOOSE_RANDOM"))("min_max_adj", double(10))("bbp_props", string(""))("bbp_cfn", string(""))("recursion", string("REC_FIXED"))("tol", 1e-3)("rec_tol", 1e-3)("maxiter", (size_t)100)("verbose", (size_t)0);
-        //inference_algorithm_ = new dai::CBP(factor_graph, opts);
+        algorithm_ = string(inference_algorithm, 0, first_par);
+        string options(inference_algorithm, first_par + 1, last_par - first_par - 1);
 
-        //opts = dai::PropertySet()("updates", string("SEQRND"))("cavity", string("FULL"))("logdomain", false)("tol", 1e-3)("maxiter", (size_t)100)("maxtime", double(1))("damping", double(.2))("verbose", (size_t)0);
-        //inference_algorithm_ = new dai::LC(factor_graph, opts);
+        // parameter types
+        map<string, string> parameter_type;
+        parameter_type["bbp_props"] = "string";
+        parameter_type["bbp_cfn"] = "string";
+        parameter_type["cavity"] = "string";
+        parameter_type["choose"] = "string";
+        parameter_type["clamp"] = "string";
+        parameter_type["clusters"] = "string";
+        parameter_type["damping"] = "double";
+        parameter_type["doubleloop"] = "boolean";
+        parameter_type["init"] = "string";
+        parameter_type["inits"] = "string";
+        parameter_type["logdomain"] = "boolean";
+        parameter_type["maxiter"] = "size_t";
+        parameter_type["maxtime"] = "double";
+        parameter_type["min_max_adj"] = "double";
+        parameter_type["rec_tol"] = "double";
+        parameter_type["recursion"] = "string";
+        parameter_type["tol"] = "double";
+        parameter_type["updates"] = "string";
+        parameter_type["verbose"] = "size_t";
 
-        //opts = dai::PropertySet()("updates", string("LINEAR"))("inits", string("RESPPROP"))("logdomain", false)("tol", 1e-3)("maxiter", (size_t)100)("maxtime", double(1))("damping", double(.2))("verbose", (size_t)10);
-        //inference_algorithm_ = new dai::MR(factor_graph, opts);
+        // set parameters
+        vector<string> tokens = dai::tokenizeString(options, false, ", ");
+        for( int i = 0; i < int(tokens.size()); ++i ) {
+            size_t equal_pos = tokens[i].find_first_of('=');
+            assert(equal_pos != string::npos);
+            string parameter(tokens[i], 0, equal_pos);
+            string value(tokens[i], equal_pos + 1);
 
-        //opts = dai::PropertySet()("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-3)("maxiter", (size_t)100)("maxtime", double(1));
-        //inference_algorithm_ = new dai::HAK(factor_graph, opts);
+            // string paramenters
+            if( parameter_type.find(parameter) == parameter_type.end() ) {
+                cout << "warning: parameter '" << parameter << "' not recognized" << endl;
+            } else {
+                const string &type = parameter_type[parameter];
+                if( type == "string" )
+                    libdai_options_ = libdai_options_(parameter, value);
+                else if( type == "double" )
+                    libdai_options_ = libdai_options_(parameter, atof(value.c_str()));
+                else if( type == "boolean" )
+                    libdai_options_ = libdai_options_(parameter, value == "true");
+                else if( type == "size_t" )
+                    libdai_options_ = libdai_options_(parameter, size_t(atol(value.c_str())));
+                else
+                    cout << "warning: type '" << type << "' not supported" << endl;
+            }
+        }
+    }
 
-        cout << "Properties: " << inference_algorithm_->printProperties() << endl;
-        inference_algorithm_->init();
+    void create_and_initialize_inference_algorithm() {
+        if( algorithm_ != "edbp" ) {
+            dai::FactorGraph factor_graph(factors_);
+            if( algorithm_ == "jt" ) {
+                inference_algorithm_ = new dai::JTree(factor_graph, libdai_options_);
+            } else if( algorithm_ == "bp" ) {
+                inference_algorithm_ = new dai::BP(factor_graph, libdai_options_);
+            } else if( algorithm_ == "cbp" ) {
+                inference_algorithm_ = new dai::CBP(factor_graph, libdai_options_);
+            } else if( algorithm_ == "lc" ) {
+                inference_algorithm_ = new dai::LC(factor_graph, libdai_options_);
+            } else if( algorithm_ == "mr" ) {
+                inference_algorithm_ = new dai::MR(factor_graph, libdai_options_);
+            } else if( algorithm_ == "hak" ) {
+                inference_algorithm_ = new dai::HAK(factor_graph, libdai_options_);
+            } else {
+                std::cout << "error: unrecognized inference algorithm '" << algorithm_ << "'" << std::endl;
+                exit(-1);
+            }
+            std::cout << "Properties: " << inference_algorithm_->printProperties() << std::endl;
+            inference_algorithm_->init();
+        }
     }
 
     void destroy_inference_algorithm() {
@@ -383,12 +453,12 @@ struct ms_pbt_t {
 
     void calculate_marginals(bool print_marginals = false) const {
         if( !indices_for_updated_factors_.empty() ) {
-            if( inference_type_ == 0 ) {
-                apply_inference_libdai();
-                extract_marginals_from_inference_libdai(print_marginals);
-            } else {
+            if( algorithm_ == "edbp" ) {
                 apply_inference_edbp();
                 extract_marginals_from_inference_edbp(print_marginals);
+            } else {
+                apply_inference_libdai();
+                extract_marginals_from_inference_libdai(print_marginals);
             }
             indices_for_updated_factors_.clear();
         }
@@ -416,7 +486,7 @@ struct ms_pbt_t {
     }
 
     void extract_marginals_from_inference_edbp(bool print_marginals = false) const {
-        ifstream ifs(edbp_factors_fn_ + ".factors.MAR");
+        ifstream ifs(edbp_factors_fn_ + ".MAR");
 
         string buff;
         ifs >> buff;
@@ -453,7 +523,7 @@ struct ms_pbt_t {
 
     void apply_inference_edbp() const {
         // create model in given file
-        ofstream ofs(edbp_factors_fn_ + ".factors");
+        ofstream ofs(edbp_factors_fn_);
         ofs << "MARKOV"
             << endl
             << nrows_ * ncols_
@@ -477,7 +547,7 @@ struct ms_pbt_t {
         ofs.close();
 
         // call edbp solver
-        string edbp_cmd = string("~/software/edbp/solver") + " " + edbp_factors_fn_ + ".factors " + edbp_evid_fn_ + " 0 MAR 2>/dev/null";
+        string edbp_cmd = string("~/software/edbp/solver") + " " + edbp_factors_fn_ + " " + edbp_evid_fn_ + " 0 MAR 2>" + edbp_output_fn_;
         system(edbp_cmd.c_str());
     }
 
@@ -617,11 +687,29 @@ int main(int argc, const char **argv) {
     int nmines = 40;
     int seed = 0;
     bool verbose = false;
+    string tmp_path = "";
+
+    // inference algorithm
+    //string inference_algorithm = "edbp(hola=1,chao=2)";
+    //string inference_algorithm = "jt(updates=HUGIN)";
+    string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-3,maxiter=20,maxtime=1,damping=.2)";
+    //string inference_algorithm = "cbp(updates=SEQRND,clamp=CLAMP_VAR,choose=CHOOSE_RANDOM,min_max_adj=10,bbp_props=,bbp_cfn=,recursion=REC_FIXED,tol=1e-3,rec_tol=1e-3,maxiter=100)";
+    //string inference_algorithm = "lc(updates=SEQRND,cavity=FULL,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
+    //string inference_algorithm = "mr(updates=LINEAR,inits=RESPPROP,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
+    //string inference_algorithm = "hak(doubleloop=true,clusters=MIN,init=UNIFORM,tol=1e-3,maxiter=100,maxtime=1)";
 
     --argc;
     ++argv;
     while( (argc > 0) && (**argv == '-') ) {
-        if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
+        if( !strcmp(argv[0], "-i") || !strcmp(argv[0], "--inference") ) {
+            inference_algorithm = argv[1];
+            argc -= 2;
+            argv += 2;
+        } else if( !strcmp(argv[0], "--tmp-path") ) {
+            tmp_path = argv[1];
+            argc -= 2;
+            argv += 2;
+        } else if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
             ntrials = atoi(argv[1]);
             argc -= 2;
             argv += 2;
@@ -662,8 +750,8 @@ int main(int argc, const char **argv) {
     seed48(seeds);
 
     // create distributions
-    ms_pbt_t pbt(nrows, ncols, nmines, 1, false);
-    //ms_pbt_t pbt(nrows, ncols, nmines, true);
+    if( !tmp_path.empty() && (tmp_path.back() != '/') ) tmp_path += '/';
+    ms_pbt_t pbt(nrows, ncols, nmines, false, inference_algorithm, tmp_path);
 
     // run for the specified number of trials
     for( int trial = 0; trial < ntrials; ) {
@@ -724,6 +812,7 @@ int main(int argc, const char **argv) {
         ++trial;
     }
     agent_finalize();
+    pbt.clean_inference_algorithm();
     return 0;
 }
 

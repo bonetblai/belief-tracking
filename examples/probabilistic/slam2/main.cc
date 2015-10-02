@@ -49,9 +49,12 @@ using namespace std;
 int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
 vector<vector<int> > rbpf_slam2_particle_t::edbp_factor_indices_;
-dai::PropertySet rbpf_slam2_particle_t::libdai_options_;
 string rbpf_slam2_particle_t::algorithm_;
 string rbpf_slam2_particle_t::options_;
+dai::PropertySet rbpf_slam2_particle_t::libdai_options_;
+string rbpf_slam2_particle_t::edbp_factors_fn_;
+string rbpf_slam2_particle_t::edbp_evid_fn_;
+string rbpf_slam2_particle_t::edbp_output_fn_;
 
 
 void usage(ostream &os) {
@@ -91,6 +94,7 @@ int main(int argc, const char **argv) {
     int nsteps = 0;
     int seed = 0;
     bool verbose = false;
+    string tmp_path = "";
     vector<string> tracking_algorithms_str;
 
     float pa = 0.8;
@@ -104,17 +108,21 @@ int main(int argc, const char **argv) {
     // inference algorithm
     //string inference_algorithm = "edbp(hola=1,chao=2)";
     //string inference_algorithm = "jt(updates=HUGIN)";
-    string inference_algorithm = "bp(updates=SEQRND, logdomain=false, tol=1e-3, maxiter=20, maxtime=1, damping=.2)";
-    //string inference_algorithm = "cbp(updates=SEQRND, clamp=CLAMP_VAR, choose=CHOOSE_RANDOM, min_max_adj=10, bbp_props=, bbp_cfn=, recursion=REC_FIXED, tol=1e-3, rec_tol=1e-3, maxiter=100)";
-    //string inference_algorithm = "lc(updates=SEQRND, cavity=FULL, logdomain=false, tol=1e-3, maxiter=100, maxtime=1, damping=.2)";
-    //string inference_algorithm = "mr(updates=LINEAR, inits=RESPPROP, logdomain=false, tol=1e-3, maxiter=100, maxtime=1, damping=.2)";
-    //string inference_algorithm = "hak(doubleloop=true, clusters=MIN, init=UNIFORM, tol=1e-3, maxiter=100, maxtime=1)";
+    string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-3,maxiter=20,maxtime=1,damping=.2)";
+    //string inference_algorithm = "cbp(updates=SEQRND,clamp=CLAMP_VAR,choose=CHOOSE_RANDOM,min_max_adj=10,bbp_props=,bbp_cfn=,recursion=REC_FIXED,tol=1e-3,rec_tol=1e-3,maxiter=100)";
+    //string inference_algorithm = "lc(updates=SEQRND,cavity=FULL,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
+    //string inference_algorithm = "mr(updates=LINEAR,inits=RESPPROP,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
+    //string inference_algorithm = "hak(doubleloop=true,clusters=MIN,init=UNIFORM,tol=1e-3,maxiter=100,maxtime=1)";
 
     --argc;
     ++argv;
     while( (argc > 0) && (**argv == '-') ) {
         if( !strcmp(argv[0], "-i") || !strcmp(argv[0], "--inference") ) {
             inference_algorithm = argv[1];
+            argc -= 2;
+            argv += 2;
+        } else if( !strcmp(argv[0], "--tmp-path") ) {
+            tmp_path = argv[1];
             argc -= 2;
             argv += 2;
         } else if( !strcmp(argv[0], "-g") || !strcmp(argv[0], "--gtype") ) {
@@ -213,7 +221,7 @@ int main(int argc, const char **argv) {
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
     rbpf_slam2_particle_t::compute_edbp_factor_indices();
-    rbpf_slam2_particle_t::set_inference_algorithm(inference_algorithm);
+    rbpf_slam2_particle_t::set_inference_algorithm(inference_algorithm, tmp_path);
 
     // tracking algorithms
     vector<tracking_t<cellmap_t>*> tracking_algorithms;
