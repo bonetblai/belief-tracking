@@ -21,7 +21,7 @@ using namespace std;
 state_t *g_agent_state = 0;
 base_policy_t *g_agent_policy = 0;
 
-int g_ngames = 0, g_nwins = 0, g_nguesses = 0, g_ndecisions = 0;
+int g_ngames = 0, g_nwins = 0, g_nguesses = 0, g_ndecisions = 0, g_ninferences = 0;
 float g_start_time = 0;
 float g_elapsed_time = 0;
 bool g_playing = false;
@@ -84,6 +84,10 @@ int agent_get_nguesses() {
     return g_nguesses;
 }
 
+void agent_increase_ninferences(int n) {
+    g_ninferences += n;
+}
+
 void agent_update_state(int flag, int cell, int obs) {
     if( g_agent_state != 0 ) {
         g_agent_state->apply(flag == 1, cell);
@@ -97,6 +101,7 @@ void print_stats(ostream &os) {
        << ", %win=" << (float)g_nwins / (float)g_ngames
        << ", #guesses=" << g_nguesses
        << ", #decisions=" << g_ndecisions
+       << ", #inferences=" << g_ninferences
        << ", etime=" << g_elapsed_time
        << ", etime/game=" << g_elapsed_time / (float)g_ngames
        << endl;

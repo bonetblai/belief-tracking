@@ -13,8 +13,8 @@ CXXEXT2=		-std=c++11 -DMACOSX -I ~/software/libdai/include -I ~/include -Wno-dep
 
 CFLAGS=			-Wall -Werror -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
 
-prob_mines:		prob_main.cc c_api.o
-				$(CXX) $(CXXEXT2) -o prob_mines prob_main.cc c_api.o -ldai -lgmpxx -lgmp
+prob_mines.test:		prob_main.cc c_api.o
+				$(CXX) $(CXXEXT2) -o prob_mines.test prob_main.cc c_api.o -ldai -lgmpxx -lgmp
 
 c_api.o:		c_api.cc c_api.h mines_agent.h mines_belief.h mines_grid_belief.h
 				$(CXX) $(CFLAGS) -c c_api.cc

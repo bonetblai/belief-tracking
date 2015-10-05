@@ -76,11 +76,11 @@ struct minefield_t {
                     int nc = c + dc;
                     int cell = nr * ncols_ + nc;
                     if( (nc < 0) || (nc >= ncols_) ) continue;
-                    forbidden.insert(-cell);
+                    forbidden.insert(-(1 + cell));
                 }
             }
             for( set<int>::iterator it = forbidden.begin(); it != forbidden.end(); ++it ) {
-                int pos = -(*it);
+                int pos = -(*it) - 1;
                 available_cells[pos] = available_cells.back();
                 available_cells.pop_back();
             }
@@ -188,6 +188,7 @@ struct ms_pbt_t {
     vector<int> centers_;
 
     // computation of marginals in factor model
+    mutable int ninferences_;
     mutable vector<int> indices_for_updated_factors_;
     mutable vector<dai::Factor> marginals_;
     mutable dai::Factor full_joint_;
@@ -203,6 +204,7 @@ struct ms_pbt_t {
     string edbp_factors_fn_;
     string edbp_evid_fn_;
     string edbp_output_fn_;
+    int edbp_max_iter_;
 
     // variables for game play
     set<int> plays_;
@@ -274,6 +276,10 @@ struct ms_pbt_t {
             edbp_evid_fn_ = edbp_tmp_path_ + "dummy" + to_string(pid) + ".evid";
             edbp_output_fn_ = "/dev/null";
             system((string("echo 0 > ") + edbp_evid_fn_).c_str());
+            if( libdai_options_.hasKey("maxiter") )
+                edbp_max_iter_ = libdai_options_.getStringAs<size_t>("maxiter");
+            else
+                edbp_max_iter_ = 10;
         }
     }
 
@@ -310,12 +316,14 @@ struct ms_pbt_t {
         parameter_type["init"] = "string";
         parameter_type["inits"] = "string";
         parameter_type["logdomain"] = "boolean";
+        parameter_type["loopdepth"] = "size_t";
         parameter_type["maxiter"] = "size_t";
         parameter_type["maxtime"] = "double";
         parameter_type["min_max_adj"] = "double";
         parameter_type["rec_tol"] = "double";
         parameter_type["recursion"] = "string";
         parameter_type["tol"] = "double";
+        parameter_type["type"] = "string";
         parameter_type["updates"] = "string";
         parameter_type["verbose"] = "size_t";
 
@@ -353,6 +361,8 @@ struct ms_pbt_t {
                 inference_algorithm_ = new dai::JTree(factor_graph, libdai_options_);
             } else if( algorithm_ == "bp" ) {
                 inference_algorithm_ = new dai::BP(factor_graph, libdai_options_);
+            } else if( algorithm_ == "fbp" ) {
+                inference_algorithm_ = new dai::FBP(factor_graph, libdai_options_);
             } else if( algorithm_ == "cbp" ) {
                 inference_algorithm_ = new dai::CBP(factor_graph, libdai_options_);
             } else if( algorithm_ == "lc" ) {
@@ -361,6 +371,8 @@ struct ms_pbt_t {
                 inference_algorithm_ = new dai::MR(factor_graph, libdai_options_);
             } else if( algorithm_ == "hak" ) {
                 inference_algorithm_ = new dai::HAK(factor_graph, libdai_options_);
+            } else if( algorithm_ == "tree-ep" ) {
+                inference_algorithm_ = new dai::TreeEP(factor_graph, libdai_options_);
             } else {
                 std::cout << "error: unrecognized inference algorithm '" << algorithm_ << "'" << std::endl;
                 exit(-1);
@@ -410,12 +422,13 @@ struct ms_pbt_t {
         plays_.clear();
         nflags_ = 0;
         nguesses_ = 0;
+        ninferences_ = 0;
         best_for_open_.clear();
         best_for_flag_.clear();
     }
 
     // update factors for obtained obs for cell
-    int update_factors(bool flag_action, int cell, int obs) {
+    void update_factors(bool flag_action, int cell, int obs) {
         assert(plays_.find(cell) == plays_.end());
         plays_.insert(cell);
         //int row = cell / ncols_, col = cell % ncols_;
@@ -426,8 +439,7 @@ struct ms_pbt_t {
             int center = centers_[cell];
             //cout << "center=" << center << ", var=" << factors_[cell].vars().var(center) << endl;
             dai::Factor &factor = factors_[cell];
-            const dai::VarSet &vars = factor.vars();
-            for( int j = 0; j < (1 << vars.size()); ++j ) {
+            for( int j = 0; j < int(factor.nrStates()); ++j ) {
                 int popcount = __builtin_popcount(j);
                 if( !noisy_ ) {
                     if( popcount != obs ) factor.set(j, 0);
@@ -444,15 +456,35 @@ struct ms_pbt_t {
                 if( (j & (1 << center)) != 0 ) factor.set(j, 0);
             }
             indices_for_updated_factors_.push_back(cell);
-            return cell;
+
+            // if obs is 0 and not noisy, neighboring cells don't have mines
+            if( !noisy_ && (obs == 0) ) {
+                if( best_prob_for_open_ < 1 ) {
+                    best_prob_for_open_ = 1;
+                    best_for_open_.clear();
+                }
+                int row = cell / ncols_, col = cell % ncols_;
+                for( int dr = -1; dr < 2; ++dr ) {
+                    int nr = row + dr;
+                    if( (nr < 0) || (nr >= nrows_) ) continue;
+                    for( int dc = -1; dc < 2; ++dc ) {
+                        int nc = col + dc;
+                        if( (dr == 0) && (dc == 0) ) continue;
+                        if( (nc < 0) || (nc >= ncols_) ) continue;
+                        int nloc = nr * ncols_ + nc;
+                        //cout << "adding (" << nc << "," << nr << ")" << endl;
+                        best_for_open_.push_back(nloc);
+                    }
+                }
+            }
         } else {
             ++nflags_;
-            return -1;
         }
     }
 
     void calculate_marginals(bool print_marginals = false) const {
         if( !indices_for_updated_factors_.empty() ) {
+            ++ninferences_;
             if( algorithm_ == "edbp" ) {
                 apply_inference_edbp();
                 extract_marginals_from_inference_edbp(print_marginals);
@@ -547,7 +579,7 @@ struct ms_pbt_t {
         ofs.close();
 
         // call edbp solver
-        string edbp_cmd = string("~/software/edbp/solver") + " " + edbp_factors_fn_ + " " + edbp_evid_fn_ + " 0 MAR 2>" + edbp_output_fn_;
+        string edbp_cmd = string("~/software/edbp/solver") + " " + edbp_factors_fn_ + " " + edbp_evid_fn_ + " " + to_string(edbp_max_iter_) + " 0 MAR 2>" + edbp_output_fn_;
         system(edbp_cmd.c_str());
     }
 
@@ -567,19 +599,34 @@ struct ms_pbt_t {
 
     // recommend action using information in the marginals
     int agent_get_action() const {
+        int action = -1;
         if( (best_prob_for_open_ == 1) && !best_for_open_.empty() ) {
-            int index = lrand48() % best_for_open_.size();
-            int cell = best_for_open_[index];
-            best_for_open_[index] = best_for_open_.back();
-            best_for_open_.pop_back();
-            return cell + (nrows_ * ncols_);
-        } else if( (best_prob_for_flag_ == 1) && !best_for_flag_.empty() ) {
-            int index = lrand48() % best_for_flag_.size();
-            int cell = best_for_flag_[index];
-            best_for_flag_[index] = best_for_flag_.back();
-            best_for_flag_.pop_back();
-            return cell;
-        } else {
+            int cell = -1;
+            while( (cell == -1) && !best_for_open_.empty() ) {
+                int index = lrand48() % best_for_open_.size();
+                int candidate = best_for_open_[index];
+                best_for_open_[index] = best_for_open_.back();
+                best_for_open_.pop_back();
+                if( plays_.find(candidate) == plays_.end() )
+                    cell = candidate;
+            }
+            if( cell != -1 ) action = cell + (nrows_ * ncols_);
+        }
+
+        if( (action == -1) && (best_prob_for_flag_ == 1) && !best_for_flag_.empty() ) {
+            int cell = -1;
+            while( (cell == -1) && !best_for_flag_.empty() ) {
+                int index = lrand48() % best_for_flag_.size();
+                int candidate = best_for_flag_[index];
+                best_for_flag_[index] = best_for_flag_.back();
+                best_for_flag_.pop_back();
+                if( plays_.find(candidate) == plays_.end() )
+                    cell = candidate;
+            }
+            if( cell != -1 ) action = cell;
+        }
+
+        if( action == -1 ) {
             calculate_marginals(false);
             best_for_open_.clear();
             best_for_flag_.clear();
@@ -620,30 +667,19 @@ struct ms_pbt_t {
                 int cell = best_for_open_[index];
                 best_for_open_[index] = best_for_open_.back();
                 best_for_open_.pop_back();
-                return cell + (nrows_ * ncols_);
+                action = cell + (nrows_ * ncols_);
             } else if( !best_for_flag_.empty() && (best_prob_for_open_ < best_prob_for_flag_) ) {
                 nguesses_ += best_prob_for_flag_ < 1;
                 int index = lrand48() % best_for_flag_.size();
                 int cell = best_for_flag_[index];
                 best_for_flag_[index] = best_for_flag_.back();
                 best_for_flag_.pop_back();
-                return cell;
-            } else if( !best_for_open_.empty() ) {
-                assert(0);
-                int cell = best_for_open_[lrand48() % best_for_open_.size()];
-                best_for_open_.clear();
-                return cell + (nrows_ * ncols_);
-            } else if( nflags_ < nmines_ ) {
-                assert(0);
-                assert(!best_for_flag_.empty());
-                int cell = best_for_flag_[lrand48() % best_for_flag_.size()];
-                best_for_flag_.clear();
-                return cell;
-            } else {
-                assert(0);
-                return 0;
+                action = cell;
             }
         }
+
+        assert(action != -1);
+        return action;
     }
 
     bool is_flag_action(int action) {
@@ -690,7 +726,7 @@ int main(int argc, const char **argv) {
     string tmp_path = "";
 
     // inference algorithm
-    //string inference_algorithm = "edbp(hola=1,chao=2)";
+    //string inference_algorithm = "edbp(maxiter=10)";
     //string inference_algorithm = "jt(updates=HUGIN)";
     string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-3,maxiter=20,maxtime=1,damping=.2)";
     //string inference_algorithm = "cbp(updates=SEQRND,clamp=CLAMP_VAR,choose=CHOOSE_RANDOM,min_max_adj=10,bbp_props=,bbp_cfn=,recursion=REC_FIXED,tol=1e-3,rec_tol=1e-3,maxiter=100)";
@@ -779,7 +815,7 @@ int main(int argc, const char **argv) {
                 int cell = agent_get_cell(action);
                 minefield.sample(cell);
                 assert(!minefield.cells_[cell].mine_);
-                cout << endl << endl;
+                cout << ", obs=0" << endl << endl;
                 minefield.print(cout, true);
                 cout << endl;
             }
@@ -804,6 +840,7 @@ int main(int argc, const char **argv) {
         }
 
         agent_increase_nguesses(pbt.nguesses_);
+        agent_increase_ninferences(pbt.ninferences_);
         if( win )
             agent_declare_win(true);
         else
