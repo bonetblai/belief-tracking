@@ -26,156 +26,25 @@
 #include <set>
 #include <vector>
 #include <math.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 
 #include <dai/alldai.h>
-
-extern "C" {
-#include "c_api.h"
-};
 
 using namespace std;
 
 
-struct cell_t {
-    bool mine_;
-    int nmines_;
-    cell_t() : mine_(false), nmines_(0) { }
-};
-
-struct minefield_t {
-    int nrows_;
-    int ncols_;
-    int ncells_;
-    int nmines_;
-    int num_remaining_mines_;
-
-    vector<cell_t> cells_;
-
-    minefield_t(int nrows, int ncols, int nmines)
-      : nrows_(nrows), ncols_(ncols), ncells_(nrows_ * ncols_), nmines_(nmines) {
-    }
-
-    int num_remaining_mines() const { return num_remaining_mines_; }
-
-    void sample(int initial_cell) {
-        // do not place a mine at the initial cell or surrounding cells
-        // calculate places where a mine can be placed
-        vector<int> available_cells(ncells_, 0);
-        set<int> forbidden;
-        do {
-            forbidden.clear();
-            available_cells = vector<int>(ncells_, 0);
-            for( int i = 0; i < ncells_; ++i )
-                available_cells[i] = i;
-
-            int r = initial_cell / ncols_, c = initial_cell % ncols_;
-            for( int dr = -1; dr < 2; ++dr ) {
-                int nr = r + dr;
-                if( (nr < 0) || (nr >= nrows_) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
-                    int nc = c + dc;
-                    int cell = nr * ncols_ + nc;
-                    if( (nc < 0) || (nc >= ncols_) ) continue;
-                    forbidden.insert(-(1 + cell));
-                }
-            }
-            for( set<int>::iterator it = forbidden.begin(); it != forbidden.end(); ++it ) {
-                int pos = -(*it) - 1;
-                available_cells[pos] = available_cells.back();
-                available_cells.pop_back();
-            }
-        } while( (int)available_cells.size() < nmines_ );
-
-        // available_cells contains the cells where mines can be placed.
-        // Place mines in random cells. For each placed mines, increase
-        // counter of surronding mines in surrounding cells.
-        cells_ = vector<cell_t>(ncells_);
-        for( int num_placed_mines = 0; num_placed_mines < nmines_; ++num_placed_mines ) {
-            int pos = lrand48() % available_cells.size();
-            int cell = available_cells[pos];
-            available_cells[pos] = available_cells.back();
-            available_cells.pop_back();
-            assert(!cells_[cell].mine_);
-            cells_[cell].mine_ = true;
-            int r = cell / ncols_, c = cell % ncols_;
-            for( int dr = -1; dr < 2; ++dr ) {
-                int nr = r + dr;
-                if( (nr < 0) || (nr >= nrows_) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
-                    int nc = c + dc;
-                    int ncell = nr * ncols_ + nc;
-                    if( (nc < 0) || (nc >= ncols_) ) continue;
-                    if( cell == ncell ) continue;
-                    ++cells_[ncell].nmines_;
-                }
-            }
-        }
-        num_remaining_mines_ = nmines_;
-    }
-
-    int flag_cell(int cell, bool verbose) {
-        int r = cell / ncols_, c = cell % ncols_;
-        if( verbose ) cout << "flag_cell(" << c << "," << r << "): mine=" << (cells_[cell].mine_ ? 1 : 0) << endl;
-        num_remaining_mines_ -= cells_[cell].mine_ ? 1 : 0;
-        return -1;
-    }
-
-    int open_cell(int cell, bool verbose) {
-        int r = cell / ncols_, c = cell % ncols_;
-        if( verbose ) cout << "open_cell(" << c << "," << r << "): mine=" << (cells_[cell].mine_ ? 1 : 0) << ", #mines=" << cells_[cell].nmines_ << endl;
-        return cells_[cell].mine_ ? 9 : cells_[cell].nmines_;
-    }
-
-    int apply_action(int action, bool verbose) {
-        int cell = agent_get_cell(action);
-        if( agent_is_flag_action(action) ) {
-            return flag_cell(cell, verbose);
-        } else {
-            return open_cell(cell, verbose);
-        }
-    }
-
-    void print(ostream &os, bool formatted = false) const {
-        for( int r = 0; r < nrows_; ++r ) {
-            for( int c = 0; c < ncols_; ++c ) {
-                int cell = r * ncols_ + c;
-                if( cells_[cell].mine_ )
-                    os << " *";
-                else
-                    os << " " << cells_[cell].nmines_;
-            }
-            if( formatted ) os << endl;
-        }
-    }
-};
-
-// divergence measures between distributions
-pair<float, bool> kl_divergence(const vector<float> &P, const vector<float> &Q) {
-    assert(P.size() == Q.size());
-    float kl = 0;
-    for( size_t i = 0; i < P.size(); ++i ) {
-        float p = P[i];
-        float q = Q[i];
-        if( (q == 0) && (p != 0) ) return make_pair(kl, false);
-        if( p == 0 ) continue;
-        kl += p * (log(p) - log(q));
-    }
-    return make_pair(kl, true);
-}
-
-pair<float, bool> js_divergence(const vector<float> &P, const vector<float> &Q) {
-    assert(P.size() == Q.size());
-    vector<float> M(P.size(), 0);
-    for( size_t i = 0; i < M.size(); ++i )
-        M[i] = (P[i] + Q[i]) / 2;
-    pair<float, bool> kl1 = kl_divergence(P, M);
-    pair<float, bool> kl2 = kl_divergence(Q, M);
-    assert(kl1.second && kl2.second);
-    return make_pair((kl1.first + kl2.first) / 2, true);
+inline float read_time_in_seconds() {
+    struct rusage r_usage;
+    getrusage(RUSAGE_SELF, &r_usage);
+    float time = (float)r_usage.ru_utime.tv_sec + (float)r_usage.ru_utime.tv_usec / (float)1000000;
+    getrusage(RUSAGE_CHILDREN, &r_usage);
+    time += (float)r_usage.ru_utime.tv_sec + (float)r_usage.ru_utime.tv_usec / (float)1000000;
+    return time;
 }
 
 // probabilistic belief tracking for minesweeper
-struct ms_pbt_t {
+struct pbt_t {
     // grid dimension, num of mines, and noisy flag
     int nrows_;
     int ncols_;
@@ -188,7 +57,6 @@ struct ms_pbt_t {
     vector<int> centers_;
 
     // computation of marginals in factor model
-    mutable int ninferences_;
     mutable vector<int> indices_for_updated_factors_;
     mutable vector<dai::Factor> marginals_;
     mutable dai::Factor full_joint_;
@@ -211,13 +79,20 @@ struct ms_pbt_t {
     int nflags_;
 
     // action selection
-    mutable int nguesses_;
     mutable float best_prob_for_open_;
     mutable float best_prob_for_flag_;
     mutable vector<int> best_for_open_;
     mutable vector<int> best_for_flag_;
 
-    ms_pbt_t(int nrows, int ncols, int nmines, bool noisy, const string &inference_algorithm, const std::string &edbp_tmp_path = "")
+    // statistics
+    mutable int ngames_;
+    mutable int nwins_;
+    mutable int nguesses_;
+    mutable int ndecisions_;
+    mutable int ninferences_;
+    mutable float elapsed_time_;
+
+    pbt_t(int nrows, int ncols, int nmines, bool noisy, const string &inference_algorithm, const std::string &edbp_tmp_path = "")
       : nrows_(nrows), ncols_(ncols), nmines_(nmines), noisy_(noisy), edbp_tmp_path_(edbp_tmp_path) {
         // create binary variables for each cell in the grid
         variables_ = vector<dai::Var>(nrows_ * ncols_);
@@ -260,7 +135,7 @@ struct ms_pbt_t {
         // create inference algorithm
         create_and_initialize_inference_algorithm();
     }
-    ~ms_pbt_t() {
+    ~pbt_t() {
         destroy_inference_algorithm();
     }
 
@@ -421,10 +296,9 @@ struct ms_pbt_t {
         }
         plays_.clear();
         nflags_ = 0;
-        nguesses_ = 0;
-        ninferences_ = 0;
         best_for_open_.clear();
         best_for_flag_.clear();
+        ++ngames_;
     }
 
     // update factors for obtained obs for cell
@@ -598,7 +472,8 @@ struct ms_pbt_t {
     }
 
     // recommend action using information in the marginals
-    int agent_get_action() const {
+    int get_action() const {
+        ++ndecisions_;
         int action = -1;
         if( (best_prob_for_open_ == 1) && !best_for_open_.empty() ) {
             int cell = -1;
@@ -682,13 +557,176 @@ struct ms_pbt_t {
         return action;
     }
 
-    bool is_flag_action(int action) {
+    bool is_flag_action(int action) const {
         return action < nrows_ * ncols_ ? true : false;
     }
-    int agent_get_cell(int action) {
+    int get_cell(int action) const {
         return is_flag_action(action) ? action : action - (nrows_ * ncols_);
     }
+
+    void initialize_stats() const {
+        ngames_ = 0;
+        nwins_ = 0;
+        nguesses_ = 0;
+        ndecisions_ = 0;
+        ninferences_ = 0;
+        elapsed_time_ = 0;
+    }
+
+    void print_stats(ostream &os) const {
+          os << "stats: #games=" << ngames_
+             << ", #wins=" << nwins_
+             << ", %win=" << (float)nwins_ / (float)ngames_
+             << ", #guesses=" << nguesses_
+             << ", #decisions=" << ndecisions_ // not updated
+             << ", #inferences=" << ninferences_
+             << ", etime=" << elapsed_time_
+             << ", etime/game=" << elapsed_time_ / (float)ngames_
+             << ", etime/decision=" << elapsed_time_ / (float)ndecisions_
+             << ", etime/inference=" << elapsed_time_ / (float)ninferences_
+             << endl;
+    }
 };
+
+struct cell_t {
+    bool mine_;
+    int nmines_;
+    cell_t() : mine_(false), nmines_(0) { }
+};
+
+struct minefield_t {
+    int nrows_;
+    int ncols_;
+    int ncells_;
+    int nmines_;
+    int num_remaining_mines_;
+
+    vector<cell_t> cells_;
+
+    minefield_t(int nrows, int ncols, int nmines)
+      : nrows_(nrows), ncols_(ncols), ncells_(nrows_ * ncols_), nmines_(nmines) {
+    }
+
+    int num_remaining_mines() const { return num_remaining_mines_; }
+
+    void sample(int initial_cell) {
+        // do not place a mine at the initial cell or surrounding cells
+        // calculate places where a mine can be placed
+        vector<int> available_cells(ncells_, 0);
+        set<int> forbidden;
+        do {
+            forbidden.clear();
+            available_cells = vector<int>(ncells_, 0);
+            for( int i = 0; i < ncells_; ++i )
+                available_cells[i] = i;
+
+            int r = initial_cell / ncols_, c = initial_cell % ncols_;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nr = r + dr;
+                if( (nr < 0) || (nr >= nrows_) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int nc = c + dc;
+                    int cell = nr * ncols_ + nc;
+                    if( (nc < 0) || (nc >= ncols_) ) continue;
+                    forbidden.insert(-(1 + cell));
+                }
+            }
+            for( set<int>::iterator it = forbidden.begin(); it != forbidden.end(); ++it ) {
+                int pos = -(*it) - 1;
+                available_cells[pos] = available_cells.back();
+                available_cells.pop_back();
+            }
+        } while( (int)available_cells.size() < nmines_ );
+
+        // available_cells contains the cells where mines can be placed.
+        // Place mines in random cells. For each placed mines, increase
+        // counter of surronding mines in surrounding cells.
+        cells_ = vector<cell_t>(ncells_);
+        for( int num_placed_mines = 0; num_placed_mines < nmines_; ++num_placed_mines ) {
+            int pos = lrand48() % available_cells.size();
+            int cell = available_cells[pos];
+            available_cells[pos] = available_cells.back();
+            available_cells.pop_back();
+            assert(!cells_[cell].mine_);
+            cells_[cell].mine_ = true;
+            int r = cell / ncols_, c = cell % ncols_;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nr = r + dr;
+                if( (nr < 0) || (nr >= nrows_) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int nc = c + dc;
+                    int ncell = nr * ncols_ + nc;
+                    if( (nc < 0) || (nc >= ncols_) ) continue;
+                    if( cell == ncell ) continue;
+                    ++cells_[ncell].nmines_;
+                }
+            }
+        }
+        num_remaining_mines_ = nmines_;
+    }
+
+    int flag_cell(int cell, bool verbose) {
+        int r = cell / ncols_, c = cell % ncols_;
+        if( verbose ) cout << "flag_cell(" << c << "," << r << "): mine=" << (cells_[cell].mine_ ? 1 : 0) << endl;
+        num_remaining_mines_ -= cells_[cell].mine_ ? 1 : 0;
+        return -1;
+    }
+
+    int open_cell(int cell, bool verbose) {
+        int r = cell / ncols_, c = cell % ncols_;
+        if( verbose ) cout << "open_cell(" << c << "," << r << "): mine=" << (cells_[cell].mine_ ? 1 : 0) << ", #mines=" << cells_[cell].nmines_ << endl;
+        return cells_[cell].mine_ ? 9 : cells_[cell].nmines_;
+    }
+
+    int apply_action(const pbt_t &pbt, int action, bool verbose) {
+        int cell = pbt.get_cell(action);
+        if( pbt.is_flag_action(action) ) {
+            return flag_cell(cell, verbose);
+        } else {
+            return open_cell(cell, verbose);
+        }
+    }
+
+    void print(ostream &os, bool formatted = false) const {
+        for( int r = 0; r < nrows_; ++r ) {
+            for( int c = 0; c < ncols_; ++c ) {
+                int cell = r * ncols_ + c;
+                if( cells_[cell].mine_ )
+                    os << " *";
+                else
+                    os << " " << cells_[cell].nmines_;
+            }
+            if( formatted ) os << endl;
+        }
+    }
+};
+
+#if 0
+// divergence measures between distributions
+pair<float, bool> kl_divergence(const vector<float> &P, const vector<float> &Q) {
+    assert(P.size() == Q.size());
+    float kl = 0;
+    for( size_t i = 0; i < P.size(); ++i ) {
+        float p = P[i];
+        float q = Q[i];
+        if( (q == 0) && (p != 0) ) return make_pair(kl, false);
+        if( p == 0 ) continue;
+        kl += p * (log(p) - log(q));
+    }
+    return make_pair(kl, true);
+}
+
+pair<float, bool> js_divergence(const vector<float> &P, const vector<float> &Q) {
+    assert(P.size() == Q.size());
+    vector<float> M(P.size(), 0);
+    for( size_t i = 0; i < M.size(); ++i )
+        M[i] = (P[i] + Q[i]) / 2;
+    pair<float, bool> kl1 = kl_divergence(P, M);
+    pair<float, bool> kl2 = kl_divergence(Q, M);
+    assert(kl1.second && kl2.second);
+    return make_pair((kl1.first + kl2.first) / 2, true);
+}
+#endif
 
 void usage(ostream &os) {
     os << endl
@@ -787,22 +825,21 @@ int main(int argc, const char **argv) {
 
     // create distributions
     if( !tmp_path.empty() && (tmp_path.back() != '/') ) tmp_path += '/';
-    ms_pbt_t pbt(nrows, ncols, nmines, false, inference_algorithm, tmp_path);
+    pbt_t pbt(nrows, ncols, nmines, false, inference_algorithm, tmp_path);
 
     // run for the specified number of trials
+    pbt.initialize_stats();
     for( int trial = 0; trial < ntrials; ) {
         minefield_t minefield(nrows, ncols, nmines);
-        agent_initialize(nrows, ncols, nmines);
-
-        // inference and print marginals
         pbt.reset();
+        float start_time = read_time_in_seconds();
 
         bool win = true;
         vector<pair<int,int> > execution(nrows * ncols);
         for( int play = 0; play < nrows * ncols; ++play ) {
-            int action = pbt.agent_get_action();
+            int action = pbt.get_action();
             bool is_flag_action = pbt.is_flag_action(action);
-            int cell = pbt.agent_get_cell(action);
+            int cell = pbt.get_cell(action);
             cout << "Play: n=" << play
                  << ", type=" << (is_flag_action ? "FLAG" : "OPEN")
                  << ", cell=" << cell << ":(" << cell % ncols << "," << cell / ncols << ")"
@@ -812,7 +849,7 @@ int main(int argc, const char **argv) {
             // gets sampled using the action's cell.
             if( play == 0 ) {
                 assert(!pbt.is_flag_action(action));
-                int cell = agent_get_cell(action);
+                int cell = pbt.get_cell(action);
                 minefield.sample(cell);
                 assert(!minefield.cells_[cell].mine_);
                 cout << ", obs=0" << endl << endl;
@@ -822,7 +859,7 @@ int main(int argc, const char **argv) {
 
             // obtain observation for this action. If first play, observation
             // must be zero.
-            int obs = minefield.apply_action(action, verbose);
+            int obs = minefield.apply_action(pbt, action, verbose);
             assert((obs == 0) || (play > 0));
             if( play > 0 ) cout << ", obs=" << obs << endl;
             if( obs == 9 ) {
@@ -835,20 +872,14 @@ int main(int argc, const char **argv) {
             execution[play] = make_pair(action, obs);
 
             // update agent's belief
-            agent_update_state(agent_is_flag_action(action), agent_get_cell(action), obs);
-            pbt.update_factors(pbt.is_flag_action(action), agent_get_cell(action), obs);
+            pbt.update_factors(pbt.is_flag_action(action), pbt.get_cell(action), obs);
         }
+        pbt.elapsed_time_ += read_time_in_seconds() - start_time;
 
-        agent_increase_nguesses(pbt.nguesses_);
-        agent_increase_ninferences(pbt.ninferences_);
-        if( win )
-            agent_declare_win(true);
-        else
-            agent_declare_lose(true);
-
+        if( win ) ++pbt.nwins_;
+        pbt.print_stats(cout);
         ++trial;
     }
-    agent_finalize();
     pbt.clean_inference_algorithm();
     return 0;
 }
