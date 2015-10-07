@@ -49,7 +49,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     // computation of marginals in factor model
     mutable std::vector<int> indices_for_updated_factors_;
     mutable std::vector<dai::Factor> marginals_;
-    inference_t tandem_;
+    inference_t inference_;
 
     // conversion between libdai and edbp factors
     static std::vector<std::vector<int> > edbp_factor_indices_;
@@ -93,14 +93,14 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
 #ifdef DEBUG
         for( int loc = 0; loc < nloc; ++loc )
-            tandem_.print_factor(std::cout, loc, factors_, "factors");
+            inference_.print_factor(std::cout, loc, factors_, "factors");
 #endif
 
         // create inference algorithm
-        tandem_.create_and_initialize_algorithm(factors_);
+        inference_.create_and_initialize_algorithm(factors_);
     }
     virtual ~rbpf_slam2_particle_t() {
-        tandem_.destroy_inference_algorithm();
+        inference_.destroy_inference_algorithm();
     }
 
     rbpf_slam2_particle_t(const rbpf_slam2_particle_t &p) {
@@ -113,7 +113,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         factors_(std::move(p.factors_)),
         indices_for_updated_factors_(std::move(p.indices_for_updated_factors_)),
         marginals_(std::move(p.marginals_)),
-        tandem_(std::move(p.tandem_)) {
+        inference_(std::move(p.inference_)) {
     }
 
     const rbpf_slam2_particle_t& operator=(const rbpf_slam2_particle_t &p) {
@@ -122,7 +122,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         factors_ = p.factors_;
         indices_for_updated_factors_ = p.indices_for_updated_factors_;
         marginals_ = p.marginals_;
-        tandem_ = p.tandem_;
+        inference_ = p.inference_;
         return *this;
     }
 
@@ -132,7 +132,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                (factors_ == p.factors_) &&
                (indices_for_updated_factors_ == p.indices_for_updated_factors_) &&
                (marginals_ == p.marginals_) &&
-               (tandem_ == p.tandem_);
+               (inference_ == p.inference_);
     }
 
     static void compute_edbp_factor_indices() {
@@ -223,7 +223,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 #ifdef DEBUG
         //std::cout << "update_factors: loc=" << current_loc << ", coord=" << coord_t(current_loc) << ", obs=" << obs << std::endl;
         std::cout << "factor before update: loc=" << current_loc << ", obs=" << obs << std::endl;
-        tandem_.print_factor(std::cout, current_loc, factors_, "factors");
+        inference_.print_factor(std::cout, current_loc, factors_, "factors");
 #endif
         assert(current_loc < int(factors_.size()));
         dai::Factor &factor = factors_[current_loc];
@@ -239,17 +239,17 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         indices_for_updated_factors_.push_back(current_loc);
 #ifdef DEBUG
         std::cout << "factor after  update: loc=" << current_loc << ", obs=" << obs << std::endl;
-        tandem_.print_factor(std::cout, current_loc, factors_, "factors");
+        inference_.print_factor(std::cout, current_loc, factors_, "factors");
 #endif
     }
 
     void calculate_marginals(bool print_marginals = false) const {
-        tandem_.calculate_marginals(variables_,
-                                    indices_for_updated_factors_,
-                                    factors_,
-                                    marginals_,
-                                    edbp_factor_index,
-                                    print_marginals);
+        inference_.calculate_marginals(variables_,
+                                       indices_for_updated_factors_,
+                                       factors_,
+                                       marginals_,
+                                       edbp_factor_index,
+                                       print_marginals);
     }
 
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {

@@ -91,7 +91,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
         for( int i = 0; i < nparticles_; ++i )
             delete particles_[i].second;
-        particles_ = new_particles;
+        particles_ = std::move(new_particles);
 
         history_.push_back(std::make_pair(last_action, obs));
     }
@@ -99,6 +99,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     virtual void calculate_marginals() {
         // initialize marginals
         marginals_on_vars_ = std::vector<dai::Factor>(base_.nvars_);
+        std::cout << "MoV-1.cap=" << marginals_on_vars_.capacity() << std::endl;
         for( int var = 0; var < base_.nvars_; ++var ) {
             marginals_on_vars_[var] = dai::Factor(dai::VarSet(dai::Var(var, base_.domain_size(var))), 0.0);
         }
@@ -115,6 +116,13 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
     virtual void get_marginal(int var, dai::Factor &marginal) const {
         marginal = marginals_on_vars_[var];
+    }
+
+    virtual float* get_marginal(int var, float *ptr) const {
+        const dai::Factor &factor = marginals_on_vars_[var];
+        for( int value = 0; value < int(factor.nrStates()); ++value )
+            *ptr++ = factor[value];
+        return ptr;
     }
 
     PTYPE* sample_from_pi(const PTYPE &p, int last_action, int obs) const {

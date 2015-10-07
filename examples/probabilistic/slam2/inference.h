@@ -31,8 +31,10 @@
 struct inference_t {
     static std::string algorithm_;
     static std::string options_;
+
     static dai::PropertySet libdai_options_;
-    static std::string edbp_type_;
+    static std::string type_;
+
     static std::string edbp_factors_fn_;
     static std::string edbp_evid_fn_;
     static std::string edbp_output_fn_;
@@ -68,6 +70,7 @@ struct inference_t {
                   << algorithm_spec << "'"
                   << std::endl;
 
+        type_ = type;
         parse_inference_algorithm(algorithm_spec);
 
         // if edbp algorithm, create evidence file and set filenames
@@ -82,14 +85,13 @@ struct inference_t {
                 edbp_max_iter_ = libdai_options_.getStringAs<size_t>("maxiter");
             else
                 edbp_max_iter_ = 10;
-            edbp_type_ = type;
         }
     }
 
     void clean_inference_algorithm() {
         if( algorithm_ == "edbp" ) {
             unlink(edbp_factors_fn_.c_str());
-            unlink((edbp_factors_fn_ + "." + edbp_type_).c_str());
+            unlink((edbp_factors_fn_ + "." + type_).c_str());
             unlink(edbp_evid_fn_.c_str());
             if( edbp_output_fn_ != "/dev/null" )
                 unlink(edbp_output_fn_.c_str());
@@ -188,10 +190,11 @@ struct inference_t {
             }
 
             if( inference_algorithm_ != 0 ) {
-                std::cout << "Algorithm: "
+                std::cout << "[algorithm="
                           << algorithm_
                           << inference_algorithm_->printProperties()
-                          << std::endl;
+                          << "]"
+                          << std::flush;
                 inference_algorithm_->init();
             }
         }
@@ -254,30 +257,43 @@ struct inference_t {
         std::string edbp_cmd =
           std::string("~/software/edbp/solver") + " " + edbp_factors_fn_
           + " " + edbp_evid_fn_ + " " + std::to_string(edbp_max_iter_)
-          + " 0 " + edbp_type_ + " 2>" + edbp_output_fn_;
+          + " 0 " + type_ + " 2>" + edbp_output_fn_;
         system(edbp_cmd.c_str());
     }
 
-    void extract_marginals_from_inference_libdai(const std::vector<dai::Factor> &factors, std::vector<dai::Factor> &marginals, bool print_marginals = false) const {
-        for( int fid = 0; fid < int(factors.size()); ++fid ) {
-            marginals[fid] = inference_algorithm_->belief(factors[fid].vars());
-            if( print_marginals )
-                print_factor(std::cout, fid, marginals, "libdai::marginals");
+    void extract_marginals_from_inference_libdai(
+        const std::vector<dai::Var> &variables,
+        const std::vector<dai::Factor> &factors,
+        std::vector<dai::Factor> &marginals,
+        bool print_marginals = false) const {
+        if( type_ == "BEL" ) {
+            for( int fid = 0; fid < int(factors.size()); ++fid ) {
+                marginals[fid] = inference_algorithm_->belief(factors[fid].vars());
+                if( print_marginals )
+                    print_factor(std::cout, fid, marginals, "libdai::marginals");
+            }
+        } else {
+            for( int vid = 0; vid < int(variables.size()); ++vid ) {
+                marginals[vid] = inference_algorithm_->belief(variables[vid]);
+                if( print_marginals )
+                    print_factor(std::cout, vid, marginals, "libdai::marginals");
+            }
         }
     }
 
     void extract_marginals_from_inference_edbp(
+        const std::vector<dai::Var> &variables,
         const std::vector<dai::Factor> &factors,
         std::vector<dai::Factor> &marginals,
         int edbp_factor_index(const dai::Factor&, int),
         bool print_marginals = false) const {
 
-        assert(edbp_factor_index != 0);
-        std::ifstream ifs(edbp_factors_fn_ + "." + edbp_type_);
+        assert((type_ == "MAR") || (edbp_factor_index != 0));
+        std::ifstream ifs(edbp_factors_fn_ + "." + type_);
 
         std::string buff;
         ifs >> buff;
-        assert(buff == edbp_type_);
+        assert(buff == type_);
 
         bool more_results = true;
         while( more_results ) {
@@ -285,19 +301,37 @@ struct inference_t {
             ifs >> nlines;
             assert(nlines == 1);
 
-            int nfactors = 0;
-            ifs >> nfactors;
-            assert(nfactors == int(factors.size()));
-            assert(nfactors == int(marginals.size()));
-            for( int fid = 0; fid < nfactors; ++fid ) {
-                const dai::Factor &factor = factors[fid];
-                int nstates = 0;
-                ifs >> nstates;
-                assert(nstates == (1 << factor.vars().size()));
-                for( int j = 0; j < nstates; ++j ) {
-                    float p = 0;
-                    ifs >> p;
-                    marginals[fid].set(edbp_factor_index(factor, j), p);
+            if( type_ == "BEL" ) {
+                int nfactors = 0;
+                ifs >> nfactors;
+                assert(nfactors == int(factors.size()));
+                assert(nfactors == int(marginals.size()));
+                for( int fid = 0; fid < nfactors; ++fid ) {
+                    const dai::Factor &factor = factors[fid];
+                    int nstates = 0;
+                    ifs >> nstates;
+                    assert(nstates == int(factor.nrStates()));
+                    for( int j = 0; j < nstates; ++j ) {
+                        float p = 0;
+                        ifs >> p;
+                        marginals[fid].set(edbp_factor_index(factor, j), p);
+                    }
+                }
+            } else {
+                int nvariables = 0;
+                ifs >> nvariables;;
+                assert(nvariables == int(variables.size()));
+                assert(nvariables == int(marginals.size()));
+                for( int vid = 0; vid < nvariables; ++vid ) {
+                    const dai::Var &variable = variables[vid];
+                    int nstates = 0;
+                    ifs >> nstates;
+                    assert(nstates == int(variable.states()));
+                    for( int j = 0; j < nstates; ++j ) {
+                        float p = 0;
+                        ifs >> p;
+                        marginals[vid].set(j, p);
+                    }
                 }
             }
 
@@ -325,10 +359,10 @@ struct inference_t {
         if( !indices_for_updated_factors.empty() ) {
             if( algorithm_ == "edbp" ) {
                 apply_inference_edbp(variables, factors);
-                extract_marginals_from_inference_edbp(factors, marginals, edbp_factor_index, print_marginals);
+                extract_marginals_from_inference_edbp(variables, factors, marginals, edbp_factor_index, print_marginals);
             } else {
                 apply_inference_libdai(indices_for_updated_factors, factors);
-                extract_marginals_from_inference_libdai(factors, marginals, print_marginals);
+                extract_marginals_from_inference_libdai(variables, factors, marginals, print_marginals);
             }
             indices_for_updated_factors.clear();
         }

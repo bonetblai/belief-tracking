@@ -155,7 +155,6 @@ template <typename BASE> struct pcbt_t : public tracking_t<BASE> {
     }
 
     virtual void initialize() {
-        tracking_t<BASE>::marginals_.clear();
         reset_factors(base_.initial_loc_);
     }
 
@@ -211,6 +210,10 @@ template <typename BASE> struct pcbt_t : public tracking_t<BASE> {
                 }
             }
         }
+    }
+
+    virtual float* get_marginal(int var, float *ptr) const {
+        assert(0);
     }
 };
 

@@ -21,8 +21,19 @@
 
 #include <cassert>
 #include <math.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 
 namespace Utils {
+
+inline float read_time_in_seconds() {
+    struct rusage r_usage;
+    getrusage(RUSAGE_SELF, &r_usage);
+    float time = (float)r_usage.ru_utime.tv_sec + (float)r_usage.ru_utime.tv_usec / (float)1000000;
+    getrusage(RUSAGE_CHILDREN, &r_usage);
+    time += (float)r_usage.ru_utime.tv_sec + (float)r_usage.ru_utime.tv_usec / (float)1000000;
+    return time;
+}
 
 inline void stochastic_sampling(int n, const float *cdf, int k, std::vector<int> &indices) {
     assert(cdf[n-1] != 0);

@@ -34,12 +34,13 @@
 
 #define EPSILON 0.000001
 
+// Repositoy of marginals for each time step
+class repository_t : public std::vector<float*> { };
 
 // General Tracking Algorithm
 template <typename BASE> struct tracking_t {
     std::string name_;
     const BASE &base_;
-    std::vector<std::vector<dai::Factor> > marginals_;
 
     tracking_t(const std::string &name, const BASE &base)
       : name_(name), base_(base) { };
@@ -49,25 +50,36 @@ template <typename BASE> struct tracking_t {
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
     virtual void get_marginal(int var, dai::Factor &marginal) const = 0;
+    virtual float* get_marginal(int var, float *ptr) const = 0;
 
-    void store_marginals() {
-        marginals_.push_back(std::vector<dai::Factor>(base_.nvars_));
+    void store_marginals(repository_t &repository) const {
+        float *marginals = new float[base_.marginals_size_];
+        float *ptr = marginals;
         for( int var = 0; var < base_.nvars_; ++var )
-            get_marginal(var, marginals_.back()[var]);
+            ptr = get_marginal(var, ptr);
+        repository.push_back(marginals);
     }
 
-    const dai::Factor& stored_marginal(int t, int var) const {
-        assert(t < int(marginals_.size()));
-        const std::vector<dai::Factor> &marginals_at_time_t = marginals_[t];
-        assert(var < int(marginals_at_time_t.size()));
-        return marginals_at_time_t[var];
+    const float* stored_marginal(const repository_t &repository, int t, int var) const {
+        assert(t < int(repository.size()));
+        const float *marginals = repository[t];
+        return &marginals[base_.variable_offset(var)];
     }
 
-    void MAP_on_var(int var, std::vector<int> &map_values, float epsilon = EPSILON) const {
-        const dai::Factor &marginal = marginals_.back()[var];
+    void clean(repository_t &repository) const {
+        while( !repository.empty() ) {
+            delete repository.back();
+            repository.pop_back();
+        }
+    }
+
+    void MAP_on_var(const repository_t &repository, int var, std::vector<int> &map_values, float epsilon = EPSILON) const {
+        assert(!repository.empty());
+        const float *marginals = repository.back();
+        const float *marginal = &marginals[base_.variable_offset(var)];
         map_values.clear();
         float max_probability = 0;
-        for( size_t value = 0; value < marginal.nrStates(); ++value ) {
+        for( int value = 0; value < base_.variable_size(var); ++value ) {
             if( (marginal[value] - max_probability > epsilon) || (fabs(max_probability - marginal[value]) < epsilon) ) {
                 if( marginal[value] - max_probability > epsilon )
                     map_values.clear();
@@ -77,15 +89,14 @@ template <typename BASE> struct tracking_t {
         }
     }
 
-    void print_marginals(std::ostream &os) const {
-        assert(!marginals_.empty());
-        const std::vector<dai::Factor> &last_marginals = marginals_.back();
-        assert(base_.nvars_ == int(last_marginals.size()));
+    void print_marginals(std::ostream &os, const repository_t &repository) const {
+        assert(!repository.empty());
+        const float *last_marginals = repository.back();
         for( int var = 0; var < base_.nvars_; ++var ) {
-            const dai::Factor &factor = last_marginals[var];
-            os << "var " << var << " [dsz=" << factor.nrStates() << "]:";
-            for( int j = 0; j < int(factor.nrStates()); ++j )
-                os << " " << factor[j];
+            const float *marginal = &last_marginals[base_.variable_offset(var)];
+            os << "var " << var << " [dsz=" << base_.variable_size(var) << "]:";
+            for( int value = 0; value < base_.variable_size(var); ++value )
+                os << " " << marginal[value];
             os << std::endl;
         }
     }

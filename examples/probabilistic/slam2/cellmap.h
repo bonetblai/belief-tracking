@@ -90,6 +90,7 @@ struct cellmap_t {
     int nloc_;
     int nvars_;
     int nlabels_;
+    int marginals_size_;
 
     float pa_;
     float po_;
@@ -110,10 +111,19 @@ struct cellmap_t {
       : nrows_(nrows), ncols_(ncols), nloc_(nrows * ncols), nvars_(1 + nloc_),
         nlabels_(nlabels), pa_(pa), po_(po), pc_(pc), special_(special) {
         cells_ = std::vector<cell_t>(nloc_);
+        marginals_size_ = 2 * nloc_ + nloc_;
         if( special_ )
             precompute_stored_information_special(); // precompute stored information
     }
     ~cellmap_t() { }
+
+    int variable_offset(int var) const {
+        return 2 * var;
+    }
+
+    int variable_size(int var) const {
+        return var == nloc_ ? nloc_ : 2;
+    }
 
     void set_labels(const int *labels, size_t size) {
         assert(size == cells_.size());
@@ -479,20 +489,23 @@ struct cellmap_t {
         return var_offset_[loc * nloc_ + var_id];
     }
 
-    void initialize(std::vector<tracking_t<cellmap_t>*> &tracking_algorithms) const {
+    void initialize(std::vector<tracking_t<cellmap_t>*> &tracking_algorithms, std::vector<repository_t> &repos) const {
+        repos.clear();
+        repos.reserve(tracking_algorithms.size());
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             tracking_t<cellmap_t> &tracking = *tracking_algorithms[i];
             tracking.initialize();
+            repos.push_back(repository_t());
         }
     }
-    void advance_step(int last_action, int obs, std::vector<tracking_t<cellmap_t>*> &tracking_algorithms, bool print_marginals = false) const {
-        //std::cout << "ADVANCE STEP: last_action=" << last_action << ", obs=" << obs << std::endl;
+    void advance_step(std::vector<repository_t> &repos, int last_action, int obs, std::vector<tracking_t<cellmap_t>*> &tracking_algorithms, bool print_marginals = false) const {
+        assert(repos.size() == tracking_algorithms.size());
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             tracking_t<cellmap_t> &tracking = *tracking_algorithms[i];
             tracking.update(last_action, obs);
             tracking.calculate_marginals();
-            tracking.store_marginals();
-            if( print_marginals ) tracking.print_marginals(std::cout);
+            tracking.store_marginals(repos[i]);
+            if( print_marginals ) tracking.print_marginals(std::cout, repos[i]);
         }
     }
 
@@ -550,7 +563,8 @@ struct cellmap_t {
         }
     }
 
-    void run_execution(const execution_t &input_execution,
+    void run_execution(std::vector<repository_t> &repos,
+                       const execution_t &input_execution,
                        execution_t &output_execution,
                        int nsteps,
                        const action_selection_t<cellmap_t> *policy,
@@ -566,9 +580,9 @@ struct cellmap_t {
         // initialize tracking algorithms and output execution
         std::cout << "# initializing... " << std::flush;
         output_execution.clear();
-        initialize(tracking_algorithms);
+        initialize(tracking_algorithms, repos);
         output_execution.push_back(initial_step);
-        advance_step(-1, obs, tracking_algorithms, print_marginals);
+        advance_step(repos, -1, obs, tracking_algorithms, print_marginals);
         std::cout << "done!" << std::endl;
 
         // run execution
@@ -597,17 +611,19 @@ struct cellmap_t {
 
             // update tracking
             output_execution.push_back(execution_step_t(hidden_loc, obs, last_action));
-            advance_step(last_action, obs, tracking_algorithms, print_marginals);
+            advance_step(repos, last_action, obs, tracking_algorithms, print_marginals);
         }
         std::cout << std::endl;
     }
-    void run_execution(const execution_t &input_execution,
+    void run_execution(std::vector<repository_t> &repos,
+                       const execution_t &input_execution,
                        execution_t &output_execution,
                        std::vector<tracking_t<cellmap_t>*> &tracking_algorithms,
                        bool print_marginals = false) {
-        run_execution(input_execution, output_execution, 0, 0, tracking_algorithms, print_marginals);
+        run_execution(repos, input_execution, output_execution, 0, 0, tracking_algorithms, print_marginals);
     }
-    void run_execution(execution_t &output_execution,
+    void run_execution(std::vector<repository_t> &repos,
+                       execution_t &output_execution,
                        int initial_loc,
                        int nsteps,
                        const action_selection_t<cellmap_t> &policy,
@@ -615,7 +631,7 @@ struct cellmap_t {
                        bool print_marginals = false) {
         execution_step_t initial_step(initial_loc, -1, -1);
         execution_t empty_execution(1, initial_step);
-        run_execution(empty_execution, output_execution, nsteps, &policy, tracking_algorithms, print_marginals);
+        run_execution(repos, empty_execution, output_execution, nsteps, &policy, tracking_algorithms, print_marginals);
     }
 
     // scoring of tracking algorithms
@@ -663,20 +679,24 @@ struct cellmap_t {
     }
 
     // R plots
-    void generate_R_plot(std::ostream &os, const tracking_t<cellmap_t> &tracking) const {
-        for( size_t t = 0; t < tracking.marginals_.size(); ++t ) {
-            os << "mar_" << tracking.name_ << "_t" << t << " <- c"
-               << tracking.stored_marginal(t, nrows_ * ncols_).p()
-               << ";" << std::endl;
+    void generate_R_plot(std::ostream &os, const tracking_t<cellmap_t> &tracking, const repository_t &repository) const {
+        for( size_t t = 0; t < repository.size(); ++t ) {
+            const float *loc_marginal = tracking.stored_marginal(repository, t, nloc_);
+            os << "mar_" << tracking.name_ << "_t" << t << " <- c(";
+            for( int value = 0; value < nloc_; ++value ) {
+                os << loc_marginal[value];
+                if( 1 + value < nloc_ ) os << ", ";
+            }
+            os << ");" << std::endl;
         }
         os << "mar_" << tracking.name_ << " <- c(";
-        for( size_t t = 0; t < tracking.marginals_.size(); ++t )
-            os << "mar_" << tracking.name_ << "_t" << t << (t + 1 < tracking.marginals_.size() ? ", " : "");
+        for( size_t t = 0; t < repository.size(); ++t )
+            os << "mar_" << tracking.name_ << "_t" << t << (t + 1 < repository.size() ? ", " : "");
         os << ");" << std::endl;
 
         int ncols_in_plot = nrows_ * ncols_;
         os << "dmf <- melt(as.data.frame(t(matrix(mar_" << tracking.name_ << ", ncol=" << ncols_in_plot << ", byrow=T))));" << std::endl
-           << "dmf$y <- rep(1:" << ncols_in_plot << ", " << tracking.marginals_.size() << ");" << std::endl
+           << "dmf$y <- rep(1:" << ncols_in_plot << ", " << repository.size() << ");" << std::endl
            << "plot_" << tracking.name_ << " <- ggplot(dmf,aes(y=variable, x=y)) + "
            << "geom_tile(aes(fill=value)) + "
            //<< "geom_text(aes(label=ifelse(value>.01, trunc(100*value, digits=2)/100, \"\")), size=3, angle=0, color=\"white\") +"

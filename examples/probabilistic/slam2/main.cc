@@ -52,7 +52,7 @@ vector<vector<int> > rbpf_slam2_particle_t::edbp_factor_indices_;
 string inference_t::algorithm_;
 string inference_t::options_;
 dai::PropertySet inference_t::libdai_options_;
-string inference_t::edbp_type_;
+string inference_t::type_;
 string inference_t::edbp_factors_fn_;
 string inference_t::edbp_evid_fn_;
 string inference_t::edbp_output_fn_;
@@ -361,12 +361,13 @@ int main(int argc, const char **argv) {
     cout << "# Fixed-execution=" << fixed_execution << endl;
 
     // run for the specified number of trials
+    vector<repository_t> repos;
     for( int trial = 0; trial < ntrials; ++trial ) {
         cellmap_t::execution_t output_execution;
         if( !fixed_execution.empty() )
-            cellmap.run_execution(fixed_execution, output_execution, tracking_algorithms, verbose);
+            cellmap.run_execution(repos, fixed_execution, output_execution, tracking_algorithms, verbose);
         else
-            cellmap.run_execution(output_execution, cellmap.initial_loc_, nsteps, policy, tracking_algorithms, verbose);
+            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, policy, tracking_algorithms, verbose);
 
         // calculate final marginals
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
@@ -387,7 +388,7 @@ int main(int argc, const char **argv) {
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
             for( int var = 0; var < nrows * ncols; ++var ) {
-                tracking_algorithms[i]->MAP_on_var(var, map_values);
+                tracking_algorithms[i]->MAP_on_var(repos[i], var, map_values);
                 if( map_values.size() == 1 ) {
                     cout << " " << map_values.back();
                 } else {
@@ -407,7 +408,7 @@ int main(int argc, const char **argv) {
             }
 
             cout << "], loc=";
-            tracking_algorithms[i]->MAP_on_var(nrows * ncols, map_values);
+            tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values);
             if( map_values.size() == 1 ) {
                 cout << coord_t(map_values.back()) << ":" << map_values.back() << endl;
             } else {
@@ -422,13 +423,13 @@ int main(int argc, const char **argv) {
         cout << "# '*' means more than one label in MAP for given position" << endl;
 
 
-
+        int loc_var = nrows * ncols;
         if( !tracking_algorithms.empty() ) {
             cout << "library(ggplot2)" << endl << "library(reshape)" << endl << "library(zoo)" << endl;
             cout << "marginals<-matrix(c(";
             for( int loc = 0; loc < nrows * ncols; ++loc ) {
-                assert(loc < int(tracking_algorithms.back()->marginals_.back().size()));
-                cout << tracking_algorithms.back()->marginals_.back()[loc][1];
+                const float *loc_marginal = &repos.back().back()[cellmap.variable_offset(loc_var)];
+                cout << loc_marginal[1];
                 if( loc + 1 < nrows * ncols ) cout << ", ";
             }
             cout << "),ncol=" << ncols << ",byrow=T)" << endl;
@@ -463,7 +464,7 @@ ggplot(melt(mod_mat), aes(x = X2, y = X1, fill = factor(value))) + geom_tile(col
             // generate R plots
             cout << "library(\"reshape2\");" << endl << "library(\"ggplot2\");" << endl;
             for( size_t i = 0; i < tracking_algorithms.size(); ++i )
-                cellmap.generate_R_plot(cout, *tracking_algorithms[i]);
+                cellmap.generate_R_plot(cout, *tracking_algorithms[i], repos[i]);
         }
     }
 

@@ -88,6 +88,13 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
     virtual void get_marginal(int var, dai::Factor &marginal) const {
         marginal = marginals_on_vars_[var];
     }
+
+    virtual float* get_marginal(int var, float *ptr) const {
+        const dai::Factor &factor = marginals_on_vars_[var];
+        for( int value = 0; value < int(factor.nrStates()); ++value )
+            *ptr++ = factor[value];
+        return ptr;
+    }
 };
 
 #endif
