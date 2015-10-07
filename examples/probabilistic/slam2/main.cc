@@ -49,12 +49,14 @@ using namespace std;
 int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
 vector<vector<int> > rbpf_slam2_particle_t::edbp_factor_indices_;
-string rbpf_slam2_particle_t::algorithm_;
-string rbpf_slam2_particle_t::options_;
-dai::PropertySet rbpf_slam2_particle_t::libdai_options_;
-string rbpf_slam2_particle_t::edbp_factors_fn_;
-string rbpf_slam2_particle_t::edbp_evid_fn_;
-string rbpf_slam2_particle_t::edbp_output_fn_;
+string inference_t::algorithm_;
+string inference_t::options_;
+dai::PropertySet inference_t::libdai_options_;
+string inference_t::edbp_type_;
+string inference_t::edbp_factors_fn_;
+string inference_t::edbp_evid_fn_;
+string inference_t::edbp_output_fn_;
+int inference_t::edbp_max_iter_;
 
 
 void usage(ostream &os) {
@@ -108,7 +110,7 @@ int main(int argc, const char **argv) {
     // inference algorithm
     //string inference_algorithm = "edbp(hola=1,chao=2)";
     //string inference_algorithm = "jt(updates=HUGIN)";
-    string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-3,maxiter=20,maxtime=1,damping=.2)";
+    string inference_algorithm = "bp(updates=PARALL,logdomain=false,tol=1e-3,maxiter=20,maxtime=1,damping=.2)";
     //string inference_algorithm = "cbp(updates=SEQRND,clamp=CLAMP_VAR,choose=CHOOSE_RANDOM,min_max_adj=10,bbp_props=,bbp_cfn=,recursion=REC_FIXED,tol=1e-3,rec_tol=1e-3,maxiter=100)";
     //string inference_algorithm = "lc(updates=SEQRND,cavity=FULL,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
     //string inference_algorithm = "mr(updates=LINEAR,inits=RESPPROP,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
@@ -221,7 +223,7 @@ int main(int argc, const char **argv) {
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
     rbpf_slam2_particle_t::compute_edbp_factor_indices();
-    rbpf_slam2_particle_t::set_inference_algorithm(inference_algorithm, tmp_path);
+    inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
 
     // tracking algorithms
     vector<tracking_t<cellmap_t>*> tracking_algorithms;

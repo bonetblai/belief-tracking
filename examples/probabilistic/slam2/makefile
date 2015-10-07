@@ -1,13 +1,14 @@
-ROOT=		            ../../../..
+ROOT=			../../../..
 BELIEF_TRACKING_HOME=	$(ROOT)/belief-tracking
-MDP_ENGINE_HOME=		$(ROOT)/mdp-engine
+MDP_ENGINE_HOME=	$(ROOT)/mdp-engine
 
-DEPS=	    			action_selection.h cellmap.h slam_action_selection.h tracking.h utils.h \
-						particle_filter.h \
-						sis.h \
-						sir.h motion_model_sir.h optimal_sir.h \
-						rbpf.h \
-						slam_particle_types.h slam2_particle_types.h 
+DEPS=			action_selection.h cellmap.h slam_action_selection.h tracking.h utils.h \
+			particle_filter.h \
+			sis.h \
+			sir.h motion_model_sir.h optimal_sir.h \
+			rbpf.h \
+			slam_particle_types.h slam2_particle_types.h \
+			inference.h
 
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
 
@@ -24,5 +25,5 @@ colorslam:		main.cc $(DEPS)
 				$(CXX) $(CFLAGS) -o colorslam main.cc -ldai -lgmpxx -lgmp
 
 clean:
-				rm -f colorslam dummy* *~
+			rm -f colorslam dummy* *~
 
