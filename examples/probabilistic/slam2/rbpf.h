@@ -23,6 +23,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <math.h>
 
 #include "sir.h"
 
@@ -50,6 +51,14 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
             float weight = particles_[i].first;
             const PTYPE &p = *particles_[i].second;
             p.update_marginals(weight, marginals_on_vars_);
+        }
+
+        // verify
+        for( int var = 0; var < base_.nvars_; ++var ) {
+            float sum = 0;
+            for( int value = 0; value < base_.domain_size(var); ++value )
+                sum += marginals_on_vars_[var][value];
+            assert(fabs(sum - 1.0) < EPSILON);
         }
     }
 

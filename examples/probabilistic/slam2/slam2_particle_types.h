@@ -255,6 +255,10 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             dai::Factor marginal = marginals_[loc].marginal(dai::Var(loc, 2));
+#if 0
+            std::cout << "---- marginal[loc=" << loc << "] ----" << std::endl;
+            inference_.print_factor(std::cout, 0, std::vector<dai::Factor>(1, marginal), "M");
+#endif
             assert(base_->nlabels_ == int(marginal.nrStates()));
             for( int label = 0; label < base_->nlabels_; ++label )
                 marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * marginal[label]);

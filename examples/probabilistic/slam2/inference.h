@@ -66,7 +66,7 @@ struct inference_t {
     }
 
     static void set_inference_algorithm(const std::string &algorithm_spec, const std::string &type, const std::string &tmp_path) {
-        std::cout << "setting inference algorithm to '"
+        std::cout << "# setting inference algorithm to '"
                   << algorithm_spec << "'"
                   << std::endl;
 
@@ -190,11 +190,13 @@ struct inference_t {
             }
 
             if( inference_algorithm_ != 0 ) {
+#if 0
                 std::cout << "[algorithm="
                           << algorithm_
                           << inference_algorithm_->printProperties()
                           << "]"
                           << std::flush;
+#endif
                 inference_algorithm_->init();
             }
         }
