@@ -59,7 +59,7 @@ struct slam_particle_t : public base_particle_t {
 struct sis_slam_particle_t : public slam_particle_t {
     void update(float &weight, int last_action, int obs) {
         int new_loc = base_->sample_loc(current_loc_, last_action);
-        weight *= base_->probability_obs(obs, new_loc, labels_[new_loc], last_action);
+        weight *= base_->probability_obs_standard(obs, new_loc, labels_[new_loc], last_action);
         current_loc_ = new_loc;
     }
 
@@ -78,7 +78,7 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
     }
 
     float importance_weight(const motion_model_sir_slam_particle_t &np, const motion_model_sir_slam_particle_t &/*p*/, int last_action, int obs) const {
-        return base_->probability_obs(obs, np.current_loc_, np.labels_, last_action);
+        return base_->probability_obs_standard(obs, np.current_loc_, np.labels_, last_action);
     }
 
     motion_model_sir_slam_particle_t* initial_sampling() {
@@ -116,7 +116,7 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
         //                          = P(obs|np,p,last_action) * P(np|p,last_action) / P(obs|p,last_action)
         //                          = P(obs|np,last_action) * P(np|p,last_action) / P(obs|p,last_action)
         if( np.labels_ == p.labels_ ) {
-            float prob = base_->probability_obs(obs, np.current_loc_, np.labels_, last_action);
+            float prob = base_->probability_obs_standard(obs, np.current_loc_, np.labels_, last_action);
             prob *= base_->probability_tr_loc(last_action, p.current_loc_, np.current_loc_);
             return prob / importance_weight(np, p, last_action, obs);
         } else {
@@ -136,7 +136,7 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
         float weight = 0;
         int loc = p.current_loc_;
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc )
-            weight += base_->probability_obs(obs, new_loc, p.labels_, last_action) * base_->probability_tr_loc(last_action, loc, new_loc);
+            weight += base_->probability_obs_standard(obs, new_loc, p.labels_, last_action) * base_->probability_tr_loc(last_action, loc, new_loc);
         return weight;
     }
 
@@ -167,7 +167,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
         assert(base_->nlabels_ == int(factor.nrStates()));
         float total_mass = 0.0;
         for( int label = 0; label < base_->nlabels_; ++label ) {
-            factor.set(label, factor[label] * base_->probability_obs(obs, current_loc, label, last_action));
+            factor.set(label, factor[label] * base_->probability_obs_standard(obs, current_loc, label, last_action));
             total_mass += factor[label];
         }
         assert(total_mass > 0);
@@ -208,7 +208,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
         for( int label = 0; label < base_->nlabels_; ++label ) // marginalize over possible labels at current loc
-            weight += base_->probability_obs(obs, np_current_loc, label, last_action) * p.probability(label, np_current_loc);
+            weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * p.probability(label, np_current_loc);
         return weight;
     }
 
@@ -233,7 +233,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
             for( int label = 0; label < base_->nlabels_; ++label )
-                prob += base_->probability_obs(obs, new_loc, label, last_action) * p.probability(label, new_loc);
+                prob += base_->probability_obs_standard(obs, new_loc, label, last_action) * p.probability(label, new_loc);
             cdf_.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
             previous = cdf_.back();
         }
@@ -260,7 +260,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
             for( int label = 0; label < base_->nlabels_; ++label )
-                prob += base_->probability_obs(obs, new_loc, label, last_action) * p.probability(label, new_loc);
+                prob += base_->probability_obs_standard(obs, new_loc, label, last_action) * p.probability(label, new_loc);
             weight += base_->probability_tr_loc(last_action, current_loc, new_loc) * prob;
         }
         return weight;

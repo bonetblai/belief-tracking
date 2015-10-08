@@ -120,7 +120,7 @@ template <typename BASE> struct pcbt_t : public tracking_t<BASE> {
                 int loc_hist = j / base_.nlabels_;
                 int loc = loc_hist % base_.nloc_;
                 if( findex == loc ) { // findex == "most recent loc in loc_hist"
-                    factor.set(j, weight * base_.probability_obs(obs, loc, label, last_action));
+                    factor.set(j, weight * base_.probability_obs_standard(obs, loc, label, last_action));
                 } else {
                     factor.set(j, weight / float(base_.nlabels_));
                 }

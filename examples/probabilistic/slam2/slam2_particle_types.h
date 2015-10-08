@@ -318,7 +318,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             float prob = 0;
             for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
                 prob += p_marginal[slabels] * base_->probability_obs_special(obs, new_loc, slabels, last_action);
-            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
+            cdf.push_back(previous + base_->probability_tr_loc_special(last_action, current_loc, new_loc) * prob);
             previous = cdf.back();
         }
 
@@ -350,7 +350,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             float prob = 0;
             for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
                 prob += p_marginal[slabels] * base_->probability_obs_special(obs, new_loc, slabels, last_action);
-            weight += base_->probability_tr_loc(last_action, current_loc, new_loc) * prob;
+            weight += base_->probability_tr_loc_special(last_action, current_loc, new_loc) * prob;
         }
         return weight;
     }

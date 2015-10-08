@@ -68,7 +68,7 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
         // initialize marginals
         marginals_on_vars_ = std::vector<dai::Factor>(base_.nvars_);
         for( int var = 0; var < base_.nvars_; ++var ) {
-            marginals_on_vars_[var] = dai::Factor(dai::VarSet(dai::Var(var, base_.domain_size(var))), 0.0);
+            marginals_on_vars_[var] = dai::Factor(dai::VarSet(dai::Var(var, base_.variable_size(var))), 0.0);
         }
 
         float total_mass = 0;

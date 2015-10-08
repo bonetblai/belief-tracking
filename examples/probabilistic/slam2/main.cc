@@ -356,9 +356,10 @@ int main(int argc, const char **argv) {
             fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
         }
     } else {
-        cellmap.compute_random_execution(0, execution_length, fixed_execution);
+        //cellmap.compute_random_execution(0, execution_length, fixed_execution);
+        cellmap.compute_covering_execution(0, fixed_execution, execution_length);
     }
-    cout << "# fixed-execution=" << fixed_execution << endl;
+    cout << "# fixed-execution[sz=" << fixed_execution.size() << "]=" << fixed_execution << endl;
 
     // run for the specified number of trials
     vector<repository_t> repos;
@@ -449,21 +450,40 @@ int main(int argc, const char **argv) {
             }
             cout << "), ncol=" << ncols << ", byrow=T)" << endl;
 
-            // quantile range for plot: 10 units
-            cout << "quantile_range <- seq(0, 1, .1)" << endl;
+            // MAP at last time step
+            cout << "map_marginals <- matrix(c(";
+            for( int var = 0; var < nrows * ncols; ++var ) {
+                vector<int> map_values;
+                tracking_algorithms.back()->MAP_on_var(repos.back(), var, map_values, .1);
+                cout << (map_values.size() == 1 ? map_values[0] : .50);
+                if( 1 + var < nrows * ncols ) cout << ", ";
+            }
+            cout << "), ncol=" << ncols << ", byrow=T)" << endl;
 
-            // diverging palette with 10 values: taken from http://colorbrewer2.org
-            cout << "diverging_colors <- c(\"#276419\",\"#4d9221\",\"#7fbc41\",\"#b8e186\",\"#e6f5d0\",\"#fde0ef\",\"#f1b6da\",\"#de77ae\",\"#c51b7d\",\"#8e0152\")" << endl;
+            // quantile range for plot: 10 units
+            cout << "quantile_range <- c(0, .01, .05, .1, .25, .45, .55, .75, .9, .95, .99, 1)" << endl;
+
+            // color themes from http://colorbrewer2.org
+            cout << "color_theme1 <- c(\"#543005\",\"#8c510a\",\"#bf812d\",\"#dfc27d\",\"#f6e8c3\",\"#f5f5f5\",\"#c7eae5\",\"#80cdc1\",\"#35978f\",\"#01665e\",\"#003c30\")" << endl;
+            cout << "color_theme2 <- c(\"#276419\",\"#4d9221\",\"#7fbc41\",\"#b8e186\",\"#e6f5d0\",\"#f7f7f7\",\"#fde0ef\",\"#f1b6da\",\"#de77ae\",\"#c51b7d\",\"#8e0152\")" << endl;
+            cout << "color_theme3 <- c(\"#00441b\",\"#1b7837\",\"#5aae61\",\"#a6dba0\",\"#d9f0d3\",\"#f7f7f7\",\"#e7d4e8\",\"#c2a5cf\",\"#9970ab\",\"#762a83\",\"#40004b\")" << endl;
+            cout << "color_theme4 <- c(\"#7f3b08\",\"#b35806\",\"#e08214\",\"#fdb863\",\"#fee0b6\",\"#f7f7f7\",\"#d8daeb\",\"#b2abd2\",\"#8073ac\",\"#542788\",\"#2d004b\")" << endl;
+            cout << "color_theme5 <- c(\"#053061\",\"#2166ac\",\"#4393c3\",\"#92c5de\",\"#d1e5f0\",\"#f7f7f7\",\"#fddbc7\",\"#f4a582\",\"#d6604d\",\"#b2182b\",\"#67001f\")" << endl;
+            cout << "color_theme6 <- c(\"#67001f\",\"#b2182b\",\"#d6604d\",\"#f4a582\",\"#fddbc7\",\"#ffffff\",\"#e0e0e0\",\"#bababa\",\"#878787\",\"#4d4d4d\",\"#1a1a1a\")" << endl;
+            cout << "color_theme7 <- c(\"#313695\",\"#4575b4\",\"#74add1\",\"#abd9e9\",\"#e0f3f8\",\"#e8e8e8\",\"#fee090\",\"#fdae61\",\"#f46d43\",\"#d73027\",\"#a50026\")" << endl;
+            cout << "color_theme8 <- c(\"#006837\",\"#1a9850\",\"#66bd63\",\"#a6d96a\",\"#d9ef8b\",\"#b8b8b8\",\"#fee08b\",\"#fdae61\",\"#f46d43\",\"#d73027\",\"#a50026\")" << endl;
+            cout << "color_theme9 <- c(\"#5e4fa2\",\"#3288bd\",\"#66c2a5\",\"#abdda4\",\"#e6f598\",\"#ffffbf\",\"#fee08b\",\"#fdae61\",\"#f46d43\",\"#d53e4f\",\"#9e0142\")" << endl;
 
             // color palette applied to quantile range
-            cout << "color_palette <- colorRampPalette(diverging_colors)(length(quantile_range) - 1)" << endl;
+            cout << "color_palette <- colorRampPalette(color_theme1)(length(quantile_range) - 1)" << endl;
 
             // prepare text labels for legend
-            cout << "label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = function(i) paste(i, collapse = \" : \"))" << endl;
+            cout << "label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = function(i) paste(i, collapse = \"-\"))" << endl;
 
             // apply quantile discretization to field and marginals
-            cout << "marginals_mod_mat <- matrix(findInterval(marginals, quantile_range, all.inside = TRUE), nrow = nrow(marginals))" << endl
-                 << "ore_field_mod_mat <- matrix(findInterval(ore_field, quantile_range, all.inside = TRUE), nrow = nrow(ore_field))" << endl;
+            cout << "ore_field_mod_mat <- matrix(findInterval(ore_field, quantile_range, all.inside = TRUE), nrow = nrow(ore_field))" << endl
+                 << "marginals_mod_mat <- matrix(findInterval(marginals, quantile_range, all.inside = TRUE), nrow = nrow(marginals))" << endl
+                 << "map_marginals_mod_mat <- matrix(findInterval(map_marginals, quantile_range, all.inside = TRUE), nrow = nrow(map_marginals))" << endl;
 
             // set minimal theme
             cout << "theme_change <- theme(" << endl
@@ -476,30 +496,38 @@ int main(int argc, const char **argv) {
                  << "    axis.ticks = element_blank()," << endl
                  << "    axis.text.x = element_blank()," << endl
                  << "    axis.text.y = element_blank()," << endl
-                 << "    axis.title.x = element_blank()," << endl
+                 //<< "    axis.title.x = element_blank()," << endl
                  << "    axis.title.y = element_blank()" << endl
                  << ")" << endl;
 
             // generate plots
-            cout << "p1 <- ggplot(melt(ore_field_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:10))) + "
+            cout << "p1 <- ggplot(melt(ore_field_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
                  << "          geom_tile(color = \"black\") + "
-                 << "          scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + theme_change + "
-                 << "          theme(legend.position = \"none\")"
+                 << "          scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
+                 << "          theme_change + theme(legend.position = \"none\") + xlab(\"ore field\")"
                  << endl;
 
-            cout << "p2 <- ggplot(melt(marginals_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:10))) + "
+            cout << "p2 <- ggplot(melt(marginals_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
                  << "          geom_tile(color = \"black\") + "
-                 << "          scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + theme_change"
+                 << "          scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
+                 << "          theme_change + theme(legend.position = \"none\") + xlab(\"marginals\")"
+                 << endl;
+
+            cout << "p3 <- ggplot(melt(map_marginals_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
+                 << "          geom_tile(color = \"black\") + "
+                 << "          scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
+                 << "          theme_change + xlab(\"map on marginals\")"
                  << endl;
 
             // put plots together
-            cout << "gl <- lapply(list(p1, p2), ggplotGrob)" << endl
+            cout << "gl <- lapply(list(p1, p2, p3), ggplotGrob)" << endl
                  << "widths <- do.call(unit.pmax, lapply(gl, \"[[\", \"widths\"))" << endl
                  << "heights <- do.call(unit.pmax, lapply(gl, \"[[\", \"heights\"))" << endl
                  << "lg <- lapply(gl, function(g) {g$widths <- widths; g$heights <- heights; g})" << endl
-                 << "gt <- cbind(lg[[1]], lg[[2]][, -(1:3)], size = \"first\")" << endl
-                 << "gt$widths[5] = list(unit(-1.125, \"lines\"))" << endl
-                 //<< "gt$widths[9] = list(unit(-2, \"lines\"))" << endl
+                 << "gt <- cbind(lg[[1]], lg[[2]][, -(1:3)], lg[[3]][, -(1:3)], size = \"first\")" << endl
+                 << "gt$widths[5] = list(unit(-1, \"lines\"))" << endl
+                 << "gt$widths[8] = list(unit(-1, \"lines\"))" << endl
+                 << "gt$widths[11] = list(unit(5.5, \"lines\"))" << endl
                  << "grid.newpage()" << endl
                  << "grid.draw(gt)" << endl;
 

@@ -43,7 +43,7 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         // initialize marginals
         marginals_on_vars_ = std::vector<dai::Factor>(base_.nvars_);
         for( int var = 0; var < base_.nvars_; ++var ) {
-            marginals_on_vars_[var] = dai::Factor(dai::VarSet(dai::Var(var, base_.domain_size(var))), 0.0);
+            marginals_on_vars_[var] = dai::Factor(dai::VarSet(dai::Var(var, base_.variable_size(var))), 0.0);
         }
 
         // aggregate info from particles into marginals
@@ -56,7 +56,7 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         // verify
         for( int var = 0; var < base_.nvars_; ++var ) {
             float sum = 0;
-            for( int value = 0; value < base_.domain_size(var); ++value )
+            for( int value = 0; value < base_.variable_size(var); ++value )
                 sum += marginals_on_vars_[var][value];
             assert(fabs(sum - 1.0) < EPSILON);
         }

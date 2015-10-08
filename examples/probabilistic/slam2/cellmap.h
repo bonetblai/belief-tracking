@@ -145,16 +145,6 @@ struct cellmap_t {
         set_labels(labels);
     }
 
-    // location types
-    enum { LOC_CORNER_LO_LE = 0, LOC_CORNER_LO_RI = 1, LOC_CORNER_UP_LE = 2, LOC_CORNER_UP_RI = 3,
-           LOC_EDGE_LO = 4, LOC_EDGE_LE = 5, LOC_EDGE_RI = 6, LOC_EDGE_UP = 7,
-           LOC_MIDDLE = 8 };
-
-    // API for particle filters
-    int domain_size(int var) const {
-        return var == nvars_ - 1 ? nloc_ : nlabels_;
-    }
-
     // action labels
     enum { up, down, right, left };
 
@@ -212,12 +202,9 @@ struct cellmap_t {
         return p;
     }
 
-#if 0
     float probability_tr_loc_special(int action, int old_loc, int new_loc) const {
-        //return probability_tr_loc_special_[old_loc * 4 * nloc_ + new_loc * 4 + action];
-        return 0;
+        return probability_tr_loc(action, old_loc, new_loc);
     }
-#endif
 
     int sample_loc(int loc, int action) const {
         if( action == -1 ) {
@@ -238,23 +225,19 @@ struct cellmap_t {
         }
     }
 
-    // model for observations. For non-special case, P( obs | label at current loc is 'label' )
-    // is equal to parameter po if obs = label and (1 - po) / (nlabels - 1) otherwise.
-    // In the special case, observation is a number from 0 to 9 computed from the current
-    // location and the 8 surrounding locations (for a middle location). The model is the
-    // following: obs = \sum_loc I(loc) where the sum is over all locations loc surrounding
-    // (and including) the current location cloc. The variable I(loc) is a random variable
-    // which is equal to label[loc] with probability equal to po * .9^dist(loc,cloc) where
-    // dist(loc,cloc) is the Manhattan distance between loc and cloc.
+    // model for observations.
+    //
+    // For the non-special case, P( obs | label at current loc is 'label' ) is equal to
+    // parameter po if obs = label and (1 - po) / (nlabels - 1) otherwise.
 
     // computes P(obs | label at current loc is 'label')
-    float probability_obs(int obs, int /*loc*/, int label, int /*last_action*/) const {
+    float probability_obs_standard(int obs, int /*loc*/, int label, int /*last_action*/) const {
         return label == obs ? po_ : (1 - po_) / float(nlabels_ - 1);
     }
 
     // computes P(obs | loc, map given by labels)
-    float probability_obs(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        return probability_obs(obs, loc, labels[loc], last_action);
+    float probability_obs_standard(int obs, int loc, const std::vector<int> &labels, int last_action) const {
+        return probability_obs_standard(obs, loc, labels[loc], last_action);
     }
 
     int sample_obs(int loc, int last_action) const {
@@ -276,17 +259,85 @@ struct cellmap_t {
         }
         return label;
     }
+
     int sample_obs_standard(int loc, int last_action) const {
         assert((loc >= 0) && (loc < nloc_));
         int label = cells_[loc].label_;
         return sample_obs_standard(loc, label, last_action);
     }
 
-    // observation model for the special model
+    // For the special case, observation is a number from 0 to 9 that is computed from
+    // the current // location and the 8 surrounding locations (for a middle location).
+    // The model is the following:
+    //
+    //     obs = \sum_loc I(loc)
+    //
+    // where the sum is over all locations loc surrounding (and including) the current
+    // location cloc. The variable I(loc) is a indicator random variable that is equal
+    // to label[loc] with probability equal to po^dist(loc,cloc) where dist(loc,cloc)
+    // is the Manhattan distance between loc and cloc.
+
+    float probability_obs_special(int obs, int loc, int slabels, int /*last_action*/) const {
+        assert(special_);
+        return probability_obs_special_[calculate_index(slabels, obs, loc_type_[loc])];
+    }
+
+    float probability_obs_special(int obs, int loc, const std::vector<int> &labels, int last_action) const {
+        assert(special_);
+        int slabels = 0;
+        int row = loc / ncols_, col = loc % ncols_;
+        for( int dr = -1; dr < 2; ++dr ) {
+            int nrow = row + dr;
+            if( (nrow < 0) || (nrow >= nrows_) ) continue;
+            for( int dc = -1; dc < 2; ++dc ) {
+                int ncol = col + dc;
+                if( (ncol < 0) || (ncol >= ncols_) ) continue;
+                int bit = (dr + 1) * 3 + (dc + 1);
+                int off_loc = nrow * ncols_ + ncol;
+                int label = labels[off_loc];
+                slabels += (label << bit);
+            }
+        }
+        assert((slabels >= 0) && (slabels < 512));
+        return probability_obs_special(obs, loc, slabels, last_action);
+    }
+
+    int sample_obs_special(int loc, int /*last_action*/) const {
+        assert(special_);
+        assert((loc >= 0) && (loc < nloc_));
+        int obs = 0;
+        int row = loc / ncols_, col = loc % ncols_;
+        for( int dr = -1; dr < 2; ++dr ) {
+            int nrow = row + dr;
+            if( (nrow < 0) || (nrow >= nrows_) ) continue;
+            for( int dc = -1; dc < 2; ++dc ) {
+                int ncol = col + dc;
+                if( (ncol < 0) || (ncol >= ncols_) ) continue;
+                int new_loc = nrow * ncols_ + ncol;
+                int label = cells_[new_loc].label_;
+                assert((label == 0) || (label == 1));
+                float q = (dr != 0 ? po_ : 1) * (dc != 0 ? po_ : 1);
+                obs += drand48() <= q ? label : 1 - label;
+            }
+        }
+        assert((obs >= 0) && (obs < 10));
+        return obs;
+    }
+
+    // precompute information for efficient computation of observation
+    // probabilities.
+
+    // location types
+    enum { LOC_CORNER_LO_LE = 0, LOC_CORNER_LO_RI = 1, LOC_CORNER_UP_LE = 2, LOC_CORNER_UP_RI = 3,
+           LOC_EDGE_LO = 4, LOC_EDGE_LE = 5, LOC_EDGE_RI = 6, LOC_EDGE_UP = 7,
+           LOC_MIDDLE = 8 };
+
+    // wheter a given *relative* loc-type:rel-loc is active or not (belong to grid)
     bool incompatible_loc(int loc, int loc_type) const {
         return inactive_locs_[loc_type].find(loc) != inactive_locs_[loc_type].end();
     }
 
+    // this function is currently not used
     bool incompatible_slabels(int slabels, int loc_type) const {
         for( std::set<int>::const_iterator it = inactive_locs_[loc_type].begin(); it != inactive_locs_[loc_type].end(); ++it ) {
             if( bit(slabels, *it) == 1 )
@@ -298,14 +349,14 @@ struct cellmap_t {
     void precompute_stored_information_special() {
         assert(special_);
 
-        // num bits
+        // num bits equal to 1 for each integer in 0..511
         num_bits_ = std::vector<int>(512, 0);
         for( int n = 0; n < 512; ++n ) {
             for( int j = 0; j < 9; ++j )
                 num_bits_[n] += bit(n, j);
         }
 
-        // location types
+        // location types for each cell: bits for corner and side
         loc_type_ = std::vector<int>(nloc_, 0);
         for( int loc = 0; loc < nloc_; ++loc ) {
             int row = loc / ncols_, col = loc % ncols_;
@@ -377,7 +428,8 @@ struct cellmap_t {
         //                      = \sum_{val} P( obs | val, slabels) P( val | slabels)
         //                      = \sum_{val} P( obs | val ) \prod_{loc} P( val[loc] | slabels[loc] )
         //                      = \sum_{val} [[ obs = #{ loc : val[loc] = 1 } ]] \prod_{loc} P( val[loc] | slabels[loc] )
-        //
+
+        // dimension is product of 512 valuations, 10 obs and 9 loc-types
         probability_obs_special_ = std::vector<float>(512 * 10 * 9, 0);
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
             for( int obs = 0; obs < 10; ++obs ) {
@@ -390,7 +442,7 @@ struct cellmap_t {
                         float p = 1;
                         for( int rloc = 0; rloc < 9; ++rloc ) {
                             //if( incompatible_loc(rloc, loc_type) ) continue;
-                            float q = po_ * (same_column(rloc, 4, 3) ? 1 : 0.9) * (same_row(rloc, 4, 3) ? 1 : 0.9);
+                            float q = (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_);
                             if( incompatible_loc(rloc, loc_type) )
                                 p *= bit(valuation, rloc) == 0 ? 0.9 : 0.1;
                             else
@@ -403,7 +455,6 @@ struct cellmap_t {
             }
         }
 
-#ifdef DEBUG
         // check probabilities for observation: \sum_{obs} P( obs | slabels ) = 1 for all slabels
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
             for( int slabels = 0; slabels < 512; ++slabels ) {
@@ -411,11 +462,12 @@ struct cellmap_t {
                 float sum = 0;
                 for( int obs = 0; obs < 10; ++obs )
                     sum += probability_obs_special_[calculate_index(slabels, obs, loc_type)];
+                assert(fabs(sum - 1) < 1e-6);
+#ifdef DEBUG
                 std::cout << "total-mass[lt=" << loc_type << ",labels=" << slabels << "] = " << sum << std::endl;
-                assert(fabs(sum - 1) < 0.000001);
+#endif
             }
         }
-#endif
 
         // calculate var offsets
         var_offset_ = std::vector<int>(nloc_ * nloc_, 0);
@@ -435,59 +487,12 @@ struct cellmap_t {
         }
     }
 
-    float probability_obs_special(int obs, int loc, int slabels, int /*last_action*/) const {
-        assert(special_);
-        return probability_obs_special_[calculate_index(slabels, obs, loc_type_[loc])];
-    }
-
-    float probability_obs_special(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        assert(special_);
-        int slabels = 0;
-        int row = loc / ncols_, col = loc % ncols_;
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue;
-            for( int dc = -1; dc < 2; ++dc ) {
-                int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue;
-                int bit = (dr + 1) * 3 + (dc + 1);
-                int off_loc = nrow * ncols_ + ncol;
-                int label = labels[off_loc];
-                slabels += (label << bit);
-            }
-        }
-        assert((slabels >= 0) && (slabels < 512));
-        return probability_obs_special(obs, loc, slabels, last_action);
-    }
-
-    int sample_obs_special(int loc, int /*last_action*/) const {
-        assert(special_);
-        assert((loc >= 0) && (loc < nloc_));
-        int obs = 0;
-        int row = loc / ncols_, col = loc % ncols_;
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue;
-            for( int dc = -1; dc < 2; ++dc ) {
-                int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue;
-                int new_loc = nrow * ncols_ + ncol;
-                int label = cells_[new_loc].label_;
-                float q = po_ * (dr != 0 ? .9 : 1) * (dc != 0 ? .9 : 1);
-                obs += drand48() < q ? label : 1 - label;
-            }
-        }
-        assert((obs >= 0) && (obs < 10));
-        return obs;
-    }
-
-    int num_bits(int n) const {
-        return num_bits_[n];
-    }
-
     int var_offset(int loc, int var_id) const {
         return var_offset_[loc * nloc_ + var_id];
     }
+
+
+    // tracking function
 
     void initialize(std::vector<tracking_t<cellmap_t>*> &tracking_algorithms, std::vector<repository_t> &repos) const {
         repos.clear();
@@ -551,15 +556,55 @@ struct cellmap_t {
         }
     }
 
+    int action_for(int target_loc, int current_loc) const {
+        assert(target_loc != current_loc);
+        coord_t target(target_loc), current(current_loc);
+        if( target.row_ != current.row_ ) {
+            if( target.col_ != current.col_ ) {
+                // row and col are different, first try to get to the right column
+                return target.col_ > current.col_ ? right : left;
+            } else {
+                // action must be either up or down
+                return target.row_ > current.row_ ? up : down;
+            }
+        } else {
+            assert(target.col_ != current.col_);
+            return target.col_ > current.col_ ? right : left;
+        }
+    }
+
     void compute_random_execution(int initial_loc, int length, execution_t &execution) const {
         execution.reserve(length + 1);
         execution.push_back(execution_step_t(initial_loc, sample_obs(initial_loc, -1), -1));
         for( int step = 0; step < length; ++step ) {
             int current_loc = execution.back().loc_;
-            int last_action = random_action();
-            int new_loc = sample_loc(current_loc, last_action);
-            int obs = sample_obs(new_loc, last_action);
-            execution.push_back(execution_step_t(new_loc, obs, last_action));
+            int action = random_action();
+            int new_loc = sample_loc(current_loc, action);
+            int obs = sample_obs(new_loc, action);
+            execution.push_back(execution_step_t(new_loc, obs, action));
+        }
+    }
+
+    void compute_covering_execution(int initial_loc, execution_t &execution, int loops = 1) const {
+        execution.reserve(loops * nloc_ + 1);
+        execution.push_back(execution_step_t(initial_loc, sample_obs(initial_loc, -1), -1));
+
+        while( loops > 0 ) {
+            std::set<int> cells_to_visit;
+            for( int loc = 0; loc < nloc_; ++loc )
+                cells_to_visit.insert(loc);
+
+            cells_to_visit.erase(execution.back().loc_);
+            while( !cells_to_visit.empty() ) {
+                int target = *cells_to_visit.begin();
+                int current_loc = execution.back().loc_;
+                int action = action_for(target, current_loc);
+                int new_loc = sample_loc(current_loc, action);
+                int obs = sample_obs(new_loc, action);
+                execution.push_back(execution_step_t(new_loc, obs, action));
+                cells_to_visit.erase(new_loc);
+            }
+            --loops;
         }
     }
 
