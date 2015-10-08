@@ -32,7 +32,7 @@
 
 #include <dai/alldai.h>
 
-#define EPSILON 1e-6
+#define EPSILON 1e-4
 
 // Repositoy of marginals for each time step
 class repository_t : public std::vector<float*> { };
@@ -53,13 +53,19 @@ template <typename BASE> struct tracking_t {
     virtual void get_marginal(int var, dai::Factor &marginal) const = 0;
     virtual float* get_marginal(int var, float *ptr) const = 0;
 
-    void verify_marginals(const float *marginals) const {
+    bool verify_marginals(const float *marginals) const {
+        int good = true;
         for( int var = 0; var < base_.nvars_; ++var ) {
             float sum = 0;
             for( int value = 0; value < base_.variable_size(var); ++value )
                 sum += marginals[base_.variable_offset(var) + value];
-            assert(fabs(sum - 1.0) < EPSILON);
+            if( fabs(sum - 1.0) >= EPSILON ) {
+                good = false;
+                std::cout << "warning: tracking_t::verify_marginals(): sum=" << sum << std::endl;
+                //assert(fabs(sum - 1.0) < EPSILON);
+            }
         }
+        return good;
     }
 
     void store_marginals(repository_t &repository) const {

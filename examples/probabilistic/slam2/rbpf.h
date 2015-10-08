@@ -58,7 +58,10 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
             float sum = 0;
             for( int value = 0; value < base_.variable_size(var); ++value )
                 sum += marginals_on_vars_[var][value];
-            assert(fabs(sum - 1.0) < EPSILON);
+            if( fabs(sum - 1.0) >= EPSILON ) {
+                std::cout << "warning: rbpf_t::calculate_marginals(): sum=" << sum << std::endl;
+                //assert(fabs(sum - 1.0) < EPSILON);
+            }
         }
     }
 
