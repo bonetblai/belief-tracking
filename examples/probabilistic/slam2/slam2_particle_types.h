@@ -24,6 +24,7 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+#include <map>
 #include <sstream>
 #include <string.h>
 #include <set>
@@ -201,20 +202,33 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         calculate_marginals();
     }
 
-    int get_slabels(int loc, int value) const {
-        //std::cout << "get_slabels(loc=" << loc << ", value=" << value << ")=" << std::flush;
-        int slabels = 0, i = 0;
-        for( dai::VarSet::const_iterator it = factors_[loc].vars().begin(); it != factors_[loc].vars().end(); ++it, ++i ) {
-            if( value & 0x1 ) {
+    int get_slabels(int loc, const dai::Factor &factor, int value) const {
+#if DEBUG
+        std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
+#endif
+        std::map<dai::Var, size_t> states = dai::calcState(factor.vars(), value);
+        int slabels = 0;
+        for( dai::VarSet::const_iterator it = factors_[loc].vars().begin(); it != factors_[loc].vars().end(); ++it ) {
+            const dai::Var &var = *it;
+            size_t var_value = states[var];
+            assert(var_value < 2); // because it is a binary variable
+            if( var_value ) {
                 int var_id = it->label();
                 int var_off = base_->var_offset(loc, var_id);
-                //std::cout << "[var_id=" << var_id << ", off=" << var_off << "]";
+                assert((var_off >= 0) && (var_off < 9));
+#if DEBUG
+                std::cout << "    [var_id=" << var_id << ":" << coord_t(var_id)
+                          << ", var_value=1, off=" << var_off << "]"
+                          << std::endl;
+#endif
                 slabels += (1 << var_off);
             }
-            value = value >> 1;
         }
-        //print_bits(std::cout, slabels, 9);
-        //std::cout << " (" << slabels << ")" << std::endl;
+#if DEBUG
+        std::cout << "    bits=|";
+        print_bits(std::cout, slabels, 9);
+        std::cout << "| (" << slabels << ")" << std::endl;
+#endif
         return slabels;
     }
 
@@ -228,11 +242,11 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         assert(current_loc < int(factors_.size()));
         dai::Factor &factor = factors_[current_loc];
         float total_mass = 0.0;
-        for( int j = 0; j < int(factor.nrStates()); ++j ) {
+        for( int value = 0; value < int(factor.nrStates()); ++value ) {
             //std::cout << "CASE j=" << std::setw(3) << j << std::endl;
-            int slabels = get_slabels(current_loc, j);
-            factor.set(j, factor[j] * base_->probability_obs_special(obs, current_loc, slabels, last_action));
-            total_mass += factor[j];
+            int slabels = get_slabels(current_loc, factor, value);
+            factor.set(value, factor[value] * base_->probability_obs_oreslam(obs, current_loc, slabels, last_action));
+            total_mass += factor[value];
         }
         assert(total_mass > 0);
         factor /= total_mass;
@@ -291,7 +305,7 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         float weight = 0;
         const dai::Factor &p_marginal = p.marginals_[np_current_loc];
         for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
-            weight += p_marginal[slabels] * base_->probability_obs_special(obs, np_current_loc, slabels, last_action);
+            weight += p_marginal[slabels] * base_->probability_obs_oreslam(obs, np_current_loc, slabels, last_action);
         return weight;
     }
 
@@ -317,8 +331,8 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
             for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
-                prob += p_marginal[slabels] * base_->probability_obs_special(obs, new_loc, slabels, last_action);
-            cdf.push_back(previous + base_->probability_tr_loc_special(last_action, current_loc, new_loc) * prob);
+                prob += p_marginal[slabels] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action);
+            cdf.push_back(previous + base_->probability_tr_loc_oreslam(last_action, current_loc, new_loc) * prob);
             previous = cdf.back();
         }
 
@@ -349,8 +363,8 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
             for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
-                prob += p_marginal[slabels] * base_->probability_obs_special(obs, new_loc, slabels, last_action);
-            weight += base_->probability_tr_loc_special(last_action, current_loc, new_loc) * prob;
+                prob += p_marginal[slabels] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action);
+            weight += base_->probability_tr_loc_oreslam(last_action, current_loc, new_loc) * prob;
         }
         return weight;
     }

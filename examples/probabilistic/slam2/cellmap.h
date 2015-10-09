@@ -92,28 +92,32 @@ struct cellmap_t {
     int nlabels_;
     int marginals_size_;
 
+    // tells whether this problem is colortile-slam or ore-slam
+    bool oreslam_;
+
     float pa_;
     float po_;
-    float pc_;
+    float base_obs_noise_;
 
-    bool special_;
     std::vector<int> num_bits_;
     std::vector<int> loc_type_;
     std::vector<std::set<int> > inactive_locs_;
-    std::vector<float> probability_obs_special_;
+    std::vector<float> probability_obs_oreslam_;
     std::vector<int> var_offset_;
 
     std::vector<cell_t> cells_;
 
     mutable int initial_loc_;
 
-    cellmap_t(int nrows, int ncols, int nlabels, float pa, float po, float pc, bool special = false)
-      : nrows_(nrows), ncols_(ncols), nloc_(nrows * ncols), nvars_(1 + nloc_),
-        nlabels_(nlabels), pa_(pa), po_(po), pc_(pc), special_(special) {
+    cellmap_t(int nrows, int ncols, int nlabels, bool oreslam, float pa, float po, float base_obs_noise = 0.9)
+      : nrows_(nrows), ncols_(ncols), nloc_(nrows * ncols),
+        nvars_(1 + nloc_), nlabels_(nlabels),
+        oreslam_(oreslam),
+        pa_(pa), po_(po), base_obs_noise_(base_obs_noise) {
         cells_ = std::vector<cell_t>(nloc_);
         marginals_size_ = 2 * nloc_ + nloc_;
-        if( special_ )
-            precompute_stored_information_special(); // precompute stored information
+        if( oreslam_ )
+            precompute_stored_information_oreslam(); // precompute stored information
     }
     ~cellmap_t() { }
 
@@ -202,7 +206,7 @@ struct cellmap_t {
         return p;
     }
 
-    float probability_tr_loc_special(int action, int old_loc, int new_loc) const {
+    float probability_tr_loc_oreslam(int action, int old_loc, int new_loc) const {
         return probability_tr_loc(action, old_loc, new_loc);
     }
 
@@ -227,7 +231,7 @@ struct cellmap_t {
 
     // model for observations.
     //
-    // For the non-special case, P( obs | label at current loc is 'label' ) is equal to
+    // For the non-ore-slam case, P( obs | label at current loc is 'label' ) is equal to
     // parameter po if obs = label and (1 - po) / (nlabels - 1) otherwise.
 
     // computes P(obs | label at current loc is 'label')
@@ -241,11 +245,11 @@ struct cellmap_t {
     }
 
     int sample_obs(int loc, int last_action) const {
-        return !special_ ? sample_obs_standard(loc, last_action) : sample_obs_special(loc, last_action);
+        return !oreslam_ ? sample_obs_standard(loc, last_action) : sample_obs_oreslam(loc, last_action);
     }
 
     int sample_obs_standard(int /*loc*/, int label, int /*last_action*/) const {
-        assert(!special_);
+        assert(!oreslam_);
         if( drand48() > po_ ) {
             int i = lrand48() % (nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {
@@ -266,7 +270,7 @@ struct cellmap_t {
         return sample_obs_standard(loc, label, last_action);
     }
 
-    // For the special case, observation is a number from 0 to 9 that is computed from
+    // For the ore-slam case, observation is a number from 0 to 9 that is computed from
     // the current // location and the 8 surrounding locations (for a middle location).
     // The model is the following:
     //
@@ -277,13 +281,13 @@ struct cellmap_t {
     // to label[loc] with probability equal to po^dist(loc,cloc) where dist(loc,cloc)
     // is the Manhattan distance between loc and cloc.
 
-    float probability_obs_special(int obs, int loc, int slabels, int /*last_action*/) const {
-        assert(special_);
-        return probability_obs_special_[calculate_index(slabels, obs, loc_type_[loc])];
+    float probability_obs_oreslam(int obs, int loc, int slabels, int /*last_action*/) const {
+        assert(oreslam_);
+        return probability_obs_oreslam_[calculate_index(slabels, obs, loc_type_[loc])];
     }
 
-    float probability_obs_special(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        assert(special_);
+    float probability_obs_oreslam(int obs, int loc, const std::vector<int> &labels, int last_action) const {
+        assert(oreslam_);
         int slabels = 0;
         int row = loc / ncols_, col = loc % ncols_;
         for( int dr = -1; dr < 2; ++dr ) {
@@ -299,11 +303,11 @@ struct cellmap_t {
             }
         }
         assert((slabels >= 0) && (slabels < 512));
-        return probability_obs_special(obs, loc, slabels, last_action);
+        return probability_obs_oreslam(obs, loc, slabels, last_action);
     }
 
-    int sample_obs_special(int loc, int /*last_action*/) const {
-        assert(special_);
+    int sample_obs_oreslam(int loc, int /*last_action*/) const {
+        assert(oreslam_);
         assert((loc >= 0) && (loc < nloc_));
         int obs = 0;
         int row = loc / ncols_, col = loc % ncols_;
@@ -316,7 +320,8 @@ struct cellmap_t {
                 int new_loc = nrow * ncols_ + ncol;
                 int label = cells_[new_loc].label_;
                 assert((label == 0) || (label == 1));
-                float q = (dr != 0 ? po_ : 1) * (dc != 0 ? po_ : 1);
+                float q = base_obs_noise_ * (dr != 0 ? po_ : 1) * (dc != 0 ? po_ : 1);
+                assert(q > 0.5);
                 obs += drand48() <= q ? label : 1 - label;
             }
         }
@@ -346,8 +351,8 @@ struct cellmap_t {
         return false;
     }
 
-    void precompute_stored_information_special() {
-        assert(special_);
+    void precompute_stored_information_oreslam() {
+        assert(oreslam_);
 
         // num bits equal to 1 for each integer in 0..511
         num_bits_ = std::vector<int>(512, 0);
@@ -430,7 +435,7 @@ struct cellmap_t {
         //                      = \sum_{val} [[ obs = #{ loc : val[loc] = 1 } ]] \prod_{loc} P( val[loc] | slabels[loc] )
 
         // dimension is product of 512 valuations, 10 obs and 9 loc-types
-        probability_obs_special_ = std::vector<float>(512 * 10 * 9, 0);
+        probability_obs_oreslam_ = std::vector<float>(512 * 10 * 9, 0);
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
             for( int obs = 0; obs < 10; ++obs ) {
                 for( int slabels = 0; slabels < 512; ++slabels ) {
@@ -440,17 +445,26 @@ struct cellmap_t {
                         //if( incompatible_slabels(valuation, loc_type) ) continue;
                         if( num_bits_[valuation] != obs ) continue;
                         float p = 1;
-                        for( int rloc = 0; rloc < 9; ++rloc ) {
+                        for( int rloc = 0; rloc < 9; ++rloc ) { // computes \prod_{loc} P( val[loc] | slabels[loc] ) onto p
                             //if( incompatible_loc(rloc, loc_type) ) continue;
-                            float q = (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_);
+                            // below loc=4 refers to the center of the 3x3 window
+                            float q = base_obs_noise_ * (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_);
                             if( incompatible_loc(rloc, loc_type) )
-                                p *= bit(valuation, rloc) == 0 ? 0.9 : 0.1;
+                                p *= bit(valuation, rloc) == 0 ? 0.99 : 0.01;
                             else
                                 p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
                         }
-                        probability_obs_special_[index] += p;
+                        probability_obs_oreslam_[index] += p;
                     }
-                    assert(probability_obs_special_[index] <= 1);
+                    assert(probability_obs_oreslam_[index] <= 1);
+                    if( probability_obs_oreslam_[index] == 0 ) {
+                        std::cout << "error: prob(obs=" << obs
+                                  << "|slabels=" << slabels
+                                  << ", loc-type=" << loc_type
+                                  << ") = " << probability_obs_oreslam_[index]
+                                  << std::endl;
+                        assert(probability_obs_oreslam_[index] > 0);
+                    }
                 }
             }
         }
@@ -461,7 +475,7 @@ struct cellmap_t {
                 //if( incompatible_slabels(slabels, loc_type) ) continue;
                 float sum = 0;
                 for( int obs = 0; obs < 10; ++obs )
-                    sum += probability_obs_special_[calculate_index(slabels, obs, loc_type)];
+                    sum += probability_obs_oreslam_[calculate_index(slabels, obs, loc_type)];
                 assert(fabs(sum - 1) < 1e-6);
 #ifdef DEBUG
                 std::cout << "total-mass[lt=" << loc_type << ",labels=" << slabels << "] = " << sum << std::endl;
@@ -469,8 +483,36 @@ struct cellmap_t {
             }
         }
 
+        // check that the most plausible obs correspond to number of ore bits
+        for( int loc_type = 0; loc_type < 9; ++loc_type ) {
+            for( int slabels = 0; slabels < 512; ++slabels ) {
+                int best_obs = 0;
+                float best_obs_prob = 0;
+                for( int obs = 0; obs < 10; ++obs ) {
+                    float p = probability_obs_oreslam_[calculate_index(slabels, obs, loc_type)];
+                    if( p > best_obs_prob ) {
+                        best_obs = obs;
+                        best_obs_prob = p;
+                    }
+                }
+                int correct_obs = num_bits(slabels);
+                if( best_obs != correct_obs ) {
+                    std::cout << "warning: most plausible obs for (loc-type=" << loc_type
+                              << ", slabels=" << slabels
+                              << ", bits=|";
+                    print_bits(std::cout, slabels, 9);
+                    std::cout << "|) is " << best_obs
+                              << " with p=" << best_obs_prob
+                              << "; correct obs " << correct_obs
+                              << " has p="
+                              << probability_obs_oreslam_[calculate_index(slabels, correct_obs, loc_type)]
+                              << std::endl;
+                }
+            }
+        }
+
         // calculate var offsets
-        var_offset_ = std::vector<int>(nloc_ * nloc_, 0);
+        var_offset_ = std::vector<int>(nloc_ * nloc_, -1);
         for( int loc = 0; loc < nloc_; ++loc ) {
             int row = loc / ncols_, col = loc % ncols_;
             for( int dr = -1; dr < 2; ++dr ) {
@@ -487,7 +529,14 @@ struct cellmap_t {
         }
     }
 
+    int num_bits(int valuation) const {
+        assert((valuation >= 0) && (valuation < 512));
+        return num_bits_[valuation];
+    }
+
     int var_offset(int loc, int var_id) const {
+        assert((loc >= 0) && (loc < nloc_));
+        assert((var_id >= 0) && (var_id < nloc_));
         return var_offset_[loc * nloc_ + var_id];
     }
 

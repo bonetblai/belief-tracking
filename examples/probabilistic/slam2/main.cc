@@ -102,7 +102,7 @@ int main(int argc, const char **argv) {
     float pa = 0.8;
     float po = 0.9;
 
-    bool special = false;
+    bool oreslam = false;
     int gtype = -1;
     int ptype = 0;
     int execution_length = 10;
@@ -168,8 +168,8 @@ int main(int argc, const char **argv) {
             seed = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-S") || !strcmp(argv[0], "--special") ) {
-            special = true;
+        } else if( !strcmp(argv[0], "-o") || !strcmp(argv[0], "--ore-slam") ) {
+            oreslam = true;
             --argc;
             ++argv;
         } else if( !strncmp(argv[0], "--tracking=", 11) ) {
@@ -217,7 +217,7 @@ int main(int argc, const char **argv) {
         pa = 0.8; // CHECK
         po = 0.9; // CHECK
     }
-    cellmap_t cellmap(nrows, ncols, nlabels, pa, po, 0.0, special);
+    cellmap_t cellmap(nrows, ncols, nlabels, oreslam, pa, po);
 
     // set static members
     coord_t::ncols_ = ncols;
@@ -277,12 +277,12 @@ int main(int argc, const char **argv) {
                 cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf = new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
                 t = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(full_name, cellmap, *cdf, nparticles);
             } else if( name == "mm_rbpf" ) {
-                if( !special )
+                if( !oreslam )
                     t = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
                 else
                     t = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
             } else if( name == "opt_rbpf" ) {
-                if( !special )
+                if( !oreslam )
                     t = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
                 else
                     t = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
@@ -475,7 +475,7 @@ int main(int argc, const char **argv) {
             cout << "color_theme9 <- c(\"#5e4fa2\",\"#3288bd\",\"#66c2a5\",\"#abdda4\",\"#e6f598\",\"#ffffbf\",\"#fee08b\",\"#fdae61\",\"#f46d43\",\"#d53e4f\",\"#9e0142\")" << endl;
 
             // color palette applied to quantile range
-            cout << "color_palette <- colorRampPalette(color_theme1)(length(quantile_range) - 1)" << endl;
+            cout << "color_palette <- colorRampPalette(color_theme8)(length(quantile_range) - 1)" << endl;
 
             // prepare text labels for legend
             cout << "label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = function(i) paste(i, collapse = \"-\"))" << endl;
