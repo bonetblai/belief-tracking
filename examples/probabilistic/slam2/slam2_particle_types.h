@@ -52,6 +52,9 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     inference_t inference_;
 
+    // conversion from factor values into slabels (it is computed dynamically by get_slabels())
+    static std::vector<std::vector<int> > slabels_;
+
     // conversion between libdai and edbp factors
     static std::vector<std::vector<int> > edbp_factor_indices_;
 
@@ -153,23 +156,23 @@ struct rbpf_slam2_particle_t : public base_particle_t {
             edbp_factor_indices_[nvars] = std::vector<int>(1 << nvars);
 
             dai::VarSet vars, r_vars;
-            for( int j = 0; j < nvars; ++j ) {
-                vars |= dai::Var(j, 2);
-                r_vars |= dai::Var(nvars - j - 1, 2);
+            for( int var = 0; var < nvars; ++var ) {
+                vars |= dai::Var(var, 2);
+                r_vars |= dai::Var(nvars - var - 1, 2);
             }
             //std::cout << "vars=" << vars << ", r_vars=" << r_vars << std::endl;
 
-            for( int j = 0; j < (1 << nvars); ++j ) {
-                std::map<dai::Var, size_t> state = dai::calcState(vars, j);
+            for( int value = 0; value < (1 << nvars); ++value ) {
+                std::map<dai::Var, size_t> state = dai::calcState(vars, value);
                 std::map<dai::Var, size_t> r_state;
                 for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it ) {
                     int label = nvars - 1 - it->first.label();
                     r_state[dai::Var(label, 2)] = it->second;
                 }
                 int r_index = dai::calcLinearState(r_vars, r_state);
-                edbp_factor_indices_[nvars][r_index] = j;
+                edbp_factor_indices_[nvars][r_index] = value;
 #if 0
-                std::cout << "State of vars(index=" << j << "): " //<< state
+                std::cout << "State of vars(index=" << value << "): " //<< state
                           << "; state of r_vars(index=" << r_index << "): " //<< dai::calcState(r_vars, r_index)
                           << std::endl;
 #endif
@@ -203,9 +206,26 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     }
 
     int get_slabels(int loc, const dai::Factor &factor, int value) const {
+        assert((loc >= 0) && (loc < base_->nloc_));
+        assert((value >= 0) && (value < int(factor.nrStates())));
+
 #if DEBUG
         std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
 #endif
+
+        // allocate space if first call
+        if( slabels_.empty() ) {
+            slabels_ = std::vector<std::vector<int> >(base_->nloc_, std::vector<int>(512, -1));
+        }
+
+        // check whether there is a valid entry
+        assert(loc < slabels_.size());
+        const std::vector<int> &slabels_for_loc = slabels_[loc];
+        if( slabels_for_loc[value] != -1 )
+            return slabels_for_loc[value];
+
+        // this is the first time that we access (loc,value)
+        // compute the correct value and cache it slabels_for_loc
         std::map<dai::Var, size_t> states = dai::calcState(factor.vars(), value);
         int slabels = 0;
         for( dai::VarSet::const_iterator it = factors_[loc].vars().begin(); it != factors_[loc].vars().end(); ++it ) {
@@ -229,6 +249,9 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         print_bits(std::cout, slabels, 9);
         std::cout << "| (" << slabels << ")" << std::endl;
 #endif
+
+        // cache it and return
+        slabels_[loc][value] = slabels;
         return slabels;
     }
 
@@ -243,9 +266,8 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         dai::Factor &factor = factors_[current_loc];
         float total_mass = 0.0;
         for( int value = 0; value < int(factor.nrStates()); ++value ) {
-            //std::cout << "CASE j=" << std::setw(3) << j << std::endl;
             int slabels = get_slabels(current_loc, factor, value);
-            factor.set(value, factor[value] * base_->probability_obs_oreslam(obs, current_loc, slabels, last_action));
+            factor.set(value, factor[value] * base_->probability_obs_oreslam(obs, current_loc, slabels, last_action)); // BLAI: CHECK: OK
             total_mass += factor[value];
         }
         assert(total_mass > 0);
@@ -289,6 +311,10 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter (slam2)
 struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
+    static std::string type() {
+        return std::string("mm_rbpf2_sir");
+    }
+
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
 #ifdef DEBUG
         assert(np == p);
@@ -304,8 +330,10 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
         const dai::Factor &p_marginal = p.marginals_[np_current_loc];
-        for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
-            weight += p_marginal[slabels] * base_->probability_obs_oreslam(obs, np_current_loc, slabels, last_action);
+        for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
+            int slabels = get_slabels(np_current_loc, p_marginal, value);
+            weight += p_marginal[value] * base_->probability_obs_oreslam(obs, np_current_loc, slabels, last_action); // BLAI: CHECK
+        }
         return weight;
     }
 
@@ -318,6 +346,10 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
 
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
 struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
+    static std::string type() {
+        return std::string("opt_rbpf2_sir");
+    }
+
     void calculate_cdf(const rbpf_slam2_particle_t &p, int last_action, int obs, std::vector<float> &cdf) const {
         assert(p.indices_for_updated_factors_.empty());
 
@@ -330,9 +362,11 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         const dai::Factor &p_marginal = p.marginals_[current_loc];
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
-            for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
-                prob += p_marginal[slabels] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action);
-            cdf.push_back(previous + base_->probability_tr_loc_oreslam(last_action, current_loc, new_loc) * prob);
+            for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
+                int slabels = get_slabels(current_loc, p_marginal, value);
+                prob += p_marginal[value] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action); // BLAI: CHECK
+            }
+            cdf.push_back(previous + base_->probability_tr_loc_oreslam(last_action, current_loc, new_loc) * prob); // BLAI: CHECK
             previous = cdf.back();
         }
 
@@ -362,9 +396,11 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         const dai::Factor &p_marginal = p.marginals_[current_loc];
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
-            for( int slabels = 0; slabels < int(p_marginal.nrStates()); ++slabels )
-                prob += p_marginal[slabels] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action);
-            weight += base_->probability_tr_loc_oreslam(last_action, current_loc, new_loc) * prob;
+            for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
+                int slabels = get_slabels(current_loc, p_marginal, value);
+                prob += p_marginal[value] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action); // BLAI: CHECK
+            }
+            weight += base_->probability_tr_loc_oreslam(last_action, current_loc, new_loc) * prob; // BLAI: CHECK
         }
         return weight;
     }

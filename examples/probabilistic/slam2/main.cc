@@ -31,7 +31,7 @@
 #include "cellmap.h"
 #include "slam_action_selection.h"
 
-#include "pcbt.h"
+////#include "pcbt.h"
 
 #include "sis.h"
 #include "motion_model_sir.h"
@@ -48,6 +48,7 @@ using namespace std;
 // static members
 int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
+vector<vector<int> > rbpf_slam2_particle_t::slabels_;
 vector<vector<int> > rbpf_slam2_particle_t::edbp_factor_indices_;
 string inference_t::algorithm_;
 string inference_t::options_;
@@ -109,7 +110,7 @@ int main(int argc, const char **argv) {
 
     // inference algorithm
     string inference_algorithm = "bp(updates=SEQRND,logdomain=true,tol=1e-3,maxiter=100,damping=.2)";
-    //string inference_algorithm = "edbp(hola=1,chao=2)";
+    //string inference_algorithm = "edbp(maxiter=2)";
     //string inference_algorithm = "jt(updates=HUGIN)";
     //string inference_algorithm = "cbp(updates=SEQRND,clamp=CLAMP_VAR,choose=CHOOSE_RANDOM,min_max_adj=10,bbp_props=,bbp_cfn=,recursion=REC_FIXED,tol=1e-3,rec_tol=1e-3,maxiter=100)";
     //string inference_algorithm = "lc(updates=SEQRND,cavity=FULL,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
@@ -237,30 +238,40 @@ int main(int argc, const char **argv) {
         char *token = strtok(0, ":");
         tracking_t<cellmap_t> *t = 0;
         if( name == "jt" ) {
+#if 0
             memory = token != 0 ? atoi(token) : memory;
             pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
             t = pcbt;
+#endif
         } else if( name == "bp" ) {
+#if 0
             memory = token != 0 ? atoi(token) : memory;
             pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
             t = pcbt;
+#endif
         } else if( name == "hak" ) {
+#if 0
             memory = token != 0 ? atoi(token) : memory;
             pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
             pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
             t = pcbt;
-#if 0 // ppcbt2_t
+#endif
         } else if( name == "ppcbt_jt" ) {
+#if 0
             ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 1000);
             pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
             tracking_algorithms.push_back(pcbt);
+#endif
         } else if( name == "ppcbt_bp" ) {
+#if 0
             ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 50);
             pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
             tracking_algorithms.push_back(pcbt);
+#endif
         } else if( name == "ppcbt_hak" ) {
+#if 0
             ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 50);
             pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
             tracking_algorithms.push_back(pcbt);
@@ -293,6 +304,10 @@ int main(int argc, const char **argv) {
         free(str);
         if( t != 0 ) tracking_algorithms.push_back(t);
     }
+
+    // print identity of trackers
+    for( size_t i = 0; i < tracking_algorithms.size(); ++i )
+        cout << "# tracker[" << i << "].id=\"" << tracking_algorithms[i]->id() << "\"" << endl;
 
     // compute longest name
     size_t size_longest_name = 0;
@@ -475,7 +490,7 @@ int main(int argc, const char **argv) {
             cout << "color_theme9 <- c(\"#5e4fa2\",\"#3288bd\",\"#66c2a5\",\"#abdda4\",\"#e6f598\",\"#ffffbf\",\"#fee08b\",\"#fdae61\",\"#f46d43\",\"#d53e4f\",\"#9e0142\")" << endl;
 
             // color palette applied to quantile range
-            cout << "color_palette <- colorRampPalette(color_theme8)(length(quantile_range) - 1)" << endl;
+            cout << "color_palette <- colorRampPalette(color_theme2)(length(quantile_range) - 1)" << endl;
 
             // prepare text labels for legend
             cout << "label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = function(i) paste(i, collapse = \"-\"))" << endl;
@@ -502,21 +517,21 @@ int main(int argc, const char **argv) {
 
             // generate plots
             cout << "p1 <- ggplot(melt(ore_field_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
-                 << "          geom_tile(color = \"black\") + "
-                 << "          scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
-                 << "          theme_change + theme(legend.position = \"none\") + xlab(\"ore field\")"
+                 << "geom_tile(color = \"black\") + "
+                 << "scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
+                 << "theme_change + theme(legend.position = \"none\") + xlab(\"ore field\")"
                  << endl;
 
             cout << "p2 <- ggplot(melt(marginals_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
-                 << "          geom_tile(color = \"black\") + "
-                 << "          scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
-                 << "          theme_change + theme(legend.position = \"none\") + xlab(\"marginals\")"
+                 << "geom_tile(color = \"black\") + "
+                 << "scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
+                 << "theme_change + theme(legend.position = \"none\") + xlab(\"marginals\")"
                  << endl;
 
             cout << "p3 <- ggplot(melt(map_marginals_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
-                 << "          geom_tile(color = \"black\") + "
-                 << "          scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
-                 << "          theme_change + xlab(\"map on marginals\")"
+                 << "geom_tile(color = \"black\") + "
+                 << "scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
+                 << "theme_change + xlab(\"map on marginals\")"
                  << endl;
 
             // put plots together

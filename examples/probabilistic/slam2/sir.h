@@ -129,6 +129,14 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         sample_from_pi(*np, p, last_action, obs);
         return np;
     }
+
+    virtual std::string id() const {
+        std::string id_str;
+        id_str = std::string("PF(type=SIR,nparticles=") +
+          std::to_string(nparticles_) + ",sus=" +
+          std::to_string(do_stochastic_universal_sampling_) + ")";
+        return id_str;
+    }
 };
 
 #endif

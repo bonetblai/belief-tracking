@@ -56,6 +56,9 @@ inline bool same_row(int i, int j, int ncols) {
 }
 
 inline int calculate_index(int slabels, int obs, int loc_type) {
+    assert((slabels >= 0) && (slabels < 512));
+    assert((obs >= 0) && (obs < 10));
+    assert((loc_type >= 0) && (loc_type < 9));
     int index = slabels * 90 + obs * 9 + loc_type;
     assert((index >= 0) && (index < 512 * 90));
     return index;
@@ -483,6 +486,7 @@ struct cellmap_t {
             }
         }
 
+#if 0
         // check that the most plausible obs correspond to number of ore bits
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
             for( int slabels = 0; slabels < 512; ++slabels ) {
@@ -510,6 +514,7 @@ struct cellmap_t {
                 }
             }
         }
+#endif
 
         // calculate var offsets
         var_offset_ = std::vector<int>(nloc_ * nloc_, -1);

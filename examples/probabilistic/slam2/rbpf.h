@@ -33,6 +33,7 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
     using PF_t<PTYPE, BASE>::nparticles_;
     using PF_t<PTYPE, BASE>::particles_;
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
+    using SIR_t<PTYPE, BASE>::do_stochastic_universal_sampling_;
 
     RBPF_t(const std::string &name, const BASE &base, int nparticles)
       : SIR_t<PTYPE, BASE>(name, base, nparticles) {
@@ -71,6 +72,15 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
 
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
         return p.importance_weight(np, p, last_action, obs);
+    }
+
+    virtual std::string id() const {
+        std::string id_str;
+        id_str = std::string("PF(type=rbpf,ptype=") +
+          PTYPE::type() + ",nparticles=" +
+          std::to_string(nparticles_) + ",sus=" +
+          std::to_string(do_stochastic_universal_sampling_) + ")";
+        return id_str;
     }
 };
 

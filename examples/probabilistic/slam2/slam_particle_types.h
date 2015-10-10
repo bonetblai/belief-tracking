@@ -57,6 +57,10 @@ struct slam_particle_t : public base_particle_t {
 
 // Particle for the SIS filter
 struct sis_slam_particle_t : public slam_particle_t {
+    static std::string type() {
+        return std::string("sis");
+    }
+
     void update(float &weight, int last_action, int obs) {
         int new_loc = base_->sample_loc(current_loc_, last_action);
         weight *= base_->probability_obs_standard(obs, new_loc, labels_[new_loc], last_action);
@@ -72,6 +76,10 @@ struct sis_slam_particle_t : public slam_particle_t {
 
 // Particle for the motion model SIR filter (verified: 09/12/2015)
 struct motion_model_sir_slam_particle_t : public slam_particle_t {
+    static std::string type() {
+        return std::string("mm_sir");
+    }
+
     void sample_from_pi(motion_model_sir_slam_particle_t &np, const motion_model_sir_slam_particle_t &p, int last_action, int /*obs*/) const {
         np = p;
         np.current_loc_ = base_->sample_loc(p.current_loc_, last_action);
@@ -90,6 +98,10 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
 
 // Particle for the optimal SIR filter (verified: 09/12/2015)
 struct optimal_sir_slam_particle_t : public slam_particle_t {
+    static std::string type() {
+        return std::string("opt_sir");
+    }
+
     // encode/decode particles into/from integers
     int encode() const {
         int code = 0;
@@ -197,6 +209,10 @@ struct rbpf_slam_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter (verified: 09/12/2015)
 struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
+    static std::string type() {
+        return std::string("mm_rbpf_sir");
+    }
+
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
         np = p;
         int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
@@ -222,6 +238,10 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
 struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     mutable std::vector<float> cdf_;
+
+    static std::string type() {
+        return std::string("opt_rbpf_sir");
+    }
 
     void calculate_cdf(const rbpf_slam_particle_t &p, int last_action, int obs) const {
         cdf_.clear();
