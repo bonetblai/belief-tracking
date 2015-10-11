@@ -52,7 +52,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     inference_t inference_;
 
-    // conversion from factor values into slabels (it is computed dynamically by get_slabels())
+    // cache for conversion  from factor values into slabels (it is dynamically filled by get_slabels())
     static std::vector<std::vector<int> > slabels_;
 
     // conversion between libdai and edbp factors
@@ -213,13 +213,13 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
 #endif
 
-        // allocate space if first call
+        // allocate cache if this is first call
         if( slabels_.empty() ) {
             slabels_ = std::vector<std::vector<int> >(base_->nloc_, std::vector<int>(512, -1));
         }
 
-        // check whether there is a valid entry
-        assert(loc < slabels_.size());
+        // check whether there is a valid entry in cache
+        assert(loc < int(slabels_.size()));
         const std::vector<int> &slabels_for_loc = slabels_[loc];
         if( slabels_for_loc[value] != -1 )
             return slabels_for_loc[value];

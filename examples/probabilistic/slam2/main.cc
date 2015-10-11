@@ -107,6 +107,7 @@ int main(int argc, const char **argv) {
     int gtype = -1;
     int ptype = 0;
     int execution_length = 10;
+    float map_threshold = .65;
 
     // inference algorithm
     string inference_algorithm = "bp(updates=SEQRND,logdomain=true,tol=1e-3,maxiter=100,damping=.2)";
@@ -230,7 +231,7 @@ int main(int argc, const char **argv) {
     vector<tracking_t<cellmap_t>*> tracking_algorithms;
     dai::PropertySet opts;
     int nparticles = 100;
-    int memory = 0;
+    //int memory = 0;
 
     for( size_t i = 0; i < tracking_algorithms_str.size(); ++i ) {
         char *str = strdup(tracking_algorithms_str[i].c_str());
@@ -279,7 +280,8 @@ int main(int argc, const char **argv) {
         } else {
             // the tracking algorithm is a particle filter algorithm
             nparticles = token != 0 ? atoi(token) : nparticles;
-            std::string full_name = name + "_" + to_string(nparticles);
+            string full_name = name + "_" + to_string(nparticles);
+
             if( name == "sis" ) {
                 t = new SIS_t<sis_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
             } else if( name == "mm_sir" ) {
@@ -398,7 +400,7 @@ int main(int argc, const char **argv) {
         }
 
         // print final (tracked) map and location
-        vector<int> map_values;
+        vector<pair<float, int> > map_values;
         cout << "# final(" << setw(size_longest_name) << "real" << "): map=";
         cellmap.print_labels(cout);
         cout << ", loc=" << coord_t(output_execution.back().loc_) << ":" << output_execution.back().loc_ << endl;
@@ -406,19 +408,24 @@ int main(int argc, const char **argv) {
             cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
             for( int var = 0; var < nrows * ncols; ++var ) {
                 tracking_algorithms[i]->MAP_on_var(repos[i], var, map_values, .1);
-                if( map_values.size() == 1 ) {
-                    cout << " " << map_values.back();
-                } else {
-#if 1
+                assert(!map_values.empty());
+                if( map_values[0].first < map_threshold ) {
                     cout << " *";
+                } else {
+                    if( map_values.size() == 1 ) {
+                        cout << " " << map_values.back().second;
+
+#if 1
+                        cout << " +";
 #else
-                    cout << " {";
-                    for( size_t k = 0; k < map_values.size(); ++k ) {
-                        cout << map_values[k];
-                        if( k < map_values.size() - 1 ) cout << ",";
-                    }
-                    cout << "}";
+                        cout << " {";
+                        for( size_t k = 0; k < map_values.size(); ++k ) {
+                            cout << map_values[k].second;
+                            if( k < map_values.size() - 1 ) cout << ",";
+                        }
+                        cout << "}";
 #endif
+                    }
                 }
                 if( (var + 1 < nrows * ncols) && (((var + 1) % ncols) == 0) )
                     cout << " |";
@@ -426,15 +433,20 @@ int main(int argc, const char **argv) {
 
             cout << "], loc=";
             tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values, .1);
-            if( map_values.size() == 1 ) {
-                cout << coord_t(map_values.back()) << ":" << map_values.back() << endl;
+            assert(!map_values.empty());
+            if( map_values[0].first < map_threshold ) {
+                cout << " *";
             } else {
-                cout << " {";
-                for( size_t k = 0; k < map_values.size(); ++k ) {
-                    cout << coord_t(map_values[k]) << ":" << map_values[k];
-                    if( k < map_values.size() - 1 ) cout << ",";
+                if( map_values.size() == 1 ) {
+                    cout << coord_t(map_values.back().second) << ":" << map_values.back().second << endl;
+                } else {
+                    cout << " {";
+                    for( size_t k = 0; k < map_values.size(); ++k ) {
+                        cout << coord_t(map_values[k].second) << ":" << map_values[k].second;
+                        if( k < map_values.size() - 1 ) cout << ",";
+                    }
+                    cout << "}" << endl;
                 }
-                cout << "}" << endl;
             }
         }
         cout << "# '*' means more than one label in MAP for given position" << endl;
@@ -444,39 +456,19 @@ int main(int argc, const char **argv) {
             cout << "library(ggplot2)" << endl
                  << "library(reshape)" << endl
                  << "library(zoo)" << endl
-                 << "library(gtable)" << endl;
+                 << "#library(gtable)" << endl
+                 << "library(grid)" << endl
+                 << "library(gridExtra)" << endl;
 
-            // real ore field
-            cout << "ore_field <- matrix(c(";
-            for( int var = 0; var < nrows * ncols; ++var ) {
-                const cell_t &cell = cellmap.cells_[var];
-                cout << (cell.label_ ? 1 : 0);
-                if( 1 + var < nrows * ncols ) cout << ", ";
-            }
-            cout << "), ncol=" << ncols << ", byrow=T)" << endl;
+            cout << endl;
 
-            // marginals at last time step
-            cout << "marginals <- matrix(c(";
-            for( int var = 0; var < nrows * ncols; ++var ) {
-                const float *marginal = &repos.back().back()[cellmap.variable_offset(var)];
-                cout << marginal[1];
-                if( var + 1 < nrows * ncols ) cout << ", ";
-                assert(fabs(marginal[0] + marginal[1] - 1.0) < EPSILON);
-            }
-            cout << "), ncol=" << ncols << ", byrow=T)" << endl;
+            // useful R functions
+            cout << "define_region <- function(row, col) { viewport(layout.pos.row = row, layout.pos.col = col); }"
+                 << endl
+                 << "get_legend <- function(myggplot) { tmp <- ggplot_gtable(ggplot_build(myggplot)); leg <- which(sapply(tmp$grobs, function(x) x$name) == \"guide-box\"); legend <- tmp$grobs[[leg]]; return(legend); }"
+                 << endl;
 
-            // MAP at last time step
-            cout << "map_marginals <- matrix(c(";
-            for( int var = 0; var < nrows * ncols; ++var ) {
-                vector<int> map_values;
-                tracking_algorithms.back()->MAP_on_var(repos.back(), var, map_values, .1);
-                cout << (map_values.size() == 1 ? map_values[0] : .50);
-                if( 1 + var < nrows * ncols ) cout << ", ";
-            }
-            cout << "), ncol=" << ncols << ", byrow=T)" << endl;
-
-            // quantile range for plot: 10 units
-            cout << "quantile_range <- c(0, .01, .05, .1, .25, .45, .55, .75, .9, .95, .99, 1)" << endl;
+            cout << endl;
 
             // color themes from http://colorbrewer2.org
             cout << "color_theme1 <- c(\"#543005\",\"#8c510a\",\"#bf812d\",\"#dfc27d\",\"#f6e8c3\",\"#f5f5f5\",\"#c7eae5\",\"#80cdc1\",\"#35978f\",\"#01665e\",\"#003c30\")" << endl;
@@ -489,19 +481,17 @@ int main(int argc, const char **argv) {
             cout << "color_theme8 <- c(\"#006837\",\"#1a9850\",\"#66bd63\",\"#a6d96a\",\"#d9ef8b\",\"#b8b8b8\",\"#fee08b\",\"#fdae61\",\"#f46d43\",\"#d73027\",\"#a50026\")" << endl;
             cout << "color_theme9 <- c(\"#5e4fa2\",\"#3288bd\",\"#66c2a5\",\"#abdda4\",\"#e6f598\",\"#ffffbf\",\"#fee08b\",\"#fdae61\",\"#f46d43\",\"#d53e4f\",\"#9e0142\")" << endl;
 
-            // color palette applied to quantile range
-            cout << "color_palette <- colorRampPalette(color_theme2)(length(quantile_range) - 1)" << endl;
+            cout << endl;
 
-            // prepare text labels for legend
+            // prepare colors and labels for legend: 10 levels
+            cout << "quantile_range <- c(0, .01, .05, .1, .25, .45, .55, .75, .9, .95, .99, 1)" << endl;
+            cout << "color_palette <- colorRampPalette(color_theme2)(length(quantile_range) - 1)" << endl;
             cout << "label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = function(i) paste(i, collapse = \"-\"))" << endl;
 
-            // apply quantile discretization to field and marginals
-            cout << "ore_field_mod_mat <- matrix(findInterval(ore_field, quantile_range, all.inside = TRUE), nrow = nrow(ore_field))" << endl
-                 << "marginals_mod_mat <- matrix(findInterval(marginals, quantile_range, all.inside = TRUE), nrow = nrow(marginals))" << endl
-                 << "map_marginals_mod_mat <- matrix(findInterval(map_marginals, quantile_range, all.inside = TRUE), nrow = nrow(map_marginals))" << endl;
+            cout << endl;
 
-            // set minimal theme
-            cout << "theme_change <- theme(" << endl
+            // define minimal theme
+            cout << "minimal_theme <- theme(" << endl
                  << "    plot.background = element_blank()," << endl
                  << "    panel.grid.minor = element_blank()," << endl
                  << "    panel.grid.major = element_blank()," << endl
@@ -511,72 +501,97 @@ int main(int argc, const char **argv) {
                  << "    axis.ticks = element_blank()," << endl
                  << "    axis.text.x = element_blank()," << endl
                  << "    axis.text.y = element_blank()," << endl
-                 //<< "    axis.title.x = element_blank()," << endl
-                 << "    axis.title.y = element_blank()" << endl
+                 << "    axis.title.x = element_blank()," << endl
+                 << "    axis.title.y = element_blank()," << endl
+                 << "    plot.margin = unit(c(-.25, -.5, -1.25, -.5), \"lines\")," << endl
+                 << "    legend.title = element_blank()" << endl
                  << ")" << endl;
 
-            // generate plots
-            cout << "p1 <- ggplot(melt(ore_field_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
-                 << "geom_tile(color = \"black\") + "
-                 << "scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
-                 << "theme_change + theme(legend.position = \"none\") + xlab(\"ore field\")"
-                 << endl;
+            cout << endl;
 
-            cout << "p2 <- ggplot(melt(marginals_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
-                 << "geom_tile(color = \"black\") + "
-                 << "scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
-                 << "theme_change + theme(legend.position = \"none\") + xlab(\"marginals\")"
-                 << endl;
+            // define time steps for analysis
+            set<int> focus;
+            int nsteps = int(repos.back().size());
+            for( int t = 0; t < nsteps; ++t ) {
+                if( t == int(.25 * nsteps) ) // raw data at 25% time of total steps
+                    focus.insert(t);
+                else if( t == int(.5 * nsteps) ) // raw data at 50% time of total steps
+                    focus.insert(t);
+                else if( t == int(.75 * nsteps) ) // raw data at 75% time of total steps
+                    focus.insert(t);
+                else if( t == nsteps - 1 ) // raw data at end of time
+                    focus.insert(t);
+            }
 
-            cout << "p3 <- ggplot(melt(map_marginals_mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + "
-                 << "geom_tile(color = \"black\") + "
-                 << "scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + "
-                 << "theme_change + xlab(\"map on marginals\")"
-                 << endl;
+            // extract marginals and maps for selected time steps
+            cout << "time_steps <- list()" << endl;
+            cout << "raw_data <- list()" << endl;
+            for( int t = 0; t < nsteps; ++t ) {
+                if( focus.find(t) != focus.end() ) {
+                    cout << "time_steps <- append(time_steps, list(" << t << "))" << endl;
 
-            // put plots together
-            cout << "gl <- lapply(list(p1, p2, p3), ggplotGrob)" << endl
-                 << "widths <- do.call(unit.pmax, lapply(gl, \"[[\", \"widths\"))" << endl
-                 << "heights <- do.call(unit.pmax, lapply(gl, \"[[\", \"heights\"))" << endl
-                 << "lg <- lapply(gl, function(g) {g$widths <- widths; g$heights <- heights; g})" << endl
-                 << "gt <- cbind(lg[[1]], lg[[2]][, -(1:3)], lg[[3]][, -(1:3)], size = \"first\")" << endl
-                 << "gt$widths[5] = list(unit(-1, \"lines\"))" << endl
-                 << "gt$widths[8] = list(unit(-1, \"lines\"))" << endl
-                 << "gt$widths[11] = list(unit(5.5, \"lines\"))" << endl
-                 << "grid.newpage()" << endl
-                 << "grid.draw(gt)" << endl;
+                    // raw data for ore field
+                    cout << "raw_data <- append(raw_data, list(matrix(c(";
+                    for( int var = 0; var < nrows * ncols; ++var ) {
+                        const cell_t &cell = cellmap.cells_[var];
+                        cout << (cell.label_ ? 1 : 0);
+                        if( 1 + var < nrows * ncols ) cout << ", ";
+                    }
+                    cout << "), ncol=" << ncols << ", byrow=T)))" << endl;
 
-#if 0
-                "#quantile_range <- c(0,.48,.52,1) #quantile(marginals, probs = c(0, .48, .52, 1))\n\
-quantile_range <- c(0,.1,.2,.3,.4,.5,.6,.7,.8,.9,1)\n\
-## use http://colorbrewer2.org/ to find optimal divergent color palette (or set own)\n\
-# color_palette <- colorRampPalette(c(\"#e9a3c9\", \"#f7f7f7\", \"#a1d76a\"))(length(quantile_range) - 1)\n\
-color_palette <- colorRampPalette(c(\"#f7fcfd\",\"#e5f5f9\",\"#ccece6\",\"#99d8c9\",\"#66c2a4\",\"#41ae76\",\"#238b45\",\"#006d2c\",\"#00441b\",\"#000000\"))(length(quantile_range) - 1)\n\
-color_palette <- colorRampPalette(c(\"#543005\",\"#8c510a\",\"#bf812d\",\"#dfc27d\",\"#f6e8c3\",\"#c7eae5\",\"#80cdc1\",\"#35978f\",\"#01665e\",\"#003c30\"))(length(quantile_range) - 1)\n\
-color_palette <- colorRampPalette(c(\"#276419\",\"#4d9221\",\"#7fbc41\",\"#b8e186\",\"#e6f5d0\",\"#fde0ef\",\"#f1b6da\",\"#de77ae\",\"#c51b7d\",\"#8e0152\"))(length(quantile_range) - 1)\n\
-## prepare label text (use two adjacent values for range text)\n\
-label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = function(i) paste(i, collapse = \" : \"))\n\
-## discretize matrix; this is the most important step, where for each value we find category of predefined ranges (modify probs argument of quantile to detail the colors)\n\
-mod_mat <- matrix(findInterval(marginals, quantile_range, all.inside = TRUE), nrow = nrow(marginals))\n\
-## remove background and axis from plot\n\
-theme_change <- theme(\n\
-  plot.background = element_blank(),\n\
-  panel.grid.minor = element_blank(),\n\
-  panel.grid.major = element_blank(),\n\
-  panel.background = element_blank(),\n\
-  panel.border = element_blank(),\n\
-  axis.line = element_blank(),\n\
-  axis.ticks = element_blank(),\n\
-  axis.text.x = element_blank(),\n\
-  axis.text.y = element_blank(),\n\
-  axis.title.x = element_blank(),\n\
-  axis.title.y = element_blank()\n\
-)\n\
-## output the graphics\n\
-ggplot(melt(mod_mat), aes(x = X2, y = X1, fill = factor(value, levels = 1:10))) + geom_tile(color = \"black\") + scale_fill_manual(values = color_palette, name = \"X\", labels = label_text, drop = FALSE)"
-//ggplot(melt(marginals), aes(x = X2, y = X1, fill = factor(value))) + geom_tile(aes(fill=value)) + theme_change" << endl;
-                 << endl;
-#endif
+                    // raw data for marginals
+                    cout << "raw_data <- append(raw_data, list(matrix(c(";
+                    for( int var = 0; var < nrows * ncols; ++var ) {
+                        const float *marginal = &repos.back()[t][cellmap.variable_offset(var)];
+                        cout << marginal[1];
+                        if( var + 1 < nrows * ncols ) cout << ", ";
+                        assert(fabs(marginal[0] + marginal[1] - 1.0) < EPSILON);
+                    }
+                    cout << "), ncol=" << ncols << ", byrow=T)))" << endl;
+
+                    // raw data for maps on marginals
+                    cout << "raw_data <- append(raw_data, list(matrix(c(";
+                    for( int var = 0; var < nrows * ncols; ++var ) {
+                        vector<pair<float, int> > map_values;
+                        tracking_algorithms.back()->MAP_on_var(repos.back(), t, var, map_values, .1);
+                        assert(!map_values.empty());
+                        if( map_values[0].first < map_threshold )
+                            cout << .50;
+                        else
+                            cout << (map_values.size() == 1 ? map_values[0].second : .50);
+                        if( 1 + var < nrows * ncols ) cout << ", ";
+                    }
+                    cout << "), ncol=" << ncols << ", byrow=T)))" << endl;
+                }
+            }
+            cout << endl;
+
+            // apply quantile discretization to field, marginals and maps
+            cout << "mod_data <- lapply(raw_data, function(d) { m <- matrix(findInterval(d, quantile_range, all.inside = TRUE), nrow = nrow(d)); m; })" << endl;
+
+            cout << endl;
+
+            // generate plots and plots without legends
+            cout << "plots <- lapply(mod_data, function(m) { p <- ggplot(melt(m), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + geom_tile(color = \"black\") + scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + minimal_theme; p })" << endl;
+            cout << "plots_nl <- lapply(plots, function(p) { pnl <- p + theme(legend.position = \"none\"); pnl })" << endl;
+            cout << "plot_legend <- get_legend(plots[[1]])" << endl;
+
+            cout << endl;
+
+            // put plots together using viewports and display them
+            cout << "n_time_steps <- " << focus.size() << endl;
+            cout << "grid.newpage()" << endl
+                 << "pushViewport(viewport(layout = grid.layout(2 + n_time_steps, 4, heights = unit(c(1, rep(4, n_time_steps), .5), rep(\"null\", 2 + n_time_steps)), widths = unit(c(4, 4, 4, 4), c(\"null\", \"null\", \"null\", \"null\")))))" << endl
+                 << "lapply(seq_along(plots_nl), function(i) print(plots_nl[[i]], vp = define_region(2 + ((i - 1) %/% 3), 1 + ((i - 1) %% 3))))" << endl
+                 << "grid.text(\"ore field\", vp = define_region(2 + n_time_steps, 1))" << endl
+                 << "grid.text(\"marginals\", vp = define_region(2 + n_time_steps, 2))" << endl
+                 << "grid.text(\"map on marginals\", vp = define_region(2 + n_time_steps, 3))" << endl
+                 << "grid.text(\""
+                 << to_string(nrows) << "x" << to_string(ncols) << " grid problem\\n"
+                 << tracking_algorithms.back()->id()
+                 << "\", vp = viewport(layout.pos.row = 1, layout.pos.col = 1:4))" << endl
+                 << "pushViewport(viewport(just = c(\"right\", \"center\"), layout.pos.row = 2:(1 + n_time_steps), layout.pos.col = 4))" << endl
+                 << "grid.draw(plot_legend)" << endl;
 
             // generate R plots
 #if 0

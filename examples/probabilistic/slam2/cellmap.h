@@ -316,10 +316,10 @@ struct cellmap_t {
         int row = loc / ncols_, col = loc % ncols_;
         for( int dr = -1; dr < 2; ++dr ) {
             int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue;
+            if( (nrow < 0) || (nrow >= nrows_) ) continue; // for outside-of-the-grid cell, sample value = 0
             for( int dc = -1; dc < 2; ++dc ) {
                 int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue;
+                if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, sample value = 0
                 int new_loc = nrow * ncols_ + ncol;
                 int label = cells_[new_loc].label_;
                 assert((label == 0) || (label == 1));
@@ -470,6 +470,19 @@ struct cellmap_t {
                     }
                 }
             }
+        }
+
+        for( int obs = 0; obs < 10; ++obs ) {
+            float p = probability_obs_oreslam_[calculate_index(0, obs, LOC_MIDDLE)];
+            std::cout << "# P(obs=" << obs << "|slabels=0,MIDDLE)=" << p << std::endl;
+        }
+        for( int obs = 0; obs < 10; ++obs ) {
+            float p = probability_obs_oreslam_[calculate_index(0, obs, LOC_CORNER_UP_RI)];
+            std::cout << "# P(obs=" << obs << "|slabels=0,CORNER)=" << p << std::endl;
+        }
+        for( int obs = 0; obs < 10; ++obs ) {
+            float p = probability_obs_oreslam_[calculate_index(0, obs, LOC_EDGE_UP)];
+            std::cout << "# P(obs=" << obs << "|slabels=0,EDGE)=" << p << std::endl;
         }
 
         // check probabilities for observation: \sum_{obs} P( obs | slabels ) = 1 for all slabels
