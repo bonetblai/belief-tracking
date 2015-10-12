@@ -103,7 +103,6 @@ template <typename BASE> struct tracking_t {
     }
 
     void MAP_on_var(const float *marginals, int var, std::vector<std::pair<float, int> > &map_values, float epsilon = EPSILON) const {
-        calculate_marginals();
         const float *marginal = &marginals[base_.variable_offset(var)];
         map_values.clear();
         float max_probability = 0;

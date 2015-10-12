@@ -21,8 +21,8 @@ CXXEXT=			-std=c++11
 
 CFLAGS=			-Wall -O3 $(CXXEXT2) $(INCLUDES) #-DNDEBUG
 
-colorslam.test:		main.cc $(DEPS)
-				$(CXX) $(CFLAGS) -o colorslam.test main.cc -ldai -lgmpxx -lgmp
+colorslam:		main.cc $(DEPS)
+				$(CXX) $(CFLAGS) -o colorslam main.cc -ldai -lgmpxx -lgmp
 
 clean:
 			rm -f colorslam dummy* *~

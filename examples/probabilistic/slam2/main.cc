@@ -107,7 +107,7 @@ int main(int argc, const char **argv) {
     int gtype = -1;
     int ptype = 0;
     int execution_length = 10;
-    float map_threshold = .65;
+    float map_threshold = .70;
 
     // inference algorithm
     string inference_algorithm = "bp(updates=SEQRND,logdomain=true,tol=1e-3,maxiter=100,damping=.2)";
@@ -414,7 +414,7 @@ int main(int argc, const char **argv) {
                 } else {
                     if( map_values.size() == 1 ) {
                         cout << " " << map_values.back().second;
-
+                    } else {
 #if 1
                         cout << " +";
 #else
@@ -434,19 +434,15 @@ int main(int argc, const char **argv) {
             cout << "], loc=";
             tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values, .1);
             assert(!map_values.empty());
-            if( map_values[0].first < map_threshold ) {
-                cout << " *";
+            if( map_values.size() == 1 ) {
+                cout << coord_t(map_values.back().second) << ":" << map_values.back().second << endl;
             } else {
-                if( map_values.size() == 1 ) {
-                    cout << coord_t(map_values.back().second) << ":" << map_values.back().second << endl;
-                } else {
-                    cout << " {";
-                    for( size_t k = 0; k < map_values.size(); ++k ) {
-                        cout << coord_t(map_values[k].second) << ":" << map_values[k].second;
-                        if( k < map_values.size() - 1 ) cout << ",";
-                    }
-                    cout << "}" << endl;
+                cout << " {";
+                for( size_t k = 0; k < map_values.size(); ++k ) {
+                    cout << coord_t(map_values[k].second) << ":" << map_values[k].second;
+                    if( k < map_values.size() - 1 ) cout << ",";
                 }
+                cout << "}" << endl;
             }
         }
         cout << "# '*' means more than one label in MAP for given position" << endl;
@@ -578,19 +574,29 @@ int main(int argc, const char **argv) {
 
             cout << endl;
 
-            // put plots together using viewports and display them
+            // calculate # errors in maps
+            cout << "map_threshold <- " << map_threshold << endl;
+            cout << "n_rows <- " << to_string(nrows) << endl;
+            cout << "n_cols <- " << to_string(ncols) << endl;
             cout << "n_time_steps <- " << focus.size() << endl;
+            cout << "equals_in_map <- sapply(seq(1, 3 * n_time_steps, 3), function(i) { sum(raw_data[[i+2]] == raw_data[[i]]) })" << endl;
+            cout << "unknowns_in_map <- sapply(seq(1, 3 * n_time_steps, 3), function(i) { sum(raw_data[[i+2]] == 0.5) })" << endl;
+            cout << "errors_in_map <- n_rows * n_cols - equals_in_map - unknowns_in_map" << endl;
+
+            cout << endl;
+
+            // put plots together using viewports and display them
             cout << "grid.newpage()" << endl
-                 << "pushViewport(viewport(layout = grid.layout(2 + n_time_steps, 4, heights = unit(c(1, rep(4, n_time_steps), .5), rep(\"null\", 2 + n_time_steps)), widths = unit(c(4, 4, 4, 4), c(\"null\", \"null\", \"null\", \"null\")))))" << endl
-                 << "lapply(seq_along(plots_nl), function(i) print(plots_nl[[i]], vp = define_region(2 + ((i - 1) %/% 3), 1 + ((i - 1) %% 3))))" << endl
-                 << "grid.text(\"ore field\", vp = define_region(2 + n_time_steps, 1))" << endl
-                 << "grid.text(\"marginals\", vp = define_region(2 + n_time_steps, 2))" << endl
-                 << "grid.text(\"map on marginals\", vp = define_region(2 + n_time_steps, 3))" << endl
-                 << "grid.text(\""
-                 << to_string(nrows) << "x" << to_string(ncols) << " grid problem\\n"
+                 << "pushViewport(viewport(layout = grid.layout(2 + n_time_steps, 5, heights = unit(c(1.25, rep(4, n_time_steps), .5), rep(\"null\", 2 + n_time_steps)), widths = unit(rep(4, 5), rep(\"null\", 5)))))" << endl
+                 << "sapply(seq_along(plots_nl), function(i) { print(plots_nl[[i]], vp = define_region(2 + ((i - 1) %/% 3), 2 + ((i - 1) %% 3))); i })" << endl
+                 << "grid.text(\"ore field\", vp = define_region(2 + n_time_steps, 2))" << endl
+                 << "grid.text(\"marginals\", vp = define_region(2 + n_time_steps, 3))" << endl
+                 << "grid.text(\"map on marginals\", vp = define_region(2 + n_time_steps, 4))" << endl
+                 << "grid.text(paste(n_rows, \"x\", n_cols, \" grid problem\\n"
                  << tracking_algorithms.back()->id()
-                 << "\", vp = viewport(layout.pos.row = 1, layout.pos.col = 1:4))" << endl
-                 << "pushViewport(viewport(just = c(\"right\", \"center\"), layout.pos.row = 2:(1 + n_time_steps), layout.pos.col = 4))" << endl
+                 << "\", sep=\"\"), vp = viewport(layout.pos.row = 1, layout.pos.col = 1:5))" << endl
+                 << "sapply(seq_along(time_steps), function(i) { grid.text(paste(\"After\", time_steps[[i]], \"steps\\n#error(s) in MAP =\", errors_in_map[[i]], sep=\" \"), vp = define_region(1 + i, 1)); i })" << endl
+                 << "pushViewport(viewport(just = c(\"center\", \"center\"), layout.pos.row = 2:(1 + n_time_steps), layout.pos.col = 5))" << endl
                  << "grid.draw(plot_legend)" << endl;
 
             // generate R plots
