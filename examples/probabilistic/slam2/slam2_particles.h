@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef SLAM2_PARTICLE_TYPES_H
-#define SLAM2_PARTICLE_TYPES_H
+#ifndef SLAM2_PARTICLES_H
+#define SLAM2_PARTICLES_H
 
 #include <cassert>
 #include <cstdlib>
@@ -33,7 +33,7 @@
 #include <dai/alldai.h>
 
 #include "cellmap.h"
-#include "slam_particle_types.h"
+#include "slam_particles.h"
 #include "inference.h"
 #include "utils.h"
 
@@ -51,6 +51,9 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     mutable std::vector<int> indices_for_updated_factors_;
     mutable std::vector<dai::Factor> marginals_;
     inference_t inference_;
+
+    // use in MPI to send all factors to worker processes
+    static std::vector<int> all_indices_for_factors_;
 
     // cache for conversion  from factor values into slabels (it is dynamically filled by get_slabels())
     static std::vector<std::vector<int> > slabels_;
@@ -139,6 +142,14 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                (inference_ == p.inference_);
     }
 
+    static void compute_all_indices_for_factors() {
+        assert(base_ != 0);
+        all_indices_for_factors_.clear();
+        all_indices_for_factors_.reserve(base_->nloc_);
+        for( int loc = 0; loc < base_->nloc_; ++loc )
+            all_indices_for_factors_.push_back(loc);
+    }
+
     static void compute_edbp_factor_indices() {
         edbp_factor_indices_ = std::vector<std::vector<int> >(10);
 
@@ -188,6 +199,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         return edbp_factor_index(factor.vars().size(), index);
     }
 
+#ifndef USE_MPI
     void initial_sampling_in_place() {
         assert(base_->nlabels_ == 2);
 
@@ -202,8 +214,24 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                 factor.set(i, p);
             indices_for_updated_factors_.push_back(loc);
         }
-        calculate_marginals();
+        calculate_marginals(false);
     }
+#else
+    void initial_sampling_in_place(mpi_slam_t *mpi, int tid) {
+        assert(base_->nlabels_ == 2);
+
+        // set initial history and reset factors for locations
+        loc_history_.push_back(base_->initial_loc_);
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            dai::Factor &factor = factors_[loc];
+            float p = 1.0 / (1 << factor.vars().size());
+            for( int i = 0; i < (1 << factor.vars().size()); ++i )
+                factor.set(i, p);
+        }
+        mpi->initialize_worker(variables_, factors_, tid);
+        calculate_marginals(mpi, tid, false);
+    }
+#endif
 
     int get_slabels(int loc, const dai::Factor &factor, int value) const {
         assert((loc >= 0) && (loc < base_->nloc_));
@@ -279,6 +307,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 #endif
     }
 
+#ifndef USE_MPI
     void calculate_marginals(bool print_marginals = false) const {
         inference_.calculate_marginals(variables_,
                                        indices_for_updated_factors_,
@@ -287,6 +316,14 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                                        edbp_factor_index,
                                        print_marginals);
     }
+#else
+    void calculate_marginals(mpi_slam_t *mpi, int tid, bool print_marginals = false) const {
+        assert(mpi != 0);
+        assert((tid > 0) && (tid < mpi->ntasks_));
+        mpi->calculate_marginals(factors_, all_indices_for_factors_, tid);
+        indices_for_updated_factors_.clear();
+    }
+#endif
 
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
@@ -305,8 +342,18 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 
     int value_for(int /*var*/) const { return -1; }
 
+#ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
+#else
+    virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs, mpi_slam_t *mpi, int tid) const = 0;
+#endif
     virtual float importance_weight(const rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const = 0;
+
+#ifdef USE_MPI
+    void mpi_update_marginals(mpi_slam_t *mpi, int tid) {
+        mpi->read_marginals_from_worker(marginals_, tid);
+    }
+#endif
 };
 
 // Particle for the motion model RBPF filter (slam2)
@@ -315,14 +362,22 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return std::string("mm_rbpf2_sir");
     }
 
+#ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
+#else
+    virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs, mpi_slam_t *mpi, int tid) const {
+#endif
 #ifdef DEBUG
         assert(np == p);
 #endif
         int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
         np.update_factors(last_action, obs);
+#ifndef USE_MPI
         np.calculate_marginals(false);
+#else
+        np.calculate_marginals(mpi, tid, false);
+#endif
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
@@ -337,11 +392,19 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return weight;
     }
 
+#ifndef USE_MPI
     motion_model_rbpf_slam2_particle_t* initial_sampling() {
         motion_model_rbpf_slam2_particle_t *p = new motion_model_rbpf_slam2_particle_t;
         p->initial_sampling_in_place();
         return p;
     }
+#else
+    motion_model_rbpf_slam2_particle_t* initial_sampling(mpi_slam_t *mpi, int tid) {
+        motion_model_rbpf_slam2_particle_t *p = new motion_model_rbpf_slam2_particle_t;
+        p->initial_sampling_in_place(mpi, tid);
+        return p;
+    }
+#endif
 };
 
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
@@ -377,7 +440,11 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         assert(cdf.back() == 1.0);
     }
 
+#ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
+#else
+    virtual void sample_from_pi(rbpf_slam2_particle_t &np, const rbpf_slam2_particle_t &p, int last_action, int obs, mpi_slam_t *mpi, int tid) const {
+#endif
 #ifdef DEBUG
         assert(np == p);
 #endif
@@ -386,7 +453,11 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf[0]);
         np.loc_history_.push_back(next_loc);
         np.update_factors(last_action, obs);
+#ifndef USE_MPI
         np.calculate_marginals(false);
+#else
+        np.calculate_marginals(mpi, tid, false);
+#endif
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &/*np*/, const rbpf_slam2_particle_t &p, int last_action, int obs) const {
@@ -405,11 +476,19 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return weight;
     }
 
+#ifndef USE_MPI
     optimal_rbpf_slam2_particle_t* initial_sampling() {
         optimal_rbpf_slam2_particle_t *p = new optimal_rbpf_slam2_particle_t;
         p->initial_sampling_in_place();
         return p;
     }
+#else
+    optimal_rbpf_slam2_particle_t* initial_sampling(mpi_slam_t *mpi, int tid) {
+        optimal_rbpf_slam2_particle_t *p = new optimal_rbpf_slam2_particle_t;
+        p->initial_sampling_in_place(mpi, tid);
+        return p;
+    }
+#endif
 };
 
 #undef DEBUG

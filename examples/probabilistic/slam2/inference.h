@@ -65,10 +65,12 @@ struct inference_t {
                ((inference_algorithm_ != 0) && (i.inference_algorithm_ != 0));
     }
 
-    static void set_inference_algorithm(const std::string &algorithm_spec, const std::string &type, const std::string &tmp_path) {
-        std::cout << "# setting inference algorithm to '"
-                  << algorithm_spec << "'"
-                  << std::endl;
+    static void set_inference_algorithm(const std::string &algorithm_spec, const std::string &type, const std::string &tmp_path, bool verbose = true) {
+        if( verbose ) {
+            std::cout << "# inference algorithm set to '"
+                      << algorithm_spec << "'"
+                      << std::endl;
+        }
 
         type_ = type;
         parse_inference_algorithm(algorithm_spec);
@@ -166,7 +168,7 @@ struct inference_t {
         }
     }
 
-    void create_and_initialize_algorithm(const std::vector<dai::Factor> &factors) {
+    void create_and_initialize_algorithm(const std::vector<dai::Factor> &factors, bool verbose = false) {
         if( algorithm_ != "edbp" ) {
             dai::FactorGraph factor_graph(factors);
 
@@ -190,13 +192,13 @@ struct inference_t {
             }
 
             if( inference_algorithm_ != 0 ) {
-#if 0
-                std::cout << "[algorithm="
-                          << algorithm_
-                          << inference_algorithm_->printProperties()
-                          << "]"
-                          << std::flush;
-#endif
+                if( verbose ) {
+                    std::cout << "[algorithm="
+                              << algorithm_
+                              << inference_algorithm_->printProperties()
+                              << "]"
+                              << std::flush;
+                }
                 inference_algorithm_->init();
             }
         }
@@ -269,12 +271,14 @@ struct inference_t {
         std::vector<dai::Factor> &marginals,
         bool print_marginals = false) const {
         if( type_ == "BEL" ) {
+            assert(marginals.size() == factors.size());
             for( int fid = 0; fid < int(factors.size()); ++fid ) {
                 marginals[fid] = inference_algorithm_->belief(factors[fid].vars());
                 if( print_marginals )
                     print_factor(std::cout, fid, marginals, "libdai::marginals");
             }
         } else {
+            assert(marginals.size() == variables.size());
             for( int vid = 0; vid < int(variables.size()); ++vid ) {
                 marginals[vid] = inference_algorithm_->belief(variables[vid]);
                 if( print_marginals )

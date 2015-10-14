@@ -66,8 +66,12 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         }
     }
 
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const {
+    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, int pindex) const {
+#ifndef USE_MPI
         p.sample_from_pi(np, p, last_action, obs);
+#else
+        p.sample_from_pi(np, p, last_action, obs, mpi_base_t::mpi_, pindex);
+#endif
     }
 
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {

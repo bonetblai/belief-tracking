@@ -39,8 +39,8 @@
 #include "rbpf.h"
 ////#include "ppcbt2.h"
 
-#include "slam_particle_types.h"
-#include "slam2_particle_types.h"
+#include "slam_particles.h"
+#include "slam2_particles.h"
 
 using namespace std;
 
@@ -50,6 +50,7 @@ int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
 vector<vector<int> > rbpf_slam2_particle_t::slabels_;
 vector<vector<int> > rbpf_slam2_particle_t::edbp_factor_indices_;
+vector<int> rbpf_slam2_particle_t::all_indices_for_factors_;
 string inference_t::algorithm_;
 string inference_t::options_;
 dai::PropertySet inference_t::libdai_options_;
@@ -58,6 +59,10 @@ string inference_t::edbp_factors_fn_;
 string inference_t::edbp_evid_fn_;
 string inference_t::edbp_output_fn_;
 int inference_t::edbp_max_iter_;
+
+#ifdef USE_MPI
+mpi_slam_t *mpi_base_t::mpi_ = 0;
+#endif
 
 
 void usage(ostream &os) {
@@ -118,6 +123,11 @@ int main(int argc, const char **argv) {
     //string inference_algorithm = "mr(updates=LINEAR,inits=RESPPROP,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
     //string inference_algorithm = "hak(doubleloop=true,clusters=MIN,init=UNIFORM,tol=1e-3,maxiter=100,maxtime=1)";
 
+#ifdef USE_MPI
+    mpi_base_t::mpi_ = new mpi_slam_t(argc, argv);
+#endif
+
+    // parse arguments
     --argc;
     ++argv;
     while( (argc > 0) && (**argv == '-') ) {
@@ -225,6 +235,7 @@ int main(int argc, const char **argv) {
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
     rbpf_slam2_particle_t::compute_edbp_factor_indices();
+    rbpf_slam2_particle_t::compute_all_indices_for_factors();
     inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
 
     // tracking algorithms
@@ -610,6 +621,11 @@ int main(int argc, const char **argv) {
         float elapsed_time = Utils::read_time_in_seconds() - start_time;
         cout << "# elapsed time=" << elapsed_time << endl;
     }
+
+#ifdef USE_MPI
+    mpi_base_t::mpi_->finalize_workers();
+    delete mpi_base_t::mpi_;
+#endif
 
     return 0;
 }

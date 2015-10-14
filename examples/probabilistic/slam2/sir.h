@@ -50,7 +50,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     }
     virtual ~SIR_t() { }
 
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const = 0;
+    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, int pindex) const = 0;
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const = 0;
 
     virtual void initialize() {
@@ -58,9 +58,24 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         particles_.reserve(nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
             float weight = 1.0 / float(nparticles_);
+#ifndef USE_MPI
             PTYPE *p = sampler.initial_sampling();
+#else
+            PTYPE *p = sampler.initial_sampling(mpi_base_t::mpi_, 1 + i);
+#endif
             particles_.push_back(std::make_pair(weight, p));
         }
+
+#ifdef USE_MPI 
+        // processes were lauched to calculate marginals, now collect marginals
+        assert(mpi_base_t::mpi_ != 0);
+        std::cout << "XXXX: ntasks=" << mpi_base_t::mpi_->ntasks_ << ", nparticles=" << nparticles_ << std::endl;
+        assert(mpi_base_t::mpi_->ntasks_ == 1 + nparticles_);
+        for( int i = 0; i < nparticles_; ++i ) {
+            PTYPE *p = particles_[i].second;
+            p->mpi_update_marginals(mpi_base_t::mpi_, 1 + i);
+        }   
+#endif
     }
 
     virtual void update(int last_action, int obs) {
@@ -76,7 +91,11 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         for( int i = 0; i < nparticles_; ++i ) {
             int index = indices[i];
             const PTYPE &p = *particles_[index].second;
+#ifndef USE_MPI
             PTYPE *np = sample_from_pi(p, last_action, obs);
+#else
+            PTYPE *np = sample_from_pi(p, last_action, obs, 1 + i);
+#endif
             float weight = importance_weight(*np, p, last_action, obs);
             total_mass += weight;
             new_particles.push_back(std::make_pair(weight, np));
@@ -94,6 +113,14 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         particles_ = std::move(new_particles);
 
         history_.push_back(std::make_pair(last_action, obs));
+
+#ifdef USE_MPI 
+        // processes were lauched to calculate marginals, now collect marginals
+        for( int i = 0; i < nparticles_; ++i ) {
+            PTYPE *p = particles_[i].second;
+            p->mpi_update_marginals(mpi_base_t::mpi_, 1 + i);
+        }   
+#endif
     }
 
     virtual void calculate_marginals() {
@@ -124,9 +151,9 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         return ptr;
     }
 
-    PTYPE* sample_from_pi(const PTYPE &p, int last_action, int obs) const {
+    PTYPE* sample_from_pi(const PTYPE &p, int last_action, int obs, int pindex = -1) const {
         PTYPE *np = new PTYPE(p);
-        sample_from_pi(*np, p, last_action, obs);
+        sample_from_pi(*np, p, last_action, obs, pindex);
         return np;
     }
 

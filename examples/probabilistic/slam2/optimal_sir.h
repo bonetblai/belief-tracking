@@ -44,7 +44,7 @@ template <typename PTYPE, typename BASE, typename CDF> struct optimal_SIR_t : pu
     }
     virtual ~optimal_SIR_t() { }
 
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs) const {
+    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, int /*pindex*/) const {
         const float *dist = cdf_.pi_cdf(p.encode(), last_action, obs);
         int code = sample_from_distribution(cdf_.nstates_, dist);
         np.decode(code);
