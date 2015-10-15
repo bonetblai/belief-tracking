@@ -21,11 +21,13 @@ slam:
 slam.mpi:
 			$(MPICXX) $(CFLAGS) -DUSE_MPI -o slam.mpi main.cc -ldai -lgmpxx -lgmp
 
-mpi_engine:
-			$(MPICXX) $(CFLAGS) -o mpi_engine mpi_engine.cc -ldai -lgmpxx -lgmp
+mpi_worker:
+			$(MPICXX) $(CFLAGS) -o mpi_worker mpi_worker.cc -ldai -lgmpxx -lgmp
+
+all:			slam slam.mpi mpi_worker
 
 clean:
-			rm -f slam slam.mpi mpi_engine dummy* *~
+			rm -f slam slam.mpi mpi_worker dummy* *~
 
 # dependencies
 
@@ -46,5 +48,5 @@ slam.mpi:		main.cc \
 			inference.h \
 			mpi_api.h mpi_slam.h
 
-mpi_engine:		mpi_engine.cc mpi_api.h mpi_slam.h inference.h utils.h
+mpi_worker:		mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
 

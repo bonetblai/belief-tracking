@@ -31,30 +31,30 @@ struct mpi_slam_t : public mpi_t {
 
     enum { INITIALIZE, CALCULATE, READ, FINALIZE };
 
-    void initialize_worker(const std::vector<dai::Var> &variables, const std::vector<dai::Factor> &factors, int tid) {
-        send_command(INITIALIZE, tid);
-        send_variables(variables, tid);
-        send_factors(factors, tid);
+    void initialize_worker(const std::vector<dai::Var> &variables, const std::vector<dai::Factor> &factors, int wid) {
+        send_command(INITIALIZE, wid);
+        send_variables(variables, wid);
+        send_factors(factors, wid);
     }
 
-    void calculate_marginals(const std::vector<dai::Factor> &factors, const std::vector<int> &indices, int tid) {
-        send_command(CALCULATE, tid);
-        send_indices(indices, tid);
-        send_factors(factors, indices, tid);
+    void calculate_marginals(const std::vector<dai::Factor> &factors, const std::vector<int> &indices, int wid) {
+        send_command(CALCULATE, wid);
+        send_indices(indices, wid);
+        send_factors(factors, indices, wid);
     }
 
-    void read_marginals_from_worker(std::vector<dai::Factor> &marginals, int tid) {
-        send_command(READ, tid);
-        recv_marginals(marginals, tid);
+    void read_marginals_from_worker(std::vector<dai::Factor> &marginals, int wid) {
+        send_command(READ, wid);
+        recv_marginals(marginals, wid);
     }
 
-    void finalize_worker(int tid) {
-        send_command(FINALIZE, tid);
+    void finalize_worker(int wid) {
+        send_command(FINALIZE, wid);
     }
 
     void finalize_workers() {
-        for( int tid = 1; tid < ntasks_; ++tid )
-            finalize_worker(tid);
+        for( int wid = 1; wid < nworkers_; ++wid )
+            finalize_worker(wid);
     }
 };
 

@@ -20,6 +20,7 @@
 #define MPI_API_H
 
 #include <cassert>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -28,33 +29,40 @@
 #include <dai/alldai.h>
 
 struct mpi_t {
-    int ntasks_;
-    int taskid_;
+    int nworkers_;
+    int worker_id_;
     int name_len_;
     char processor_name_[MPI_MAX_PROCESSOR_NAME];
 
     int *send_tags_;
     int *recv_tags_;
 
-    enum { MPI_MASTER_TASK = 0 };
+    enum { MPI_MASTER_WORKER = 0 };
 
     mpi_t(int argc, const char **argv) {
-        // initialize MPI and obtain number of tasks and ID
+        // initialize MPI and obtain number of workers and ID
         MPI_Init(&argc, const_cast<char ***>(&argv));
-        MPI_Comm_size(MPI_COMM_WORLD, &ntasks_);
-        MPI_Comm_rank(MPI_COMM_WORLD, &taskid_);
+        MPI_Comm_size(MPI_COMM_WORLD, &nworkers_);
+        MPI_Comm_rank(MPI_COMM_WORLD, &worker_id_);
         MPI_Get_processor_name(processor_name_, &name_len_);
-        std::cout << "MPI task " << taskid_
-                  << "/" << ntasks_
-                  << " has started in " << processor_name_
-                  << ": pid=" << getpid()
-                  << std::endl;
+
+        if( worker_id_ == MPI_MASTER_WORKER ) {
+            std::cout << "MPI: master worker has started in " << processor_name_
+                      << ": pid=" << getpid()
+                      << std::endl;
+        } else {
+            std::cout << "MPI: worker " << worker_id_
+                      << "/" << nworkers_ - 1
+                      << " has started in " << processor_name_
+                      << ": pid=" << getpid()
+                      << std::endl;
+        }
 
         // initialize MPI local data structures
-        send_tags_ = new int[1 + ntasks_];
-        recv_tags_ = new int[1 + ntasks_];
-        bzero(send_tags_, (1 + ntasks_) * sizeof(int));
-        bzero(recv_tags_, (1 + ntasks_) * sizeof(int));
+        send_tags_ = new int[1 + nworkers_];
+        recv_tags_ = new int[1 + nworkers_];
+        bzero(send_tags_, (1 + nworkers_) * sizeof(int));
+        bzero(recv_tags_, (1 + nworkers_) * sizeof(int));
     }
     ~mpi_t() {
         delete[] send_tags_;
@@ -64,75 +72,75 @@ struct mpi_t {
 
 
     // low-level input/output
-    void raw_send(const void *buffer, int count, MPI_Datatype type, int tid) {
-        MPI_Send((void*)buffer, count, type, tid, ++send_tags_[tid], MPI_COMM_WORLD);
+    void raw_send(const void *buffer, int count, MPI_Datatype type, int wid) {
+        MPI_Send((void*)buffer, count, type, wid, ++send_tags_[wid], MPI_COMM_WORLD);
     }
-    void raw_recv(void *buffer, int count, MPI_Datatype type, int tid = MPI_MASTER_TASK) {
+    void raw_recv(void *buffer, int count, MPI_Datatype type, int wid = MPI_MASTER_WORKER) {
         MPI_Status status;
-        MPI_Recv(buffer, count, type, tid, ++recv_tags_[tid], MPI_COMM_WORLD, &status);
-        assert(status.MPI_SOURCE == tid);
-        assert(status.MPI_TAG == recv_tags_[tid]);
+        MPI_Recv(buffer, count, type, wid, ++recv_tags_[wid], MPI_COMM_WORLD, &status);
+        assert(status.MPI_SOURCE == wid);
+        assert(status.MPI_TAG == recv_tags_[wid]);
     }
 
     // basic input/output
-    void send_int(int datum, int tid) {
-        raw_send(&datum, 1, MPI_INT, tid);
+    void send_int(int datum, int wid) {
+        raw_send(&datum, 1, MPI_INT, wid);
     }
-    int recv_int(int tid = MPI_MASTER_TASK) {
+    int recv_int(int wid = MPI_MASTER_WORKER) {
         int data = -1;
-        raw_recv(&data, 1, MPI_INT, tid);
+        raw_recv(&data, 1, MPI_INT, wid);
         return data;
     }
 
     // send/recv indices
-    void send_indices(const std::vector<int> &indices, int tid) {
-        send_int(int(indices.size()), tid);
+    void send_indices(const std::vector<int> &indices, int wid) {
+        send_int(int(indices.size()), wid);
         int *buffer = new int[indices.size()];
         for( int i = 0; i < int(indices.size()); ++i )
             buffer[i] = indices[i];
-        raw_send(buffer, indices.size(), MPI_INT, tid);
+        raw_send(buffer, indices.size(), MPI_INT, wid);
         delete[] buffer;
     }
-    void recv_indices(std::vector<int> &indices, int tid = MPI_MASTER_TASK) {
-        int n = recv_int(tid);
+    void recv_indices(std::vector<int> &indices, int wid = MPI_MASTER_WORKER) {
+        int n = recv_int(wid);
         indices = std::vector<int>(n, 0);
-        raw_recv(&indices[0], n, MPI_INT, tid);
+        raw_recv(&indices[0], n, MPI_INT, wid);
     }
 
     // send/recv factor parametrization
-    void send_parametrization(const dai::Factor &factor, int tid) {
-        send_int(int(factor.nrStates()), tid);
+    void send_parametrization(const dai::Factor &factor, int wid) {
+        send_int(int(factor.nrStates()), wid);
         float *buffer = new float[factor.nrStates()];
         for( int j = 0; j < int(factor.nrStates()); ++j )
             buffer[j] = factor[j];
-        raw_send(buffer, int(factor.nrStates()), MPI_FLOAT, tid);
+        raw_send(buffer, int(factor.nrStates()), MPI_FLOAT, wid);
         delete[] buffer;
     }
-    void recv_parametrization(dai::Factor &factor, int tid = MPI_MASTER_TASK) {
-        int nrstates = recv_int(tid);
+    void recv_parametrization(dai::Factor &factor, int wid = MPI_MASTER_WORKER) {
+        int nrstates = recv_int(wid);
         assert(nrstates == int(factor.nrStates()));
         float *buffer = new float[nrstates];
-        raw_recv(buffer, nrstates, MPI_FLOAT, tid);
+        raw_recv(buffer, nrstates, MPI_FLOAT, wid);
         for( int j = 0; j < nrstates; ++j )
             factor.set(j, buffer[j]);
         delete[] buffer;
     }
 
     // send/recv factor metadata
-    void send_metadata(const dai::Factor &factor, int tid) {
-        send_int(int(factor.vars().size()), tid);
+    void send_metadata(const dai::Factor &factor, int wid) {
+        send_int(int(factor.vars().size()), wid);
         int *buffer = new int[factor.vars().size()];
         int j = 0;
         for( dai::VarSet::const_iterator it = factor.vars().begin(); it != factor.vars().end(); ++it, ++j ) {
             buffer[j] = it->label();
         }
-        raw_send(buffer, int(factor.vars().size()), MPI_INT, tid);
+        raw_send(buffer, int(factor.vars().size()), MPI_INT, wid);
         delete[] buffer;
     }
-    void recv_metadata(dai::Factor &factor, const std::vector<dai::Var> &variables, int tid = MPI_MASTER_TASK) {
-        int nvars = recv_int(tid);
+    void recv_metadata(dai::Factor &factor, const std::vector<dai::Var> &variables, int wid = MPI_MASTER_WORKER) {
+        int nvars = recv_int(wid);
         int *buffer = new int[nvars];
-        raw_recv(buffer, nvars, MPI_INT, tid);
+        raw_recv(buffer, nvars, MPI_INT, wid);
         dai::VarSet vars;
         for( int varid = 0; varid < nvars; ++varid )
             vars |= variables[buffer[varid]];
@@ -141,108 +149,108 @@ struct mpi_t {
     }
 
     // send/recv parametrizations for multiple factors
-    void send_parametrizations(const std::vector<dai::Factor> &factors, int tid) {
-        send_int(int(factors.size()), tid);
+    void send_parametrizations(const std::vector<dai::Factor> &factors, int wid) {
+        send_int(int(factors.size()), wid);
         for( int fid = 0; fid < int(factors.size()); ++fid )
-            send_parametrization(factors[fid], tid);
+            send_parametrization(factors[fid], wid);
     }
-    void recv_parametrizations(std::vector<dai::Factor> &factors, int tid = MPI_MASTER_TASK) {
-        int fid = recv_int(tid);
+    void recv_parametrizations(std::vector<dai::Factor> &factors, int wid = MPI_MASTER_WORKER) {
+        int fid = recv_int(wid);
         assert((fid >= 0) && (fid < int(factors.size())));
-        recv_parametrization(factors[fid], tid);
+        recv_parametrization(factors[fid], wid);
     }
 
     // send/recv complete factor
-    void send_factor(const dai::Factor &factor, int tid) {
-        send_metadata(factor, tid);
-        send_parametrization(factor, tid);
+    void send_factor(const dai::Factor &factor, int wid) {
+        send_metadata(factor, wid);
+        send_parametrization(factor, wid);
     }
-    void recv_factor(dai::Factor &factor, const std::vector<dai::Var> &variables, int tid = MPI_MASTER_TASK) {
-        recv_metadata(factor, variables, tid);
-        recv_parametrization(factor, tid);
+    void recv_factor(dai::Factor &factor, const std::vector<dai::Var> &variables, int wid = MPI_MASTER_WORKER) {
+        recv_metadata(factor, variables, wid);
+        recv_parametrization(factor, wid);
     }
-    dai::Factor recv_factor(const std::vector<dai::Var> &variables, int tid = MPI_MASTER_TASK) {
+    dai::Factor recv_factor(const std::vector<dai::Var> &variables, int wid = MPI_MASTER_WORKER) {
         dai::Factor factor;
-        recv_factor(factor, variables, tid);
+        recv_factor(factor, variables, wid);
         return factor;
     }
 
     // send/recv multiple complete factor
-    void send_factors(const std::vector<dai::Factor> &factors, int tid) {
-        send_int(int(factors.size()), tid);
+    void send_factors(const std::vector<dai::Factor> &factors, int wid) {
+        send_int(int(factors.size()), wid);
         for( int fid = 0; fid < int(factors.size()); ++fid )
-            send_factor(factors[fid], tid);
+            send_factor(factors[fid], wid);
     }
-    void recv_factors(std::vector<dai::Factor> &factors, const std::vector<dai::Var> &variables, int tid = MPI_MASTER_TASK) {
-        int nfactors = recv_int(tid);
+    void recv_factors(std::vector<dai::Factor> &factors, const std::vector<dai::Var> &variables, int wid = MPI_MASTER_WORKER) {
+        int nfactors = recv_int(wid);
         factors.clear();
         factors.reserve(nfactors);
         for( int i = 0; i < nfactors; ++i )
-            factors.push_back(recv_factor(variables, tid));
+            factors.push_back(recv_factor(variables, wid));
     }
 
     // send/recv multiple complete factor by indices
-    void send_factors(const std::vector<dai::Factor> &factors, const std::vector<int> &indices, int tid) {
+    void send_factors(const std::vector<dai::Factor> &factors, const std::vector<int> &indices, int wid) {
         for( int i = 0; i < int(indices.size()); ++i )
-            send_factor(factors[indices[i]], tid);
+            send_factor(factors[indices[i]], wid);
     }
-    void recv_factors(std::vector<dai::Factor> &factors, const std::vector<dai::Var> &variables, const std::vector<int> &indices, int tid = MPI_MASTER_TASK) {
+    void recv_factors(std::vector<dai::Factor> &factors, const std::vector<dai::Var> &variables, const std::vector<int> &indices, int wid = MPI_MASTER_WORKER) {
         for( int i = 0; i < int(indices.size()); ++i )
-            recv_factor(factors[indices[i]], variables, tid);
+            recv_factor(factors[indices[i]], variables, wid);
     }
 
     // send/recv variable
-    void send_variable(const dai::Var &var, int tid) {
+    void send_variable(const dai::Var &var, int wid) {
         int buffer[2];
         buffer[0] = int(var.label());
         buffer[1] = int(var.states());
-        raw_send(buffer, 2, MPI_INT, tid);
+        raw_send(buffer, 2, MPI_INT, wid);
     }
-    void recv_variable(dai::Var &var, int tid = MPI_MASTER_TASK) {
+    void recv_variable(dai::Var &var, int wid = MPI_MASTER_WORKER) {
         int buffer[2];
-        raw_recv(buffer, 2, MPI_INT, tid);
+        raw_recv(buffer, 2, MPI_INT, wid);
         var = dai::Var(buffer[0], buffer[1]);
     }
-    dai::Var recv_variable(int tid = MPI_MASTER_TASK) {
+    dai::Var recv_variable(int wid = MPI_MASTER_WORKER) {
         dai::Var var;
-        recv_variable(var, tid);
+        recv_variable(var, wid);
         return var;
     }
 
     // send/recv multiple variables
-    void send_variables(const std::vector<dai::Var> &variables, int tid) {
-        send_int(int(variables.size()), tid);
+    void send_variables(const std::vector<dai::Var> &variables, int wid) {
+        send_int(int(variables.size()), wid);
         for( int i = 0; i < int(variables.size()); ++i )
-            send_variable(variables[i], tid);
+            send_variable(variables[i], wid);
     }
-    void recv_variables(std::vector<dai::Var> &variables, int tid = MPI_MASTER_TASK) {
-        int nvars = recv_int(tid);
+    void recv_variables(std::vector<dai::Var> &variables, int wid = MPI_MASTER_WORKER) {
+        int nvars = recv_int(wid);
         variables.clear();
         variables.reserve(nvars);
         for( int i = 0; i < int(nvars); ++i )
-            variables.push_back(recv_variable(tid));
+            variables.push_back(recv_variable(wid));
     }
 
     // send/recv marginals (in recv, assume marginals contains proper factors, only reading parametrization)
-    void send_marginals(const std::vector<dai::Factor> &marginals, int tid) {
+    void send_marginals(const std::vector<dai::Factor> &marginals, int wid) {
         int size = 0;
         for( int i = 0; i < int(marginals.size()); ++i )
             size += int(marginals[i].nrStates());
 
-        send_int(size, tid);
+        send_int(size, wid);
         float *buffer = new float[size];
         for( int i = 0, off = 0; i < int(marginals.size()); ++i ) {
             const dai::Factor &marginal = marginals[i];
             for( int j = 0; j < int(marginal.nrStates()); ++j )
                 buffer[off++] = marginal[j];
         }
-        raw_send(buffer, size, MPI_FLOAT, tid);
+        raw_send(buffer, size, MPI_FLOAT, wid);
         delete[] buffer;
     }
-    void recv_marginals(std::vector<dai::Factor> &marginals, int tid = MPI_MASTER_TASK) {
-        int size = recv_int(tid);
+    void recv_marginals(std::vector<dai::Factor> &marginals, int wid = MPI_MASTER_WORKER) {
+        int size = recv_int(wid);
         float *buffer = new float[size];
-        raw_recv(buffer, size, MPI_FLOAT, tid);
+        raw_recv(buffer, size, MPI_FLOAT, wid);
         for( int i = 0, off = 0; i < int(marginals.size()); ++i ) {
             dai::Factor &marginal = marginals[i];
             for( int j = 0; j < int(marginal.nrStates()); ++j )
@@ -252,11 +260,11 @@ struct mpi_t {
     }
 
     // send/recv commands
-    void send_command(int command, int tid) {
-        send_int(command, tid);
+    void send_command(int command, int wid) {
+        send_int(command, wid);
     }
-    int recv_command(int tid = MPI_MASTER_TASK) {
-        int command = recv_int(tid);
+    int recv_command(int wid = MPI_MASTER_WORKER) {
+        int command = recv_int(wid);
         return command;
     }
 };

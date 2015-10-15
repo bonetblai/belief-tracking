@@ -60,7 +60,7 @@ struct slam_particle_t : public base_particle_t {
     }
 
 #ifdef USE_MPI 
-    void mpi_update_marginals(mpi_slam_t *mpi, int tid) { }
+    void mpi_update_marginals(mpi_slam_t *mpi, int wid) { }
 #endif
 };
 
@@ -101,7 +101,7 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
 #ifndef USE_MPI
     motion_model_sir_slam_particle_t* initial_sampling() {
 #else
-    motion_model_sir_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*tid*/) {
+    motion_model_sir_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*wid*/) {
 #endif
         motion_model_sir_slam_particle_t *p = new motion_model_sir_slam_particle_t;
         p->initial_sampling_in_place();
@@ -168,7 +168,7 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
 #ifndef USE_MPI
     optimal_sir_slam_particle_t* initial_sampling() {
 #else
-    optimal_sir_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*tid*/) {
+    optimal_sir_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*wid*/) {
 #endif
         optimal_sir_slam_particle_t *p = new optimal_sir_slam_particle_t;
         p->initial_sampling_in_place();
@@ -223,12 +223,12 @@ struct rbpf_slam_particle_t : public base_particle_t {
 #ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const = 0;
 #else
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t *mpi, int tid) const = 0;
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t *mpi, int wid) const = 0;
 #endif
     virtual float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const = 0;
 
 #ifdef USE_MPI
-    void mpi_update_marginals(mpi_slam_t *mpi, int tid) { }
+    void mpi_update_marginals(mpi_slam_t *mpi, int wid) { }
 #endif
 };
 
@@ -241,7 +241,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 #ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
 #else
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t * /*mpi*/, int /*tid*/) const {
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t * /*mpi*/, int /*wid*/) const {
 #endif
         np = p;
         int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
@@ -260,7 +260,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 #ifndef USE_MPI
     motion_model_rbpf_slam_particle_t* initial_sampling() {
 #else
-    motion_model_rbpf_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*tid*/) {
+    motion_model_rbpf_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*wid*/) {
 #endif
         motion_model_rbpf_slam_particle_t *p = new motion_model_rbpf_slam_particle_t;
         p->initial_sampling_in_place();
@@ -301,7 +301,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 #ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
 #else
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t * /*mpi*/, int /*tid*/) const {
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t * /*mpi*/, int /*wid*/) const {
 #endif
         // sample new_loc w.p. P(new_loc|curr_loc,last_action) * SUM_c P(obs|new_loc,Label[new_loc]=c) P(c|new_loc)
         np = p;
@@ -326,7 +326,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 #ifndef USE_MPI
     optimal_rbpf_slam_particle_t* initial_sampling() {
 #else
-    optimal_rbpf_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*tid*/) {
+    optimal_rbpf_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*wid*/) {
 #endif
         optimal_rbpf_slam_particle_t *p = new optimal_rbpf_slam_particle_t;
         p->initial_sampling_in_place();

@@ -140,24 +140,24 @@ void calculate(mpi_slam_t &mpi) {
 }
 
 void write_marginals(mpi_slam_t &mpi) {
-    mpi.send_marginals(g_marginals, mpi_slam_t::MPI_MASTER_TASK);
+    mpi.send_marginals(g_marginals, mpi_slam_t::MPI_MASTER_WORKER);
 }
 
 bool execute_command(mpi_slam_t &mpi, int command) {
     if( command == mpi_slam_t::INITIALIZE ) {
-        //cout << "[task=" << g_mpi->taskid_ << "] initializing engine..." << flush;
+        //cout << "[worker=" << g_mpi->worker_id_ << "] initializing engine..." << flush;
         initialize_inference_engine(mpi);
         //cout << " done!" << endl;
     } else if( command == mpi_slam_t::CALCULATE ) {
-        //cout << "[task=" << g_mpi->taskid_ << "] calculating ..." << flush;
+        //cout << "[worker=" << g_mpi->worker_id_ << "] calculating ..." << flush;
         calculate(mpi);
         //cout << " done!" << endl;
     } else if( command == mpi_slam_t::READ ) {
-        //cout << "[task=" << g_mpi->taskid_ << "] writing marginals ..." << flush;
+        //cout << "[worker=" << g_mpi->worker_id_ << "] writing marginals ..." << flush;
         write_marginals(mpi);
         //cout << " done!" << endl;
     } else if( command == mpi_slam_t::FINALIZE ) {
-        //cout << "[task=" << g_mpi->taskid_ << "] finalizing engine..." << endl;
+        //cout << "[worker=" << g_mpi->worker_id_ << "] finalizing engine..." << endl;
         return false;
     }
     return true;
@@ -175,7 +175,7 @@ void usage(ostream &os) {
 }
 
 int main(int argc, const char **argv) {
-    // initialize MPI and obtain number of tasks and ID
+    // initialize MPI and obtain number of worker and ID
     mpi_slam_t mpi(argc, argv);
 
     // parse arguments
@@ -214,7 +214,7 @@ int main(int argc, const char **argv) {
     }
 
     // set seed using supplied seed and MPI rank
-    seed += mpi.taskid_;
+    seed += mpi.worker_id_;
     unsigned short seeds[3];
     seeds[0] = seeds[1] = seeds[2] = seed;
     seed48(seeds);

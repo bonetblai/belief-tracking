@@ -69,8 +69,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 #ifdef USE_MPI 
         // processes were lauched to calculate marginals, now collect marginals
         assert(mpi_base_t::mpi_ != 0);
-        std::cout << "XXXX: ntasks=" << mpi_base_t::mpi_->ntasks_ << ", nparticles=" << nparticles_ << std::endl;
-        assert(mpi_base_t::mpi_->ntasks_ == 1 + nparticles_);
+        assert(mpi_base_t::mpi_->nworkers_ >= 1 + nparticles_);
         for( int i = 0; i < nparticles_; ++i ) {
             PTYPE *p = particles_[i].second;
             p->mpi_update_marginals(mpi_base_t::mpi_, 1 + i);

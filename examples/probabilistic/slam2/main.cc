@@ -65,6 +65,13 @@ mpi_slam_t *mpi_base_t::mpi_ = 0;
 #endif
 
 
+void finalize() {
+#ifdef USE_MPI
+    mpi_base_t::mpi_->finalize_workers();
+    delete mpi_base_t::mpi_;
+#endif
+}
+
 void usage(ostream &os) {
     os << endl
        << "Usage: colorslam [{-t | --ntrials} <ntrials>]" << endl
@@ -293,6 +300,17 @@ int main(int argc, const char **argv) {
             nparticles = token != 0 ? atoi(token) : nparticles;
             string full_name = name + "_" + to_string(nparticles);
 
+#ifdef USE_MPI
+            // check that we have at least one worker for each particle
+            if( 1 + nparticles > mpi_base_t::mpi_->nworkers_ ) {
+                cout << "MPI: there are not enough workers for tracker '" << tracking_algorithms_str[i]
+                     << "' (nworkers=" << mpi_base_t::mpi_->nworkers_ - 1
+                     << "); continuing without this tracker"
+                     << endl;
+                continue;
+            }
+#endif
+
             if( name == "sis" ) {
                 t = new SIS_t<sis_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
             } else if( name == "mm_sir" ) {
@@ -316,6 +334,13 @@ int main(int argc, const char **argv) {
         }
         free(str);
         if( t != 0 ) tracking_algorithms.push_back(t);
+    }
+
+    // check that there is something to do
+    if( tracking_algorithms.empty() ) {
+        cout << "warning: no tracker specified. Terminating..." << endl;
+        finalize();
+        return 0;
     }
 
     // print identity of trackers
@@ -467,7 +492,8 @@ int main(int argc, const char **argv) {
                  << "library(grid)" << endl
                  << "library(gridExtra)" << endl;
 
-            cout << endl;
+            cout << endl
+                 << "pdf(\"plot.pdf\")" << endl;
 
             // useful R functions
             cout << "define_region <- function(row, col) { viewport(layout.pos.row = row, layout.pos.col = col); }"
@@ -597,8 +623,8 @@ int main(int argc, const char **argv) {
             cout << endl;
 
             // put plots together using viewports and display them
-            cout << "grid.newpage()" << endl
-                 << "pushViewport(viewport(layout = grid.layout(2 + n_time_steps, 5, heights = unit(c(1.25, rep(4, n_time_steps), .5), rep(\"null\", 2 + n_time_steps)), widths = unit(rep(4, 5), rep(\"null\", 5)))))" << endl
+            //cout << "grid.newpage()" << endl
+            cout << "pushViewport(viewport(layout = grid.layout(2 + n_time_steps, 5, heights = unit(c(1.25, rep(4, n_time_steps), .5), rep(\"null\", 2 + n_time_steps)), widths = unit(rep(4, 5), rep(\"null\", 5)))))" << endl
                  << "sapply(seq_along(plots_nl), function(i) { print(plots_nl[[i]], vp = define_region(2 + ((i - 1) %/% 3), 2 + ((i - 1) %% 3))); i })" << endl
                  << "grid.text(\"ore field\", vp = define_region(2 + n_time_steps, 2))" << endl
                  << "grid.text(\"marginals\", vp = define_region(2 + n_time_steps, 3))" << endl
@@ -608,7 +634,8 @@ int main(int argc, const char **argv) {
                  << "\", sep=\"\"), vp = viewport(layout.pos.row = 1, layout.pos.col = 1:5))" << endl
                  << "sapply(seq_along(time_steps), function(i) { grid.text(paste(\"After\", time_steps[[i]], \"steps\\n#error(s) in MAP =\", errors_in_map[[i]], sep=\" \"), vp = define_region(1 + i, 1)); i })" << endl
                  << "pushViewport(viewport(just = c(\"center\", \"center\"), layout.pos.row = 2:(1 + n_time_steps), layout.pos.col = 5))" << endl
-                 << "grid.draw(plot_legend)" << endl;
+                 << "grid.draw(plot_legend)" << endl
+                 << "dev.off()" << endl;
 
             // generate R plots
 #if 0
@@ -622,11 +649,7 @@ int main(int argc, const char **argv) {
         cout << "# elapsed time=" << elapsed_time << endl;
     }
 
-#ifdef USE_MPI
-    mpi_base_t::mpi_->finalize_workers();
-    delete mpi_base_t::mpi_;
-#endif
-
+    finalize();
     return 0;
 }
 
