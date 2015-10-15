@@ -90,14 +90,15 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         for( int i = 0; i < nparticles_; ++i ) {
             int index = indices[i];
             const PTYPE &p = *particles_[index].second;
+            float weight = particles_[index].first;
 #ifndef USE_MPI
             PTYPE *np = sample_from_pi(p, last_action, obs);
 #else
             PTYPE *np = sample_from_pi(p, last_action, obs, 1 + i);
 #endif
-            float weight = importance_weight(*np, p, last_action, obs);
-            total_mass += weight;
-            new_particles.push_back(std::make_pair(weight, np));
+            float new_weight = weight * importance_weight(*np, p, last_action, obs);
+            total_mass += new_weight;
+            new_particles.push_back(std::make_pair(new_weight, np));
         }
 
         for( int i = 0; i < nparticles_; ++i ) {
