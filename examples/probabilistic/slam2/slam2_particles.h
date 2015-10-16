@@ -53,7 +53,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     inference_t inference_;
 
     // use in MPI to send all factors to work processes
-    static std::vector<int> all_indices_for_factors_;
+    static std::vector<int> indices_for_all_factors_;
 
     // cache for conversion  from factor values into slabels (it is dynamically filled by get_slabels())
     static std::vector<std::vector<int> > slabels_;
@@ -142,12 +142,12 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                (inference_ == p.inference_);
     }
 
-    static void compute_all_indices_for_factors() {
+    static void compute_indices_for_all_factors_() {
         assert(base_ != 0);
-        all_indices_for_factors_.clear();
-        all_indices_for_factors_.reserve(base_->nloc_);
+        indices_for_all_factors_.clear();
+        indices_for_all_factors_.reserve(base_->nloc_);
         for( int loc = 0; loc < base_->nloc_; ++loc )
-            all_indices_for_factors_.push_back(loc);
+            indices_for_all_factors_.push_back(loc);
     }
 
     static void compute_edbp_factor_indices() {
@@ -325,7 +325,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     void calculate_marginals(mpi_slam_t *mpi, int wid, bool print_marginals = false) const {
         assert(mpi != 0);
         assert((wid > 0) && (wid < mpi->nworkers_));
-        mpi->calculate_marginals(factors_, all_indices_for_factors_, wid);
+        mpi->calculate_marginals(factors_, indices_for_all_factors_, wid);
         indices_for_updated_factors_.clear();
     }
 #endif

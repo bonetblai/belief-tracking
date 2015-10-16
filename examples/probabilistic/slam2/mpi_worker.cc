@@ -49,19 +49,20 @@ inference_t g_inference;
 vector<dai::Var> g_variables;
 vector<dai::Factor> g_factors;
 vector<int> g_indices_for_updated_factors;
+vector<int> g_indices_for_all_factors;
 vector<dai::Factor> g_marginals;
 vector<vector<float> > g_test;
 vector<vector<int> > g_edbp_factor_indices;
 bool g_print_marginals = false;
 
 
-void print_factor(ostream &os, int fid) {
-    g_inference.print_factor(os, fid, g_factors, "g_factors");
+void print_factor(ostream &os, int fid, const std::vector<dai::Factor> &factors, const std::string &name) {
+    g_inference.print_factor(os, fid, factors, name);
 }
 
-void print_factors(ostream &os) {
-    for( int fid = 0; fid < int(g_factors.size()); ++fid )
-        print_factor(os, fid);
+void print_factors(ostream &os, const std::vector<dai::Factor> &factors, const std::string &name = "g_factors") {
+    for( int fid = 0; fid < int(factors.size()); ++fid )
+        print_factor(os, fid, factors, name);
 }
 
 void compute_edbp_factor_indices() {
@@ -124,6 +125,11 @@ void initialize_inference_engine(mpi_slam_t &mpi) {
 
     // CHECK: should discriminate between BEL and MAR, act like BEL
     g_marginals = g_factors;
+
+    // calculate indices for all factors
+    g_indices_for_all_factors.reserve(g_factors.size());
+    for( int fid = 0; fid < int(g_factors.size()); ++fid )
+        g_indices_for_all_factors.push_back(fid);
 }
 
 void calculate(mpi_slam_t &mpi) {
@@ -136,6 +142,7 @@ void calculate(mpi_slam_t &mpi) {
 #endif
 
     // calculate
+    g_indices_for_updated_factors = g_indices_for_all_factors;
     g_inference.calculate_marginals(g_variables,
                                     g_indices_for_updated_factors,
                                     g_factors,

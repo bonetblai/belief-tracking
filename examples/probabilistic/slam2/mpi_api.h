@@ -187,8 +187,10 @@ struct mpi_t : mpi_raw_t {
     void send_all_parametrizations(const std::vector<dai::Factor> &factors, int wid) {
         assert(factor_offset_.size() == 1 + factors.size());
         for( int fid = 0; fid < int(factors.size()); ++fid ) {
-            for( int j = 0; j < int(factors[fid].nrStates()); ++j )
+            for( int j = 0; j < int(factors[fid].nrStates()); ++j ) {
+                assert(factor_offset_[fid] + j < total_size_);
                 io_buffer_[factor_offset_[fid] + j] = factors[fid][j];
+            }
         }
         raw_send(io_buffer_, total_size_, MPI_FLOAT, wid);
     }
@@ -196,8 +198,10 @@ struct mpi_t : mpi_raw_t {
         assert(factor_offset_.size() == 1 + factors.size());
         raw_recv(io_buffer_, total_size_, MPI_FLOAT, wid);
         for( int fid = 0; fid < int(factors.size()); ++fid ) {
-            for( int j = 0; j < int(factors[fid].nrStates()); ++j )
+            for( int j = 0; j < int(factors[fid].nrStates()); ++j ) {
+                assert(factor_offset_[fid] + j < total_size_);
                 factors[fid].set(j, io_buffer_[factor_offset_[fid] + j]);
+            }
         }
     }
 

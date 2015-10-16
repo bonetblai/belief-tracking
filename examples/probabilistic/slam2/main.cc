@@ -50,7 +50,7 @@ int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
 vector<vector<int> > rbpf_slam2_particle_t::slabels_;
 vector<vector<int> > rbpf_slam2_particle_t::edbp_factor_indices_;
-vector<int> rbpf_slam2_particle_t::all_indices_for_factors_;
+vector<int> rbpf_slam2_particle_t::indices_for_all_factors_;
 string inference_t::algorithm_;
 string inference_t::options_;
 dai::PropertySet inference_t::libdai_options_;
@@ -242,7 +242,7 @@ int main(int argc, const char **argv) {
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
     rbpf_slam2_particle_t::compute_edbp_factor_indices();
-    rbpf_slam2_particle_t::compute_all_indices_for_factors();
+    rbpf_slam2_particle_t::compute_indices_for_all_factors_();
     inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
 
     // tracking algorithms
