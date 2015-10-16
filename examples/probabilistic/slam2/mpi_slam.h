@@ -39,8 +39,12 @@ struct mpi_slam_t : public mpi_t {
 
     void calculate_marginals(const std::vector<dai::Factor> &factors, const std::vector<int> &indices, int wid) {
         send_command(CALCULATE, wid);
+#if 0
         send_indices(indices, wid);
         send_factors(factors, indices, wid);
+#else
+        send_all_parametrizations(factors, wid);
+#endif
     }
 
     void read_marginals_from_worker(std::vector<dai::Factor> &marginals, int wid) {

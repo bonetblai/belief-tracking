@@ -28,18 +28,20 @@
 #include "mpi.h"
 #include <dai/alldai.h>
 
-struct mpi_t {
+struct mpi_raw_t {
+  private:
+    int *send_tags_;
+    int *recv_tags_;
+
+  public:
     int nworkers_;
     int worker_id_;
     int name_len_;
     char processor_name_[MPI_MAX_PROCESSOR_NAME];
 
-    int *send_tags_;
-    int *recv_tags_;
-
     enum { MPI_MASTER_WORKER = 0 };
 
-    mpi_t(int argc, const char **argv) {
+    mpi_raw_t(int argc, const char **argv) {
         // initialize MPI and obtain number of workers and ID
         MPI_Init(&argc, const_cast<char ***>(&argv));
         MPI_Comm_size(MPI_COMM_WORLD, &nworkers_);
@@ -47,7 +49,7 @@ struct mpi_t {
         MPI_Get_processor_name(processor_name_, &name_len_);
 
         if( worker_id_ == MPI_MASTER_WORKER ) {
-            std::cout << "MPI: master worker has started in " << processor_name_
+            std::cout << "MPI: master has started in " << processor_name_
                       << ": pid=" << getpid()
                       << std::endl;
         } else {
@@ -64,12 +66,11 @@ struct mpi_t {
         bzero(send_tags_, (1 + nworkers_) * sizeof(int));
         bzero(recv_tags_, (1 + nworkers_) * sizeof(int));
     }
-    ~mpi_t() {
+    ~mpi_raw_t() {
         delete[] send_tags_;
         delete[] recv_tags_;
         MPI_Finalize();
     }
-
 
     // low-level input/output
     void raw_send(const void *buffer, int count, MPI_Datatype type, int wid) {
@@ -90,6 +91,28 @@ struct mpi_t {
         int data = -1;
         raw_recv(&data, 1, MPI_INT, wid);
         return data;
+    }
+};
+
+struct mpi_t : mpi_raw_t {
+    std::vector<int> factor_offset_;
+    int total_size_;
+
+    float *io_buffer_;
+
+    mpi_t(int argc, const char **argv)
+      : mpi_raw_t(argc, argv), total_size_(0), io_buffer_(0) { }
+    ~mpi_t() {
+         delete[] io_buffer_;
+    }
+
+    void initialize_factors(const std::vector<dai::Factor> &factors) {
+        factor_offset_ = std::vector<int>(1 + factors.size(), 0);
+        for( int i = 1; i <= int(factors.size()); ++i )
+            factor_offset_[i] = factor_offset_[i-1] + factors[i-1].nrStates();
+        total_size_ = factor_offset_.back();
+        delete[] io_buffer_;
+        io_buffer_ = new float[total_size_];
     }
 
     // send/recv indices
@@ -158,6 +181,24 @@ struct mpi_t {
         int fid = recv_int(wid);
         assert((fid >= 0) && (fid < int(factors.size())));
         recv_parametrization(factors[fid], wid);
+    }
+
+    // send/recv all factor parametrizations
+    void send_all_parametrizations(const std::vector<dai::Factor> &factors, int wid) {
+        assert(factor_offset_.size() == 1 + factors.size());
+        for( int fid = 0; fid < int(factors.size()); ++fid ) {
+            for( int j = 0; j < int(factors[fid].nrStates()); ++j )
+                io_buffer_[factor_offset_[fid] + j] = factors[fid][j];
+        }
+        raw_send(io_buffer_, total_size_, MPI_FLOAT, wid);
+    }
+    void recv_all_parametrizations(std::vector<dai::Factor> &factors, int wid = MPI_MASTER_WORKER) {
+        assert(factor_offset_.size() == 1 + factors.size());
+        raw_recv(io_buffer_, total_size_, MPI_FLOAT, wid);
+        for( int fid = 0; fid < int(factors.size()); ++fid ) {
+            for( int j = 0; j < int(factors[fid].nrStates()); ++j )
+                factors[fid].set(j, io_buffer_[factor_offset_[fid] + j]);
+        }
     }
 
     // send/recv complete factor

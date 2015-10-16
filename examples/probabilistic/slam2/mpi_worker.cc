@@ -119,6 +119,7 @@ void initialize_inference_engine(mpi_slam_t &mpi) {
     // receive variables and factors
     mpi.recv_variables(g_variables);
     mpi.recv_factors(g_factors, g_variables);
+    mpi.initialize_factors(g_factors);
     g_inference.create_and_initialize_algorithm(g_factors);
 
     // CHECK: should discriminate between BEL and MAR, act like BEL
@@ -127,8 +128,12 @@ void initialize_inference_engine(mpi_slam_t &mpi) {
 
 void calculate(mpi_slam_t &mpi) {
     // read indices and factors
+#if 0
     mpi.recv_indices(g_indices_for_updated_factors);
     mpi.recv_factors(g_factors, g_variables, g_indices_for_updated_factors);
+#else
+    mpi.recv_all_parametrizations(g_factors);
+#endif
 
     // calculate
     g_inference.calculate_marginals(g_variables,

@@ -220,6 +220,11 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     void initial_sampling_in_place(mpi_slam_t *mpi, int wid) {
         assert(base_->nlabels_ == 2);
 
+        // initialize io buffers (doing this here is quite hacky!)
+        if( mpi->io_buffer_ == 0 ) {
+            mpi->initialize_factors(factors_);
+        }
+
         // set initial history and reset factors for locations
         loc_history_.push_back(base_->initial_loc_);
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
