@@ -37,7 +37,7 @@ struct mpi_slam_t : public mpi_t {
         send_factors(factors, wid);
     }
 
-    void calculate_marginals(const std::vector<dai::Factor> &factors, const std::vector<int> &indices, int wid) {
+    void calculate_marginals(const std::vector<dai::Factor> &factors, const std::vector<int> &/*indices*/, int wid) {
         send_command(CALCULATE, wid);
 #if 0
         send_indices(indices, wid);

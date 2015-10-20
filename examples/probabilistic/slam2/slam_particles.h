@@ -61,7 +61,7 @@ struct slam_particle_t : public base_particle_t {
     }
 
 #ifdef USE_MPI 
-    void mpi_update_marginals(mpi_slam_t *mpi, int wid) { }
+    void mpi_update_marginals(mpi_slam_t *, int) { }
 #endif
 };
 
@@ -220,12 +220,12 @@ struct rbpf_slam_particle_t : public base_particle_t {
 #ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &history_container) const = 0;
 #else
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t *mpi, int wid) const = 0;
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &history_container, mpi_slam_t *mpi, int wid) const = 0;
 #endif
     virtual float importance_weight(const rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const = 0;
 
 #ifdef USE_MPI
-    void mpi_update_marginals(mpi_slam_t *mpi, int wid) { }
+    void mpi_update_marginals(mpi_slam_t *, int) { }
 #endif
 };
 
@@ -238,7 +238,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 #ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &/*history_container*/) const {
 #else
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t * /*mpi*/, int /*wid*/) const {
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &/*history_container*/, mpi_slam_t * /*mpi*/, int /*wid*/) const {
 #endif
         np = p;
         int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
@@ -298,7 +298,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 #ifndef USE_MPI
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &/*history_container*/) const {
 #else
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t * /*mpi*/, int /*wid*/) const {
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &/*history_container*/, mpi_slam_t * /*mpi*/, int /*wid*/) const {
 #endif
         // sample new_loc w.p. P(new_loc|curr_loc,last_action) * SUM_c P(obs|new_loc,Label[new_loc]=c) P(c|new_loc)
         np = p;

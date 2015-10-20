@@ -62,17 +62,16 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 #ifndef USE_MPI
         PTYPE *p = sampler.initial_sampling();
 #else
-        PTYPE *p = sampler.initial_sampling(mpi_base_t::mpi_, 1 + i);
+        assert(mpi_base_t::mpi_ != 0);
+        assert(mpi_base_t::mpi_->nworkers_ >= 1);
+        PTYPE *p = sampler.initial_sampling(mpi_base_t::mpi_, 1);
 #endif
         particles_.push_back(std::make_pair(weight, p));
         multiplicity_.push_back(nparticles_);
 
 #ifdef USE_MPI 
-        // processes were lauched to calculate marginals, now collect marginals
-        assert(mpi_base_t::mpi_ != 0);
-        assert(mpi_base_t::mpi_->nworkers_ >= 1);
-        PTYPE *p = particles_[0].second;
-        p->mpi_update_marginals(mpi_base_t::mpi_, 1 + i);
+        // process was lauched to calculate marginals, collect marginals
+        particles_[0].second->mpi_update_marginals(mpi_base_t::mpi_, 1);
 #endif
     }
 
@@ -137,7 +136,9 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
 #ifdef USE_MPI 
         // processes were lauched to calculate marginals, now collect marginals
-        for( int i = 0; i < int(new_nparticles.size()); ++i ) {
+        assert(mpi_base_t::mpi_ != 0);
+        assert(mpi_base_t::mpi_->nworkers_ >= 1);
+        for( int i = 0; i < int(new_particles.size()); ++i ) {
             PTYPE *p = particles_[i].second;
             p->mpi_update_marginals(mpi_base_t::mpi_, 1 + i);
         }   
