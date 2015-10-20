@@ -34,6 +34,8 @@
 
 #include "particle_filter.h"
 
+// TODO: use multiplicities for particles
+
 
 // Sequential Importance Sampling (SIS) Particle Filter
 template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE> {

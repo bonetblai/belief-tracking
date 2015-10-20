@@ -42,6 +42,7 @@
 // Generic particle for the color-tile SLAM problem
 struct base_particle_t {
     static const cellmap_t *base_;
+    const std::vector<int>& history() const { }
 };
 
 struct slam_particle_t : public base_particle_t {
@@ -89,7 +90,7 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
         return std::string("mm_sir");
     }
 
-    void sample_from_pi(motion_model_sir_slam_particle_t &np, const motion_model_sir_slam_particle_t &p, int last_action, int /*obs*/) const {
+    void sample_from_pi(motion_model_sir_slam_particle_t &np, const motion_model_sir_slam_particle_t &p, int last_action, int /*obs*/, const history_container_t &/*history_container*/) const {
         np = p;
         np.current_loc_ = base_->sample_loc(p.current_loc_, last_action);
     }
@@ -217,7 +218,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
     int value_for(int /*var*/) const { return -1; }
 
 #ifndef USE_MPI
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const = 0;
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &history_container) const = 0;
 #else
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t *mpi, int wid) const = 0;
 #endif
@@ -235,7 +236,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     }
 
 #ifndef USE_MPI
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &/*history_container*/) const {
 #else
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t * /*mpi*/, int /*wid*/) const {
 #endif
@@ -295,7 +296,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     }
 
 #ifndef USE_MPI
-    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+    virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, const history_container_t &/*history_container*/) const {
 #else
     virtual void sample_from_pi(rbpf_slam_particle_t &np, const rbpf_slam_particle_t &p, int last_action, int obs, mpi_slam_t * /*mpi*/, int /*wid*/) const {
 #endif
@@ -307,7 +308,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         np.update_factors(last_action, obs);
     }
 
-    virtual float importance_weight(const rbpf_slam_particle_t &/*np*/, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+    virtual float importance_weight(const rbpf_slam_particle_t &, const rbpf_slam_particle_t &, int, int) const {
 #if 0
         int current_loc = p.loc_history_.back();
         float weight = 0;

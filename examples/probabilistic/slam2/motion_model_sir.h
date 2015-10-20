@@ -31,8 +31,8 @@ template <typename PTYPE, typename BASE> struct motion_model_SIR_t : public SIR_
     }
     virtual ~motion_model_SIR_t() { }
 
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, int /*pindex*/) const {
-        p.sample_from_pi(np, p, last_action, obs);
+    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int /*pindex*/) const {
+        p.sample_from_pi(np, p, last_action, obs, history_container);
     }
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
         return p.importance_weight(np, p, last_action, obs);

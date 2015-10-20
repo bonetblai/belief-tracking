@@ -32,6 +32,7 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
     using tracking_t<BASE>::base_;
     using PF_t<PTYPE, BASE>::nparticles_;
     using PF_t<PTYPE, BASE>::particles_;
+    using PF_t<PTYPE, BASE>::multiplicity_;
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
     using SIR_t<PTYPE, BASE>::do_stochastic_universal_sampling_;
 
@@ -48,8 +49,9 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         }
 
         // aggregate info from particles into marginals
-        for( int i = 0; i < nparticles_; ++i ) {
-            float weight = particles_[i].first;
+        assert(particles_.size() == multiplicity_.size());
+        for( int i = 0; i < int(particles_.size()); ++i ) {
+            float weight = particles_[i].first * multiplicity_[i];
             const PTYPE &p = *particles_[i].second;
             p.update_marginals(weight, marginals_on_vars_);
         }
@@ -66,11 +68,11 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         }
     }
 
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, int pindex) const {
+    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int /*pindex*/) const {
 #ifndef USE_MPI
-        p.sample_from_pi(np, p, last_action, obs);
+        p.sample_from_pi(np, p, last_action, obs, history_container);
 #else
-        p.sample_from_pi(np, p, last_action, obs, mpi_base_t::mpi_, pindex);
+        p.sample_from_pi(np, p, last_action, obs, history_container, mpi_base_t::mpi_, pindex);
 #endif
     }
 
