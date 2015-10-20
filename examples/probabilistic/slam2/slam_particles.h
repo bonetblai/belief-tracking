@@ -308,6 +308,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     }
 
     virtual float importance_weight(const rbpf_slam_particle_t &/*np*/, const rbpf_slam_particle_t &p, int last_action, int obs) const {
+#if 0
         int current_loc = p.loc_history_.back();
         float weight = 0;
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
@@ -317,6 +318,9 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
             weight += base_->probability_tr_loc(last_action, current_loc, new_loc) * prob;
         }
         return weight;
+#else
+        return 1;
+#endif
     }
 
 #ifndef USE_MPI
