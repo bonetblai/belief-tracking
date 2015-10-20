@@ -194,13 +194,9 @@ struct rbpf_slam_particle_t : public base_particle_t {
         assert(current_loc < int(factors_.size()));
         dai::Factor &factor = factors_[current_loc];
         assert(base_->nlabels_ == int(factor.nrStates()));
-        float total_mass = 0.0;
-        for( int label = 0; label < base_->nlabels_; ++label ) {
+        for( int label = 0; label < base_->nlabels_; ++label )
             factor.set(label, factor[label] * base_->probability_obs_standard(obs, current_loc, label, last_action));
-            total_mass += factor[label];
-        }
-        assert(total_mass > 0);
-        factor /= total_mass;
+        factor.normalize();
     }
 
     float probability(int label, int loc) const {

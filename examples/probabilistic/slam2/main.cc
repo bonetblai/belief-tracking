@@ -485,6 +485,8 @@ int main(int argc, const char **argv) {
 
 
         if( !tracking_algorithms.empty() ) {
+            const tracking_t<cellmap_t> &tracker = *tracking_algorithms.back();
+
             cout << "library(ggplot2)" << endl
                  << "library(reshape)" << endl
                  << "library(zoo)" << endl
@@ -493,7 +495,7 @@ int main(int argc, const char **argv) {
                  << "library(gridExtra)" << endl;
 
             cout << endl
-                 << "pdf(\"plot.pdf\")" << endl;
+                 << "pdf(\"plot.pdf\", width = 12, height = 10)" << endl;
 
             // useful R functions
             cout << "define_region <- function(row, col) { viewport(layout.pos.row = row, layout.pos.col = col); }"
@@ -586,7 +588,7 @@ int main(int argc, const char **argv) {
                     cout << "raw_data <- append(raw_data, list(matrix(c(";
                     for( int var = 0; var < nrows * ncols; ++var ) {
                         vector<pair<float, int> > map_values;
-                        tracking_algorithms.back()->MAP_on_var(repos.back(), t, var, map_values, .1);
+                        tracker.MAP_on_var(repos.back(), t, var, map_values, .1);
                         assert(!map_values.empty());
                         if( map_values[0].first < map_threshold )
                             cout << .50;
@@ -624,13 +626,15 @@ int main(int argc, const char **argv) {
 
             // put plots together using viewports and display them
             //cout << "grid.newpage()" << endl
-            cout << "pushViewport(viewport(layout = grid.layout(2 + n_time_steps, 5, heights = unit(c(1.25, rep(4, n_time_steps), .5), rep(\"null\", 2 + n_time_steps)), widths = unit(rep(4, 5), rep(\"null\", 5)))))" << endl
+            cout << "pushViewport(viewport(layout = grid.layout(2 + n_time_steps, 5, heights = unit(c(1.75, rep(4, n_time_steps), .5), rep(\"null\", 2 + n_time_steps)), widths = unit(rep(4, 5), rep(\"null\", 5)))))" << endl
                  << "sapply(seq_along(plots_nl), function(i) { print(plots_nl[[i]], vp = define_region(2 + ((i - 1) %/% 3), 2 + ((i - 1) %% 3))); i })" << endl
                  << "grid.text(\"ore field\", vp = define_region(2 + n_time_steps, 2))" << endl
                  << "grid.text(\"marginals\", vp = define_region(2 + n_time_steps, 3))" << endl
                  << "grid.text(\"map on marginals\", vp = define_region(2 + n_time_steps, 4))" << endl
                  << "grid.text(paste(n_rows, \"x\", n_cols, \" grid problem\\n"
-                 << tracking_algorithms.back()->id()
+                 << tracker.id()
+                 << "\\n"
+                 << inference_algorithm
                  << "\", sep=\"\"), vp = viewport(layout.pos.row = 1, layout.pos.col = 1:5))" << endl
                  << "sapply(seq_along(time_steps), function(i) { grid.text(paste(\"After\", time_steps[[i]], \"steps\\n#error(s) in MAP =\", errors_in_map[[i]], sep=\" \"), vp = define_region(1 + i, 1)); i })" << endl
                  << "pushViewport(viewport(just = c(\"center\", \"center\"), layout.pos.row = 2:(1 + n_time_steps), layout.pos.col = 5))" << endl

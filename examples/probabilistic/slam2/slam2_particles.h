@@ -297,14 +297,11 @@ struct rbpf_slam2_particle_t : public base_particle_t {
 #endif
         assert(current_loc < int(factors_.size()));
         dai::Factor &factor = factors_[current_loc];
-        float total_mass = 0.0;
         for( int value = 0; value < int(factor.nrStates()); ++value ) {
             int slabels = get_slabels(current_loc, factor, value);
             factor.set(value, factor[value] * base_->probability_obs_oreslam(obs, current_loc, slabels, last_action)); // BLAI: CHECK: OK
-            total_mass += factor[value];
         }
-        assert(total_mass > 0);
-        factor /= total_mass;
+        factor.normalize();
         indices_for_updated_factors_.push_back(current_loc);
 #ifdef DEBUG
         std::cout << "factor after  update: loc=" << current_loc << ", obs=" << obs << std::endl;
