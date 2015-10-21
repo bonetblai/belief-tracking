@@ -37,14 +37,17 @@ struct mpi_slam_t : public mpi_t {
         send_factors(factors, wid);
     }
 
-    void calculate_marginals(const std::vector<dai::Factor> &factors, const std::vector<int> &/*indices*/, int wid) {
-        send_command(CALCULATE, wid);
+    void calculate_marginals(const std::vector<dai::Factor> &factors, const std::vector<int> &indices_for_updated_factors, int wid) {
+        if( !indices_for_updated_factors.empty() ) {
+            send_command(CALCULATE, wid);
 #if 0
-        send_indices(indices, wid);
-        send_factors(factors, indices, wid);
+            send_indices(indices, wid);
+            send_factors(factors, indices, wid);
 #else
-        send_all_parametrizations(factors, wid);
+            send_all_parametrizations(factors, wid);
 #endif
+            indices_for_updated_factors.clear();
+        }
     }
 
     void read_marginals_from_worker(std::vector<dai::Factor> &marginals, int wid) {

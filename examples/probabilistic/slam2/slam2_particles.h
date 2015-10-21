@@ -56,9 +56,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     inference_t inference_;
 
-    // use in MPI to send all factors to work processes
-    static std::vector<int> indices_for_all_factors_;
-
     // cache for conversion  from factor values into slabels (it is dynamically filled by get_slabels())
     static std::vector<std::vector<int> > slabels_;
 
@@ -146,14 +143,6 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                (inference_ == p.inference_);
     }
 
-    static void compute_indices_for_all_factors_() {
-        assert(base_ != 0);
-        indices_for_all_factors_.clear();
-        indices_for_all_factors_.reserve(base_->nloc_);
-        for( int loc = 0; loc < base_->nloc_; ++loc )
-            indices_for_all_factors_.push_back(loc);
-    }
-
     static void compute_edbp_factor_indices() {
         edbp_factor_indices_ = std::vector<std::vector<int> >(10);
 
@@ -230,12 +219,15 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         }
 
         // set initial history and reset factors for locations
+        indices_for_updated_factors_.clear();
+        indices_for_updated_factors_.reserve(base_->nloc_);
         loc_history_.push_back(base_->initial_loc_);
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             dai::Factor &factor = factors_[loc];
             float p = 1.0 / (1 << factor.vars().size());
             for( int i = 0; i < (1 << factor.vars().size()); ++i )
                 factor.set(i, p);
+            indices_for_updated_factors_.push_back(loc);
         }
         mpi->initialize_worker(variables_, factors_, wid);
         calculate_marginals(mpi, wid, false);
@@ -321,13 +313,14 @@ struct rbpf_slam2_particle_t : public base_particle_t {
                                        marginals_,
                                        edbp_factor_index,
                                        print_marginals);
+        assert(indices_for_updated_factors_.empty());
     }
 #else
     void calculate_marginals(mpi_slam_t *mpi, int wid, bool print_marginals = false) const {
         assert(mpi != 0);
         assert((wid > 0) && (wid < mpi->nworkers_));
-        mpi->calculate_marginals(factors_, indices_for_all_factors_, wid);
-        indices_for_updated_factors_.clear();
+        mpi->calculate_marginals(factors_, indices_for_updated_factors_, wid);
+        assert(indices_for_updated_factors_.empty());
     }
 #endif
 
@@ -440,6 +433,14 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             cdf[new_loc] /= cdf.back();
         }
         assert(cdf.back() == 1.0);
+
+#if 0
+        std::cout << std::endl << "cloc=" << current_loc << ", action=" << last_action << ", obs=" << obs;
+        std::cout << ", prob: " << cdf[0];
+        for( int loc = 1; loc < base_->nloc_; ++loc )
+            std::cout << " " << cdf[loc] - cdf[loc - 1];
+        std::cout << std::endl;
+#endif
     }
 
 #ifndef USE_MPI

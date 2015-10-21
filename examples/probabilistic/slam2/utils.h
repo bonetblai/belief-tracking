@@ -70,7 +70,7 @@ inline void stochastic_universal_sampling(int n, const float *cdf, int k, std::v
 inline int sample_from_distribution(int n, const float *cdf) {
     float p = drand48();
     for( int i = 0; i < n; ++i )
-        if( p < cdf[i] ) return i;
+        if( p <= cdf[i] ) return i;
     return n - 1;
 }
 
