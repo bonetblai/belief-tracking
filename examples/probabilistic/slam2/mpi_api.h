@@ -106,13 +106,14 @@ struct mpi_t : mpi_raw_t {
          delete[] io_buffer_;
     }
 
-    void initialize_factors(const std::vector<dai::Factor> &factors) {
+    void initialize_buffers(const std::vector<dai::Factor> &factors) {
         factor_offset_ = std::vector<int>(1 + factors.size(), 0);
         for( int i = 1; i <= int(factors.size()); ++i )
             factor_offset_[i] = factor_offset_[i-1] + factors[i-1].nrStates();
         total_size_ = factor_offset_.back();
         delete[] io_buffer_;
         io_buffer_ = new float[total_size_];
+        //std::cout << "[wid=" << worker_id_ << "] initialize buffers: factors.sz=" << factors.size() << ", totalsz=" << total_size_ << std::endl;
     }
 
     // send/recv indices
@@ -195,6 +196,7 @@ struct mpi_t : mpi_raw_t {
         raw_send(io_buffer_, total_size_, MPI_FLOAT, wid);
     }
     void recv_all_parametrizations(std::vector<dai::Factor> &factors, int wid = MPI_MASTER_WORKER) {
+        //std::cout << "[wid=" << worker_id_ << "] factor_offset_.sz=" << factor_offset_.size() << ", 1+factors.sz=" << 1 + factors.size() << std::endl;
         assert(factor_offset_.size() == 1 + factors.size());
         raw_recv(io_buffer_, total_size_, MPI_FLOAT, wid);
         for( int fid = 0; fid < int(factors.size()); ++fid ) {

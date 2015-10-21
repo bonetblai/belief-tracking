@@ -53,19 +53,22 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     }
     virtual ~SIR_t() { }
 
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int pindex) const = 0;
+    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int wid) const = 0;
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const = 0;
 
     virtual void initialize() {
         PTYPE sampler;
-        float weight = 1.0 / float(nparticles_);
-#ifndef USE_MPI
-        PTYPE *p = sampler.initial_sampling();
-#else
+
+#ifdef USE_MPI
+        // initialize MPI workers
         assert(mpi_base_t::mpi_ != 0);
-        assert(mpi_base_t::mpi_->nworkers_ >= 1);
-        PTYPE *p = sampler.initial_sampling(mpi_base_t::mpi_, 1);
+        assert(mpi_base_t::mpi_->nworkers_ >= nparticles_);
+        for( int wid = 0; wid < nparticles_; ++wid )
+            sampler.initialize_mpi_worker(mpi_base_t::mpi_, 1 + wid);
 #endif
+
+        float weight = 1.0 / float(nparticles_);
+        PTYPE *p = sampler.initial_sampling(mpi_base_t::mpi_, 1);
         particles_.push_back(std::make_pair(weight, p));
         multiplicity_.push_back(nparticles_);
 
@@ -89,12 +92,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             int index = indices[i];
             const PTYPE &p = *particles_[index].second;
             float weight = particles_[index].first;
-
-#ifndef USE_MPI
-            PTYPE *np = sample_from_pi(p, last_action, obs, history_container);
-#else
             PTYPE *np = sample_from_pi(p, last_action, obs, history_container, 1 + i);
-#endif
 
             if( history_container.find(np->history()) == history_container.end() ) {
                 history_container.insert(std::make_pair(np->history(), 1));
@@ -138,7 +136,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         // processes were lauched to calculate marginals, now collect marginals
         assert(mpi_base_t::mpi_ != 0);
         assert(mpi_base_t::mpi_->nworkers_ >= 1);
-        for( int i = 0; i < int(new_particles.size()); ++i ) {
+        for( int i = 0; i < int(particles_.size()); ++i ) {
             PTYPE *p = particles_[i].second;
             p->mpi_update_marginals(mpi_base_t::mpi_, 1 + i);
         }   
@@ -173,9 +171,9 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         return ptr;
     }
 
-    PTYPE* sample_from_pi(const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int pindex = -1) const {
+    PTYPE* sample_from_pi(const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int wid = -1) const {
         PTYPE *np = new PTYPE(p);
-        sample_from_pi(*np, p, last_action, obs, history_container, pindex);
+        sample_from_pi(*np, p, last_action, obs, history_container, wid);
         return np;
     }
 

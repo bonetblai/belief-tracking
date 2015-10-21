@@ -23,6 +23,9 @@
 #include <iostream>
 #include <vector>
 
+#ifndef USE_MPI
+struct mpi_slam_t { };
+#else
 #include "mpi_api.h"
 
 struct mpi_slam_t : public mpi_t {
@@ -32,26 +35,28 @@ struct mpi_slam_t : public mpi_t {
     enum { INITIALIZE, CALCULATE, READ, FINALIZE };
 
     void initialize_worker(const std::vector<dai::Var> &variables, const std::vector<dai::Factor> &factors, int wid) {
+        //std::cout << "[master] send INITIALIZE to wid=" << wid << std::endl;
         send_command(INITIALIZE, wid);
+        //std::cout << "[master] send variables to wid=" << wid << std::endl;
         send_variables(variables, wid);
+        //std::cout << "[master] send factors to wid=" << wid << std::endl;
         send_factors(factors, wid);
     }
 
-    void calculate_marginals(const std::vector<dai::Factor> &factors, const std::vector<int> &indices_for_updated_factors, int wid) {
+    void calculate_marginals(const std::vector<dai::Factor> &factors, std::vector<int> &indices_for_updated_factors, int wid) {
         if( !indices_for_updated_factors.empty() ) {
+            //std::cout << "[master] send CALCULATE to wid=" << wid << std::endl;
             send_command(CALCULATE, wid);
-#if 0
-            send_indices(indices, wid);
-            send_factors(factors, indices, wid);
-#else
+            //std::cout << "[master] send all parametrizations to wid=" << wid << std::endl;
             send_all_parametrizations(factors, wid);
-#endif
             indices_for_updated_factors.clear();
         }
     }
 
     void read_marginals_from_worker(std::vector<dai::Factor> &marginals, int wid) {
+        //std::cout << "[master] send READ to wid=" << wid << std::endl;
         send_command(READ, wid);
+        //std::cout << "[master] read marginals from wid=" << wid << std::endl;
         recv_marginals(marginals, wid);
     }
 
@@ -64,6 +69,7 @@ struct mpi_slam_t : public mpi_t {
             finalize_worker(wid);
     }
 };
+#endif
 
 #endif
 

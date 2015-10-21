@@ -59,9 +59,7 @@ string inference_t::edbp_evid_fn_;
 string inference_t::edbp_output_fn_;
 int inference_t::edbp_max_iter_;
 
-#ifdef USE_MPI
 mpi_slam_t *mpi_base_t::mpi_ = 0;
-#endif
 
 
 void finalize() {

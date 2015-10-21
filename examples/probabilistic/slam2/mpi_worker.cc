@@ -120,7 +120,7 @@ void initialize_inference_engine(mpi_slam_t &mpi) {
     // receive variables and factors
     mpi.recv_variables(g_variables);
     mpi.recv_factors(g_factors, g_variables);
-    mpi.initialize_factors(g_factors);
+    mpi.initialize_buffers(g_factors);
     g_inference.create_and_initialize_algorithm(g_factors);
 
     // CHECK: should discriminate between BEL and MAR, act like BEL
@@ -133,13 +133,9 @@ void initialize_inference_engine(mpi_slam_t &mpi) {
 }
 
 void calculate(mpi_slam_t &mpi) {
-    // read indices and factors
-#if 0
-    mpi.recv_indices(g_indices_for_updated_factors);
-    mpi.recv_factors(g_factors, g_variables, g_indices_for_updated_factors);
-#else
-    mpi.recv_all_parametrizations(g_factors);
-#endif
+    // receive parametrizations
+    //std::cout << "[wid=" << mpi.worker_id_ << "] receive all parametrizations from master" << std::endl;
+    mpi.recv_all_parametrizations(g_factors, mpi_slam_t::MPI_MASTER_WORKER);
 
     // calculate
     g_indices_for_updated_factors = g_indices_for_all_factors;
@@ -152,24 +148,22 @@ void calculate(mpi_slam_t &mpi) {
 }
 
 void write_marginals(mpi_slam_t &mpi) {
+    //std::cout << "[wid=" << mpi.worker_id_ << "] send marginals to master" << std::endl;
     mpi.send_marginals(g_marginals, mpi_slam_t::MPI_MASTER_WORKER);
 }
 
 bool execute_command(mpi_slam_t &mpi, int command) {
     if( command == mpi_slam_t::INITIALIZE ) {
-        //cout << "[worker=" << g_mpi->worker_id_ << "] initializing engine..." << flush;
+        //std::cout << "[wid=" << mpi.worker_id_ << "] initializing engine..." << std::endl;
         initialize_inference_engine(mpi);
-        //cout << " done!" << endl;
     } else if( command == mpi_slam_t::CALCULATE ) {
-        //cout << "[worker=" << g_mpi->worker_id_ << "] calculating ..." << flush;
+        //std::cout << "[wid=" << mpi.worker_id_ << "] calculating ..." << std::endl;
         calculate(mpi);
-        //cout << " done!" << endl;
     } else if( command == mpi_slam_t::READ ) {
-        //cout << "[worker=" << g_mpi->worker_id_ << "] writing marginals ..." << flush;
+        //std::cout << "[wid=" << mpi.worker_id_ << "] writing marginals ..." << std::endl;
         write_marginals(mpi);
-        //cout << " done!" << endl;
     } else if( command == mpi_slam_t::FINALIZE ) {
-        //cout << "[worker=" << g_mpi->worker_id_ << "] finalizing engine..." << endl;
+        //std::cout << "[wid=" << mpi.worker_id_ << "] finalizing engine..." << std::endl;
         return false;
     }
     return true;

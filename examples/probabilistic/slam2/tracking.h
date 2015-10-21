@@ -34,9 +34,7 @@
 
 #define EPSILON 1e-4
 
-#ifdef USE_MPI
 #include "mpi_slam.h"
-#endif
 
 
 // Repositoy of marginals for each time step
@@ -45,9 +43,7 @@ class repository_t : public std::vector<float*> { };
 
 // General Tracking Algorithm
 struct mpi_base_t {
-#ifdef USE_MPI
     static mpi_slam_t *mpi_;
-#endif
 };
 
 template <typename BASE> struct tracking_t : public mpi_base_t {

@@ -68,15 +68,9 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         }
     }
 
-#ifndef USE_MPI
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int /*pindex*/) const {
-        p.sample_from_pi(np, p, last_action, obs, history_container);
+    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int wid) const {
+        p.sample_from_pi(np, p, last_action, obs, history_container, mpi_base_t::mpi_, wid);
     }
-#else
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int pindex) const {
-        p.sample_from_pi(np, p, last_action, obs, history_container, mpi_base_t::mpi_, pindex);
-    }
-#endif
 
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
         return p.importance_weight(np, p, last_action, obs);

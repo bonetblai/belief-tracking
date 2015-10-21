@@ -22,9 +22,10 @@ slam.mpi:
 			$(MPICXX) $(CFLAGS) -DUSE_MPI -o slam.mpi main.cc -ldai -lgmpxx -lgmp
 
 mpi_worker:
-			$(MPICXX) $(CFLAGS) -o mpi_worker mpi_worker.cc -ldai -lgmpxx -lgmp
+			$(MPICXX) $(CFLAGS) -DUSE_MPI -o mpi_worker mpi_worker.cc -ldai -lgmpxx -lgmp
 
 all:			slam slam.mpi mpi_worker
+mpi:			slam.mpi mpi_worker
 
 clean:
 			rm -f slam slam.mpi mpi_worker dummy* *~
