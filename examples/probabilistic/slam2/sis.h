@@ -101,7 +101,7 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
     virtual std::string id() const {
         std::string id_str;
         id_str = std::string("PF(type=sis,ptype=") + PTYPE::type()
-          + ",nparticles=" + std::to_string(nparticles_)
+          + ",nparticles=" + std::to_string((long long)nparticles_)
           + ")";
         return id_str;
     }

@@ -78,9 +78,11 @@ struct inference_t {
         // if edbp algorithm, create evidence file and set filenames
         if( algorithm_ == "edbp" ) {
             int pid = getpid();
+#if __cplusplus >= 201103L
             assert(tmp_path.empty() || (tmp_path.back() == '/'));
-            edbp_factors_fn_ = tmp_path + "dummy" + std::to_string(pid) + ".factors";
-            edbp_evid_fn_ = tmp_path + "dummy" + std::to_string(pid) + ".evid";
+#endif
+            edbp_factors_fn_ = tmp_path + "dummy" + std::to_string((long long)pid) + ".factors";
+            edbp_evid_fn_ = tmp_path + "dummy" + std::to_string((long long)pid) + ".evid";
             edbp_output_fn_ = "/dev/null";
             system((std::string("echo 0 > ") + edbp_evid_fn_).c_str());
             if( libdai_options_.hasKey("maxiter") )
@@ -260,7 +262,7 @@ struct inference_t {
         // call edbp solver
         std::string edbp_cmd =
           std::string("~/software/edbp/solver") + " " + edbp_factors_fn_
-          + " " + edbp_evid_fn_ + " " + std::to_string(edbp_max_iter_)
+          + " " + edbp_evid_fn_ + " " + std::to_string((long long)edbp_max_iter_)
           + " 0 " + type_ + " 2>" + edbp_output_fn_;
         system(edbp_cmd.c_str());
     }

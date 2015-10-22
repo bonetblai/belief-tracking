@@ -1,0 +1,65 @@
+ROOT=			../../../..
+BELIEF_TRACKING_HOME=	$(ROOT)/belief-tracking
+MDP_ENGINE_HOME=	$(ROOT)/mdp-engine
+
+INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
+
+CXX=			c++
+MPICXX=			/usr/lib64/openmpi/bin/mpic++
+MPICHCXX=		/usr/lib64/mpich/bin/mpic++
+
+CXXEXT=			-std=c++0x -DMACOSX -I ~/software/libdai/include -Wno-deprecated -Wall -W -Wextra -fPIC -O3 -DDAI_DEBUG -L ~/software/libdai/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter	
+
+CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
+
+slam:
+			$(CXX) $(CFLAGS) -o slam main.cc -ldai #-lgmpxx -lgmp
+
+master.mpi:
+			$(MPICXX) $(CFLAGS) -DUSE_MPI -o master.mpi main.cc -ldai -lgmpxx -lgmp
+
+worker.mpi:
+			$(MPICXX) $(CFLAGS) -DUSE_MPI -o worker.mpi mpi_worker.cc -ldai -lgmpxx -lgmp
+
+master.mpich:
+			$(MPICHCXX) $(CFLAGS) -DUSE_MPI -o master.mpich main.cc -ldai -lgmpxx -lgmp
+
+worker.mpich:
+			$(MPICHCXX) $(CFLAGS) -DUSE_MPI -o worker.mpich mpi_worker.cc -ldai -lgmpxx -lgmp
+
+all:			slam mpi
+mpi:			master.mpi worker.mpi master.mpich worker.mpich
+
+clean:
+			rm -f slam master.mpi worker.mpi master.mpich worker.mpich dummy* *~
+
+# dependencies
+
+slam:			main.cc \
+			cellmap.h utils.h \
+  			action_selection.h slam_action_selection.h \
+			tracking.h particle_filter.h \
+			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
+			slam_particles.h slam2_particles.h \
+			inference.h
+
+master.mpi:		main.cc \
+			cellmap.h utils.h \
+  			action_selection.h slam_action_selection.h \
+			tracking.h particle_filter.h \
+			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
+			slam_particles.h slam2_particles.h \
+			inference.h \
+			mpi_api.h mpi_slam.h
+worker.mpi:		mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
+
+master.mpich:		main.cc \
+			cellmap.h utils.h \
+  			action_selection.h slam_action_selection.h \
+			tracking.h particle_filter.h \
+			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
+			slam_particles.h slam2_particles.h \
+			inference.h \
+			mpi_api.h mpi_slam.h
+worker.mpich:		mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
+

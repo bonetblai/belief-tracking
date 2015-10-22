@@ -188,7 +188,7 @@ int main(int argc, const char **argv) {
     int seed = 0;
     bool verbose = false;
     string tmp_path = "";
-    string inference_algorithm = "jt(updates=HUGIN)";
+    string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-5,maxtime=3)";
 
     --argc;
     ++argv;

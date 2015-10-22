@@ -119,7 +119,7 @@ int main(int argc, const char **argv) {
     float map_threshold = .70;
 
     // inference algorithm
-    string inference_algorithm = "bp(updates=SEQRND,logdomain=true,tol=1e-3,maxiter=100,damping=.2)";
+    string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-5,maxtime=3)";
     //string inference_algorithm = "edbp(maxiter=2)";
     //string inference_algorithm = "jt(updates=HUGIN)";
     //string inference_algorithm = "cbp(updates=SEQRND,clamp=CLAMP_VAR,choose=CHOOSE_RANDOM,min_max_adj=10,bbp_props=,bbp_cfn=,recursion=REC_FIXED,tol=1e-3,rec_tol=1e-3,maxiter=100)";
@@ -173,6 +173,10 @@ int main(int argc, const char **argv) {
             argv += 2;
         } else if( !strcmp(argv[0], "--po") ) {
             po = strtod(argv[1], 0);
+            argc -= 2;
+            argv += 2;
+        } else if( !strcmp(argv[0], "--map-threshold") ) {
+            map_threshold = strtod(argv[1], 0);
             argc -= 2;
             argv += 2;
         } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
@@ -294,7 +298,7 @@ int main(int argc, const char **argv) {
         } else {
             // the tracking algorithm is a particle filter algorithm
             nparticles = token != 0 ? atoi(token) : nparticles;
-            string full_name = name + "_" + to_string(nparticles);
+            string full_name = name + "_" + to_string((long long)nparticles);
 
 #ifdef USE_MPI
             // check that we have at least one worker for each particle
@@ -611,8 +615,8 @@ int main(int argc, const char **argv) {
 
             // calculate # errors in maps
             cout << "map_threshold <- " << map_threshold << endl;
-            cout << "n_rows <- " << to_string(nrows) << endl;
-            cout << "n_cols <- " << to_string(ncols) << endl;
+            cout << "n_rows <- " << nrows << endl;
+            cout << "n_cols <- " << ncols << endl;
             cout << "n_time_steps <- " << focus.size() << endl;
             cout << "equals_in_map <- sapply(seq(1, 3 * n_time_steps, 3), function(i) { sum(raw_data[[i+2]] == raw_data[[i]]) })" << endl;
             cout << "unknowns_in_map <- sapply(seq(1, 3 * n_time_steps, 3), function(i) { sum(raw_data[[i+2]] == 0.5) })" << endl;

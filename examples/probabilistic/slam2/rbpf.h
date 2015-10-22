@@ -79,7 +79,7 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
     virtual std::string id() const {
         std::string id_str;
         id_str = std::string("PF(type=rbpf,ptype=") + PTYPE::type()
-          + ",nparticles=" + std::to_string(nparticles_)
+          + ",nparticles=" + std::to_string((long long)nparticles_)
           //+ ",sus=" + std::to_string(do_stochastic_universal_sampling_)
           + ")";
         return id_str;
