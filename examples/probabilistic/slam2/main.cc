@@ -636,7 +636,7 @@ int main(int argc, const char **argv) {
                  << "\\n"
                  << inference_algorithm
                  << "\", sep=\"\"), vp = viewport(layout.pos.row = 1, layout.pos.col = 1:5))" << endl
-                 << "sapply(seq_along(time_steps), function(i) { grid.text(paste(\"After\", time_steps[[i]], \"steps\\n#error(s) in MAP =\", errors_in_map[[i]], sep=\" \"), vp = define_region(1 + i, 1)); i })" << endl
+                 << "sapply(seq_along(time_steps), function(i) { grid.text(paste(\"After\", time_steps[[i]], \"steps\\n#error(s) in MAP =\", errors_in_map[[i]], \"\\n#unknown(s) in MAP =\", unknowns_in_map[[i]], sep=\" \"), vp = define_region(1 + i, 1)); i })" << endl
                  << "pushViewport(viewport(just = c(\"center\", \"center\"), layout.pos.row = 2:(1 + n_time_steps), layout.pos.col = 5))" << endl
                  << "grid.draw(plot_legend)" << endl
                  << "dev.off()" << endl;

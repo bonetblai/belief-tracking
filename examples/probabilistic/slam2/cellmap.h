@@ -324,7 +324,6 @@ struct cellmap_t {
                 int label = cells_[new_loc].label_;
                 assert((label == 0) || (label == 1));
                 float q = base_obs_noise_ * (dr != 0 ? po_ : 1) * (dc != 0 ? po_ : 1);
-                assert(q > 0.5);
                 obs += drand48() <= q ? label : 1 - label;
             }
         }
