@@ -15,27 +15,27 @@ CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
 slam:
 			$(CXX) $(CFLAGS) -o slam main.cc -ldai #-lgmpxx -lgmp
 
-master.mpi:
-			$(MPICXX) $(CFLAGS) -DUSE_MPI -o master.mpi main.cc -ldai -lgmpxx -lgmp
+mpi.master:
+			$(MPICXX) $(CFLAGS) -DUSE_MPI -o mpi.master main.cc -ldai #-lgmpxx -lgmp
 
-worker.mpi:
-			$(MPICXX) $(CFLAGS) -DUSE_MPI -o worker.mpi mpi_worker.cc -ldai -lgmpxx -lgmp
+mpi.worker:
+			$(MPICXX) $(CFLAGS) -DUSE_MPI -o mpi.worker mpi_worker.cc -ldai #-lgmpxx -lgmp
 
-master.mpich:
-			$(MPICHCXX) $(CFLAGS) -DUSE_MPI -o master.mpich main.cc -ldai -lgmpxx -lgmp
+mpich.master:
+			$(MPICHCXX) $(CFLAGS) -DUSE_MPI -o mpich.master main.cc -ldai #-lgmpxx -lgmp
 
-worker.mpich:
-			$(MPICHCXX) $(CFLAGS) -DUSE_MPI -o worker.mpich mpi_worker.cc -ldai -lgmpxx -lgmp
+mpich.worker:
+			$(MPICHCXX) $(CFLAGS) -DUSE_MPI -o mpich.worker mpi_worker.cc -ldai #-lgmpxx -lgmp
 
 all:			slam mpi
-mpi:			master.mpi worker.mpi master.mpich worker.mpich
+mpi:			mpi.master mpi.worker mpich.master mpich.worker
 
 clean:
-			rm -f slam master.mpi worker.mpi master.mpich worker.mpich dummy* *~
+			rm -f slam mpi.master mpi.worker mpìch.master mpìch.worker dummy* *~
 
 # dependencies
 
-slam:			main.cc \
+slam:		main.cc \
 			cellmap.h utils.h \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
@@ -43,7 +43,7 @@ slam:			main.cc \
 			slam_particles.h slam2_particles.h \
 			inference.h
 
-master.mpi:		main.cc \
+mpi.master:	main.cc \
 			cellmap.h utils.h \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
@@ -51,9 +51,9 @@ master.mpi:		main.cc \
 			slam_particles.h slam2_particles.h \
 			inference.h \
 			mpi_api.h mpi_slam.h
-worker.mpi:		mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
+mpi.worker:	mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
 
-master.mpich:		main.cc \
+mpich.master:		main.cc \
 			cellmap.h utils.h \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
@@ -61,5 +61,5 @@ master.mpich:		main.cc \
 			slam_particles.h slam2_particles.h \
 			inference.h \
 			mpi_api.h mpi_slam.h
-worker.mpich:		mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
+mpich.worker:		mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
 
