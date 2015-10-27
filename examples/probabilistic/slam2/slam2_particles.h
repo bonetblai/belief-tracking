@@ -402,7 +402,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             previous = cdf.back();
         }
 
-#if 1
+#if 0
         std::cout << std::endl << "cloc=" << current_loc << ", action=" << last_action << ", obs=" << obs;
         std::cout << ", prob: " << cdf[0];
         for( int loc = 1; loc < base_->nloc_; ++loc )
@@ -416,7 +416,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             cdf[new_loc] /= cdf.back();
         }
 
-#if 1
+#if 0
         std::cout << std::endl << "cloc=" << current_loc << ", action=" << last_action << ", obs=" << obs;
         std::cout << ", prob: " << cdf[0];
         for( int loc = 1; loc < base_->nloc_; ++loc )
