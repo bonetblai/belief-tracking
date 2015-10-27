@@ -81,7 +81,7 @@ struct sis_slam_particle_t : public slam_particle_t {
     }
 };
 
-// Particle for the motion model SIR filter (verified: 09/12/2015)
+// Particle for the motion model SIR filter
 struct motion_model_sir_slam_particle_t : public slam_particle_t {
     static std::string type() {
         return std::string("mm_sir");
@@ -103,7 +103,7 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
     }
 };
 
-// Particle for the optimal SIR filter (verified: 09/12/2015)
+// Particle for the optimal SIR filter
 struct optimal_sir_slam_particle_t : public slam_particle_t {
     static std::string type() {
         return std::string("opt_sir");
@@ -213,7 +213,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
     void mpi_update_marginals(mpi_slam_t * /*mpi*/, int /*wid*/) { }
 };
 
-// Particle for the motion model RBPF filter (verified: 09/12/2015)
+// Particle for the motion model RBPF filter
 struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     static std::string type() {
         return std::string("mm_rbpf_sir");
@@ -241,7 +241,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     }
 };
 
-// Particle for the optimal RBPF filter (verified: 09/12/2015)
+// Particle for the optimal RBPF filter
 struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     mutable std::vector<float> cdf_;
 
@@ -304,7 +304,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 };
 
 
-// Helper class that pre-computes cdfs for the optimal SIR filter (verified: 09/12/2015)
+// Helper class that pre-computes cdfs for the optimal SIR filter
 template <typename PTYPE, typename BASE> struct cdf_for_optimal_sir_t {
     const BASE &base_;
     int nstates_;

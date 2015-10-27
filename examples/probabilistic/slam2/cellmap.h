@@ -274,7 +274,7 @@ struct cellmap_t {
     }
 
     // For the ore-slam case, observation is a number from 0 to 9 that is computed from
-    // the current // location and the 8 surrounding locations (for a middle location).
+    // the current location and the 8 surrounding locations (for a middle location).
     // The model is the following:
     //
     //     obs = \sum_loc I(loc)
@@ -316,10 +316,10 @@ struct cellmap_t {
         int row = loc / ncols_, col = loc % ncols_;
         for( int dr = -1; dr < 2; ++dr ) {
             int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue; // for outside-of-the-grid cell, sample value = 0
+            if( (nrow < 0) || (nrow >= nrows_) ) continue; // for outside-of-the-grid cell, sampled value = 0
             for( int dc = -1; dc < 2; ++dc ) {
                 int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, sample value = 0
+                if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, sampled value = 0
                 int new_loc = nrow * ncols_ + ncol;
                 int label = cells_[new_loc].label_;
                 assert((label == 0) || (label == 1));
@@ -448,13 +448,14 @@ struct cellmap_t {
                         if( num_bits_[valuation] != obs ) continue;
                         float p = 1;
                         for( int rloc = 0; rloc < 9; ++rloc ) { // computes \prod_{loc} P( val[loc] | slabels[loc] ) onto p
-                            //if( incompatible_loc(rloc, loc_type) ) continue;
-                            // below loc=4 refers to the center of the 3x3 window
-                            float q = base_obs_noise_ * (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_);
-                            if( incompatible_loc(rloc, loc_type) )
+                            if( incompatible_loc(rloc, loc_type) ) {
+                                //continue;
                                 p *= bit(valuation, rloc) == 0 ? 0.99 : 0.01;
-                            else
+                            } else {
+                                // loc=4 refers to the center of the 3x3 window
+                                float q = base_obs_noise_ * (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_);
                                 p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
+                            }
                         }
                         probability_obs_oreslam_[index] += p;
                     }

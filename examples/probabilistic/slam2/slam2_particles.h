@@ -222,30 +222,32 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         calculate_marginals(mpi, wid, false);
     }
 
-    int get_slabels(int loc, const dai::Factor &factor, int value) const {
+    int get_slabels(int loc, const dai::VarSet &vars, int value) const {
         assert((loc >= 0) && (loc < base_->nloc_));
-        assert((value >= 0) && (value < int(factor.nrStates())));
+        assert((value >= 0) && (value < int(vars.nrStates())));
 
 #if DEBUG
         std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
 #endif
 
         // allocate cache if this is first call
-        if( slabels_.empty() ) {
+        if( slabels_.empty() )
             slabels_ = std::vector<std::vector<int> >(base_->nloc_, std::vector<int>(512, -1));
-        }
+        assert(loc < int(slabels_.size()));
+        if( slabels_[loc].empty() )
+            slabels_[loc] = std::vector<int>(vars.nrStates(), -1);
+        assert(value < int(slabels_[loc].size()));
 
         // check whether there is a valid entry in cache
-        assert(loc < int(slabels_.size()));
         const std::vector<int> &slabels_for_loc = slabels_[loc];
         if( slabels_for_loc[value] != -1 )
             return slabels_for_loc[value];
 
         // this is the first time that we access (loc,value)
-        // compute the correct value and cache it slabels_for_loc
-        std::map<dai::Var, size_t> states = dai::calcState(factor.vars(), value);
+        // compute the correct value and cache it for later use
         int slabels = 0;
-        for( dai::VarSet::const_iterator it = factors_[loc].vars().begin(); it != factors_[loc].vars().end(); ++it ) {
+        std::map<dai::Var, size_t> states = dai::calcState(vars, value);
+        for( dai::VarSet::const_iterator it = vars.begin(); it != vars.end(); ++it ) {
             const dai::Var &var = *it;
             size_t var_value = states[var];
             assert(var_value < 2); // because it is a binary variable
@@ -282,8 +284,8 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         assert(current_loc < int(factors_.size()));
         dai::Factor &factor = factors_[current_loc];
         for( int value = 0; value < int(factor.nrStates()); ++value ) {
-            int slabels = get_slabels(current_loc, factor, value);
-            factor.set(value, factor[value] * base_->probability_obs_oreslam(obs, current_loc, slabels, last_action)); // BLAI: CHECK: OK
+            int slabels = get_slabels(current_loc, factor.vars(), value);
+            factor.set(value, factor[value] * base_->probability_obs_oreslam(obs, current_loc, slabels, last_action));
         }
         factor.normalize();
         indices_for_updated_factors_.push_back(current_loc);
@@ -358,7 +360,7 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         float weight = 0;
         const dai::Factor &p_marginal = p.marginals_[np_current_loc];
         for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
-            int slabels = get_slabels(np_current_loc, p_marginal, value);
+            int slabels = get_slabels(np_current_loc, p_marginal.vars(), value);
             weight += p_marginal[value] * base_->probability_obs_oreslam(obs, np_current_loc, slabels, last_action); // BLAI: CHECK
         }
         return weight;
@@ -383,27 +385,38 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         cdf.clear();
         cdf.reserve(base_->nloc_);
 
-        int current_loc = p.loc_history_.back();
-        float previous = 0;
+        // P(nloc | loc, action, obs) = alpha * P(nloc, obs | loc, action)
+        //                            = alpha * P(obs | nloc, loc, action) * P(nloc | loc, action)
+        //                            = alpha * P(obs | nloc, action) * P(nloc | loc, action)
 
-        const dai::Factor &p_marginal = p.marginals_[current_loc];
+        float previous = 0;
+        int current_loc = p.loc_history_.back();
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
+            const dai::Factor &p_marginal = p.marginals_[new_loc];
             float prob = 0;
             for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
-                int slabels = get_slabels(current_loc, p_marginal, value);
+                int slabels = get_slabels(new_loc, p_marginal.vars(), value);
                 prob += p_marginal[value] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action); // BLAI: CHECK
             }
             cdf.push_back(previous + base_->probability_tr_loc_oreslam(last_action, current_loc, new_loc) * prob); // BLAI: CHECK
             previous = cdf.back();
         }
 
+#if 1
+        std::cout << std::endl << "cloc=" << current_loc << ", action=" << last_action << ", obs=" << obs;
+        std::cout << ", prob: " << cdf[0];
+        for( int loc = 1; loc < base_->nloc_; ++loc )
+            std::cout << " " << cdf[loc] - cdf[loc - 1];
+        std::cout << std::endl;
+#endif
+
         // normalize
+        assert(cdf.back() > 0);
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             cdf[new_loc] /= cdf.back();
         }
-        assert(cdf.back() == 1.0);
 
-#if 0
+#if 1
         std::cout << std::endl << "cloc=" << current_loc << ", action=" << last_action << ", obs=" << obs;
         std::cout << ", prob: " << cdf[0];
         for( int loc = 1; loc < base_->nloc_; ++loc )
