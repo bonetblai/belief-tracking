@@ -61,6 +61,11 @@ int inference_t::edbp_max_iter_;
 
 mpi_slam_t *mpi_base_t::mpi_ = 0;
 
+#ifdef USE_MPI // static members for load balancing
+template <typename PTYPE, typename BASE> int SIR_t<PTYPE, BASE>::mpi_machine_for_master_ = 0;
+template <typename PTYPE, typename BASE> vector<vector<int> > SIR_t<PTYPE, BASE>::mpi_fixed_budget_;
+#endif
+
 
 void finalize() {
 #ifdef USE_MPI
@@ -118,6 +123,8 @@ int main(int argc, const char **argv) {
     int execution_length = 10;
     float map_threshold = .70;
 
+    bool do_stochastic_universal_sampling = false;
+
     // inference algorithm
     string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-5,maxtime=3)";
     //string inference_algorithm = "edbp(maxiter=2)";
@@ -129,6 +136,31 @@ int main(int argc, const char **argv) {
 
 #ifdef USE_MPI
     mpi_base_t::mpi_ = new mpi_slam_t(argc, argv);
+
+    // get worker distribution and budget
+    int mpi_machine_for_master;
+    map<string, int> mpi_processor_name_map;
+    vector<vector<int> > mpi_fixed_budget;
+    mpi_base_t::mpi_->get_worker_distribution(mpi_processor_name_map, mpi_fixed_budget, mpi_machine_for_master);
+
+    cout << "MPI: " << mpi_base_t::mpi_->nworkers_ << " process(es) running in " << mpi_processor_name_map.size() << " processor(s):" << endl;
+    for( map<string, int>::const_iterator it = mpi_processor_name_map.begin(); it != mpi_processor_name_map.end(); ++it )
+        cout << "MPI: -> " << it->first << " (" << it->second << ")" << endl;
+
+    // set static elements for load balancing
+    SIR_t<motion_model_sir_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<optimal_sir_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<motion_model_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<motion_model_rbpf_slam2_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<optimal_rbpf_slam2_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+
+    SIR_t<motion_model_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<optimal_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<motion_model_rbpf_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<motion_model_rbpf_slam2_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<optimal_rbpf_slam2_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
 #endif
 
     // parse arguments
@@ -314,20 +346,20 @@ int main(int argc, const char **argv) {
             if( name == "sis" ) {
                 tracker = new SIS_t<sis_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
             } else if( name == "mm_sir" ) {
-                tracker = new motion_model_SIR_t<motion_model_sir_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                tracker = new motion_model_SIR_t<motion_model_sir_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
             } else if( name == "opt_sir" ) {
                 cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf = new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
-                tracker = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(full_name, cellmap, *cdf, nparticles);
+                tracker = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(full_name, cellmap, *cdf, nparticles, false, do_stochastic_universal_sampling);
             } else if( name == "mm_rbpf" ) {
                 if( !oreslam )
-                    tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                    tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
                 else
-                    tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                    tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
             } else if( name == "opt_rbpf" ) {
                 if( !oreslam )
-                    tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                    tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles, false, do_stochastic_universal_sampling);
                 else
-                    tracker = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+                    tracker = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles, false, do_stochastic_universal_sampling);
             } else {
                 cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
             }

@@ -36,8 +36,8 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
     using SIR_t<PTYPE, BASE>::do_stochastic_universal_sampling_;
 
-    RBPF_t(const std::string &name, const BASE &base, int nparticles)
-      : SIR_t<PTYPE, BASE>(name, base, nparticles) {
+    RBPF_t(const std::string &name, const BASE &base, int nparticles, bool do_resampling, bool do_stochastic_universal_sampling)
+      : SIR_t<PTYPE, BASE>(name, base, nparticles, do_resampling, do_stochastic_universal_sampling) {
     }
     virtual ~RBPF_t() { }
 
@@ -51,8 +51,8 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         // aggregate info from particles into marginals
         assert(particles_.size() == multiplicity_.size());
         for( int i = 0; i < int(particles_.size()); ++i ) {
-            float weight = particles_[i].first * multiplicity_[i];
-            const PTYPE &p = *particles_[i].second;
+            float weight = particles_[i].weight_ * multiplicity_[i];
+            const PTYPE &p = *particles_[i].p_;
             p.update_marginals(weight, marginals_on_vars_);
         }
 

@@ -183,6 +183,7 @@ void usage(ostream &os) {
 int main(int argc, const char **argv) {
     // initialize MPI and obtain number of worker and ID
     mpi_slam_t mpi(argc, argv);
+    mpi.send_worker_distribution();
 
     // parse arguments
     int seed = 0;

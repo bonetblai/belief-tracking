@@ -44,12 +44,22 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     using PF_t<PTYPE, BASE>::particles_;
     using PF_t<PTYPE, BASE>::multiplicity_;
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
+    typedef typename PF_t<PTYPE, BASE>::particle_t particle_t;
 
+    bool do_resampling_;
     bool do_stochastic_universal_sampling_;
     std::vector<std::pair<int, int> > execution_;
 
-    SIR_t(const std::string &name, const BASE &base, int nparticles, bool do_stochastic_universal_sampling = false)
-      : PF_t<PTYPE, BASE>(name, base, nparticles), do_stochastic_universal_sampling_(do_stochastic_universal_sampling) {
+#ifdef USE_MPI
+    // MPI load balancing
+    static int mpi_machine_for_master_;
+    static std::vector<std::vector<int> > mpi_fixed_budget_;
+#endif
+
+    SIR_t(const std::string &name, const BASE &base, int nparticles, bool do_resampling, bool do_stochastic_universal_sampling)
+      : PF_t<PTYPE, BASE>(name, base, nparticles),
+        do_resampling_(do_resampling),
+        do_stochastic_universal_sampling_(do_stochastic_universal_sampling) {
     }
     virtual ~SIR_t() { }
 
@@ -67,32 +77,65 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             sampler.initialize_mpi_worker(mpi_base_t::mpi_, 1 + wid);
 #endif
 
+        int wid = 1;
         float weight = 1.0 / float(nparticles_);
-        PTYPE *p = sampler.initial_sampling(mpi_base_t::mpi_, 1);
-        particles_.push_back(std::make_pair(weight, p));
+        PTYPE *p = sampler.initial_sampling(mpi_base_t::mpi_, wid);
+        particles_.push_back(particle_t(weight, p, wid));
         multiplicity_.push_back(nparticles_);
 
 #ifdef USE_MPI 
         // process was lauched to calculate marginals, collect marginals
-        particles_[0].second->mpi_update_marginals(mpi_base_t::mpi_, 1);
+        particles_[0].p_->mpi_update_marginals(mpi_base_t::mpi_, particles_[0].wid_);
 #endif
     }
 
     virtual void update(int last_action, int obs) {
+        // 1. re-sampling according to importance weights
         std::vector<int> indices;
-        if( do_stochastic_universal_sampling_ )
-            PF_t<PTYPE, BASE>::stochastic_universal_sampling(nparticles_, indices);
-        else
-            PF_t<PTYPE, BASE>::stochastic_sampling(nparticles_, indices);
+        if( do_resampling_ ) {
+            if( do_stochastic_universal_sampling_ )
+                PF_t<PTYPE, BASE>::stochastic_universal_sampling(nparticles_, indices);
+            else
+                PF_t<PTYPE, BASE>::stochastic_sampling(nparticles_, indices);
+        } else {
+            indices.reserve(nparticles_);
+            for( int i = 0; i < int(particles_.size()); ++i ) {
+                for( int j = 0; j < multiplicity_[i]; ++j )
+                    indices.push_back(i);
+            }
+        }
         assert(int(indices.size()) == nparticles_);
 
+#ifdef USE_MPI
+        // prepare load balancing
+        std::vector<std::vector<int> > mpi_budget = mpi_fixed_budget_;
+        std::vector<int> mpi_load(mpi_budget.size(), 0);
+        ++mpi_load[mpi_machine_for_master_];
+#endif
+
+        // 2. sampling next particles
         history_container_t history_container;
-        std::vector<std::pair<float, PTYPE*> > new_particles;
+        std::vector<particle_t> new_particles;
         for( int i = 0; i < int(indices.size()); ++i ) {
             int index = indices[i];
-            const PTYPE &p = *particles_[index].second;
-            float weight = particles_[index].first;
-            PTYPE *np = sample_from_pi(p, last_action, obs, history_container, 1 + i);
+            const PTYPE &p = *particles_[index].p_;
+            float weight = particles_[index].weight_;
+            int wid = -1;
+
+#ifdef      USE_MPI
+            // do load balancing: find wid for machine with lowest load
+            int best_mid = -1;
+            for( int mid = 0; mid < int(mpi_budget.size()); ++mid ) {
+                if( !mpi_budget[mid].empty() && ((best_mid == -1) || (mpi_load[best_mid] > mpi_load[mid])) )
+                    best_mid = mid;
+            }
+            assert(best_mid >= 0);
+            wid = mpi_budget[best_mid].back();
+            mpi_budget[best_mid].pop_back();
+            ++mpi_load[best_mid];
+#endif
+
+            PTYPE *np = sample_from_pi(p, last_action, obs, history_container, wid);
 
             if( history_container.find(np->history()) == history_container.end() ) {
                 history_container.insert(std::make_pair(np->history(), 1));
@@ -103,7 +146,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             }
 
             float new_weight = weight * importance_weight(*np, p, last_action, obs);
-            new_particles.push_back(std::make_pair(new_weight, np));
+            new_particles.push_back(particle_t(new_weight, np, wid));
         }
 
         // set multiplicity and normalize
@@ -111,23 +154,23 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         float total_mass = 0.0;
         multiplicity_ = std::vector<int>(new_particles.size(), 0);
         for( int i = 0; i < int(new_particles.size()); ++i ) {
-            assert(history_container.find(new_particles[i].second->history()) != history_container.end());
-            multiplicity_[i] = history_container.find(new_particles[i].second->history())->second;
-            total_mass += new_particles[i].first * multiplicity_[i];
+            assert(history_container.find(new_particles[i].p_->history()) != history_container.end());
+            multiplicity_[i] = history_container.find(new_particles[i].p_->history())->second;
+            total_mass += new_particles[i].weight_ * multiplicity_[i];
             nparticles += multiplicity_[i];
         }
         assert(nparticles_ == nparticles);
 
         for( int i = 0; i < int(new_particles.size()); ++i ) {
             if( total_mass == 0 )
-                new_particles[i].first = 1.0 / float(new_particles.size());
+                new_particles[i].weight_ = 1.0 / float(new_particles.size());
             else
-                new_particles[i].first /= total_mass;
+                new_particles[i].weight_ /= total_mass;
         }
 
         // replace old particles by new particles
         for( int i = 0; i < int(particles_.size()); ++i )
-            delete particles_[i].second;
+            delete particles_[i].p_;
         particles_ = std::move(new_particles);
 
         execution_.push_back(std::make_pair(last_action, obs));
@@ -137,8 +180,8 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         assert(mpi_base_t::mpi_ != 0);
         assert(mpi_base_t::mpi_->nworkers_ >= 1);
         for( int i = 0; i < int(particles_.size()); ++i ) {
-            PTYPE *p = particles_[i].second;
-            p->mpi_update_marginals(mpi_base_t::mpi_, 1 + i);
+            PTYPE *p = particles_[i].p_;
+            p->mpi_update_marginals(mpi_base_t::mpi_, particles_[i].wid_);
         }   
 #endif
     }
@@ -152,8 +195,8 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
         // aggregate info from particles into marginals
         for( int i = 0; i < nparticles_; ++i ) {
-            float weight = particles_[i].first;
-            const PTYPE &p = *particles_[i].second;
+            float weight = particles_[i].weight_;
+            const PTYPE &p = *particles_[i].p_;
             for( int var = 0; var < base_.nvars_; ++var ) {
                 marginals_on_vars_[var].set(p.value_for(var), marginals_on_vars_[var][p.value_for(var)] + weight);
             }

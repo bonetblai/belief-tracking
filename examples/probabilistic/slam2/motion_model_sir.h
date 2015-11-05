@@ -26,8 +26,8 @@
 
 // SIR filter with proposal distribution given by motion model
 template <typename PTYPE, typename BASE> struct motion_model_SIR_t : public SIR_t<PTYPE, BASE> {
-    motion_model_SIR_t(const std::string &name, const BASE &base, int nparticles)
-      : SIR_t<PTYPE, BASE>(name, base, nparticles) {
+    motion_model_SIR_t(const std::string &name, const BASE &base, int nparticles, bool do_resampling, bool do_stochastic_universal_sampling)
+      : SIR_t<PTYPE, BASE>(name, base, nparticles, do_resampling, do_stochastic_universal_sampling) {
     }
     virtual ~motion_model_SIR_t() { }
 

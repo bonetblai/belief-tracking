@@ -36,8 +36,17 @@
 
 // Generic Particle Filter
 template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
+
+    // particle type
+    struct particle_t {
+        float weight_;
+        PTYPE *p_;
+        int wid_;
+        particle_t(float weight, PTYPE *p, int wid = -1) : weight_(weight), p_(p), wid_(wid) { }
+    };
+
     int nparticles_;
-    std::vector<std::pair<float, PTYPE*> > particles_;
+    std::vector<particle_t> particles_;
     std::vector<int> multiplicity_;
     std::vector<dai::Factor> marginals_on_vars_;
 
@@ -49,18 +58,18 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
     void stochastic_sampling(int k, std::vector<int> &indices) const {
         assert(!particles_.empty());
         std::vector<float> cdf(particles_.size(), 0);
-        cdf[0] = particles_[0].first * multiplicity_[0];
+        cdf[0] = particles_[0].weight_ * multiplicity_[0];
         for( int i = 1; i < int(particles_.size()); ++i )
-            cdf[i] = cdf[i - 1] + particles_[i].first * multiplicity_[i];
+            cdf[i] = cdf[i - 1] + particles_[i].weight_ * multiplicity_[i];
         Utils::stochastic_sampling(cdf.size(), &cdf[0], k, indices);
     }
 
     void stochastic_universal_sampling(int k, std::vector<int> &indices) const {
         assert(!particles_.empty());
         std::vector<float> cdf(particles_.size(), 0);
-        cdf[0] = particles_[0].first * multiplicity_[0];
+        cdf[0] = particles_[0].weight_ * multiplicity_[0];
         for( int i = 1; i < int(particles_.size()); ++i )
-            cdf[i] = cdf[i - 1] + particles_[i].first * multiplicity_[1];
+            cdf[i] = cdf[i - 1] + particles_[i].weight_ * multiplicity_[1];
         Utils::stochastic_universal_sampling(cdf.size(), &cdf[0], k, indices);
     }
 

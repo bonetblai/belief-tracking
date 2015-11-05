@@ -72,6 +72,43 @@ struct mpi_raw_t {
         MPI_Finalize();
     }
 
+    std::string get_processor_name() const {
+        return std::string(processor_name_);
+    }
+
+    void get_worker_distribution(std::map<std::string, int> &name_map, std::vector<std::vector<int> > &budget, int &machine_for_master) {
+        assert(worker_id_ == MPI_MASTER_WORKER);
+
+        // receive processor names
+        char *recvbuf = new char[nworkers_ * MPI_MAX_PROCESSOR_NAME];
+        MPI_Gather(processor_name_, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, recvbuf, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, MPI_MASTER_WORKER, MPI_COMM_WORLD);
+
+        for( int wid = 0; wid < nworkers_; ++wid ) {
+            std::string pname(&recvbuf[wid * MPI_MAX_PROCESSOR_NAME]);
+            if( name_map.find(pname) == name_map.end() )
+                name_map.insert(std::make_pair(pname, int(name_map.size())));
+        }
+       
+        // create budget vectors
+        budget = std::vector<std::vector<int> >(name_map.size());
+        for( int wid = 0; wid < nworkers_; ++wid ) {
+            std::string pname(&recvbuf[wid * MPI_MAX_PROCESSOR_NAME]);
+            assert(name_map.find(pname) != name_map.end());
+            int mid = name_map[pname];
+            assert((mid >= 0) && (mid < int(budget.size())));
+            budget[mid].push_back(wid);
+            if( wid == 0 ) machine_for_master = mid;
+        }
+
+        // free resources
+        delete[] recvbuf;
+    }
+
+    void send_worker_distribution() {
+        assert(worker_id_ != MPI_MASTER_WORKER);
+        MPI_Gather(processor_name_, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, 0, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, MPI_MASTER_WORKER, MPI_COMM_WORLD);
+    }
+
     // low-level input/output
     void raw_send(const void *buffer, int count, MPI_Datatype type, int wid) {
         MPI_Send((void*)buffer, count, type, wid, ++send_tags_[wid], MPI_COMM_WORLD);
