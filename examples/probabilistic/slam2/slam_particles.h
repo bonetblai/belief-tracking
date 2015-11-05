@@ -481,10 +481,8 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     }
 
     optimal_rbpf_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*wid*/) {
-        std::cout << "hola" << std::endl;
         optimal_rbpf_slam_particle_t *p = new optimal_rbpf_slam_particle_t;
         p->initial_sampling_in_place();
-        std::cout << "chao" << std::endl;
         return p;
     }
 };
