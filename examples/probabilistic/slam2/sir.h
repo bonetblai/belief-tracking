@@ -34,8 +34,47 @@
 
 #include "particle_filter.h"
 
-struct history_container_t : public std::map<std::vector<int>, int> {
+// Histories are used to detect duplicate particles and correctly
+// compute particle multiplicities. History is the value history
+// for the tracked variables
+
+typedef std::vector<int> history_t;
+
+struct history_container_t {
+    virtual bool contains(const history_t &history) const = 0;
+    virtual void insert(const history_t &history) = 0;
+    virtual int multiplicity(const history_t &history) const = 0;
+    virtual void increase_multiplicity(const history_t &history) = 0;
 };
+
+struct standard_history_container_t : public history_container_t {
+    std::map<history_t, int> container_;
+
+    virtual bool contains(const history_t &history) const {
+        return container_.find(history) != container_.end();
+    }
+    virtual void insert(const history_t &history) {
+        container_.insert(std::make_pair(history, 1));
+    }
+    virtual int multiplicity(const history_t &history) const {
+        return container_.find(history)->second;
+    }
+    virtual void increase_multiplicity(const history_t &history) {
+        ++container_[history];
+    }
+};
+
+struct null_history_container_t : public history_container_t {
+    virtual bool contains(const history_t &history) const {
+        return false;
+    }
+    virtual void insert(const history_t &history) { }
+    virtual int multiplicity(const history_t &history) const {
+        return 1;
+    }
+    virtual void increase_multiplicity(const history_t &history) { }
+};
+
 
 // Generic Sequential Importance Resampling (SIR) Particle Filter
 template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE> {
@@ -63,8 +102,16 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     }
     virtual ~SIR_t() { }
 
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int wid) const = 0;
-    virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const = 0;
+    virtual void sample_from_pi(PTYPE &np,
+                                const PTYPE &p,
+                                int last_action,
+                                int obs,
+                                const history_container_t &history_container,
+                                int wid) const = 0;
+    virtual float importance_weight(const PTYPE &np,
+                                    const PTYPE &p,
+                                    int last_action,
+                                    int obs) const = 0;
 
     virtual void initialize() {
         PTYPE sampler;
@@ -114,7 +161,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 #endif
 
         // 2. sampling next particles
-        history_container_t history_container;
+        standard_history_container_t history_container;
         std::vector<particle_t> new_particles;
         for( int i = 0; i < int(indices.size()); ++i ) {
             int index = indices[i];
@@ -138,10 +185,10 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
             PTYPE *np = sample_from_pi(p, last_action, obs, history_container, wid);
 
-            if( history_container.find(np->history()) == history_container.end() ) {
-                history_container.insert(std::make_pair(np->history(), 1));
+            if( !history_container.contains(np->history()) ) {
+                history_container.insert(np->history());
             } else {
-                ++history_container[np->history()];
+                history_container.increase_multiplicity(np->history());
                 delete np;
                 continue;
             }
@@ -155,8 +202,8 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         float total_mass = 0.0;
         multiplicity_ = std::vector<int>(new_particles.size(), 0);
         for( int i = 0; i < int(new_particles.size()); ++i ) {
-            assert(history_container.find(new_particles[i].p_->history()) != history_container.end());
-            multiplicity_[i] = history_container.find(new_particles[i].p_->history())->second;
+            assert(history_container.contains(new_particles[i].p_->history()));
+            multiplicity_[i] = history_container.multiplicity(new_particles[i].p_->history());
             total_mass += new_particles[i].weight_ * multiplicity_[i];
             nparticles += multiplicity_[i];
         }

@@ -7,7 +7,7 @@ INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabil
 CXX=			c++
 MPICXX=			mpic++
 
-CXXEXT=			-std=c++11 -DMACOSX -I ~/software/libdai/include -I /usr/local/include -Wno-deprecated -Wall -W -Wextra -fPIC -O3 -DDAI_DEBUG -L ~/software/libdai/lib -L /usr/local/lib -Wno-overloaded-virtual -Wno-unused-local-typedef #-Wno-unused-parameter
+CXXEXT=			-std=c++11 -DMACOSX -I ~/software/libdai/include -I /usr/local/include -Wno-deprecated -Wall -W -Wextra -fPIC -O3 -DDAI_DEBUG -L ~/software/libdai/lib -L /usr/local/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter
 
 CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
 
