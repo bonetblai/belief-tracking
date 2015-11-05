@@ -145,7 +145,7 @@ int main(int argc, const char **argv) {
 
     cout << "MPI: " << mpi_base_t::mpi_->nworkers_ << " process(es) running in " << mpi_processor_name_map.size() << " processor(s):" << endl;
     for( map<string, int>::const_iterator it = mpi_processor_name_map.begin(); it != mpi_processor_name_map.end(); ++it )
-        cout << "MPI: -> " << it->first << " (" << it->second << ")" << endl;
+        cout << "MPI:     -> " << it->first << " (" << it->second << ")" << endl;
 
     // set static elements for load balancing
     SIR_t<motion_model_sir_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;

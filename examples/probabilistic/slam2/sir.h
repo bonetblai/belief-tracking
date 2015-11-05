@@ -133,6 +133,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             wid = mpi_budget[best_mid].back();
             mpi_budget[best_mid].pop_back();
             ++mpi_load[best_mid];
+            //std::cout << "best: mid=" << best_mid << ", wid=" << wid << ", load=" << mpi_load[best_mid] - 1 << std::endl;
 #endif
 
             PTYPE *np = sample_from_pi(p, last_action, obs, history_container, wid);
