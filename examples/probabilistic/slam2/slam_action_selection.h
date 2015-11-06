@@ -24,7 +24,7 @@
 #include "action_selection.h"
 #include "cellmap.h"
 
-#define DEBUG
+//#define DEBUG
 
 struct random_slam_policy_t : public action_selection_t<cellmap_t> {
     random_slam_policy_t(const cellmap_t &cellmap) : action_selection_t<cellmap_t>(cellmap) { }

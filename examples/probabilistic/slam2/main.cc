@@ -114,7 +114,7 @@ int main(int argc, const char **argv) {
     string tmp_path = "";
     vector<string> tracking_algorithms_str;
 
-    float pa = 0.8;
+    float pa = 0.9;
     float po = 0.9;
 
     bool oreslam = false;
@@ -122,7 +122,7 @@ int main(int argc, const char **argv) {
     int ptype = 0;
     int num_covering_loops = 10;
     float map_threshold = .70;
-    float epsilon = .05;
+    float map_epsilon = .15;
 
     bool do_stochastic_universal_sampling = false;
 
@@ -206,6 +206,10 @@ int main(int argc, const char **argv) {
             argv += 2;
         } else if( !strcmp(argv[0], "--po") ) {
             po = strtod(argv[1], 0);
+            argc -= 2;
+            argv += 2;
+        } else if( !strcmp(argv[0], "--map-epsilon") ) {
+            map_epsilon = strtod(argv[1], 0);
             argc -= 2;
             argv += 2;
         } else if( !strcmp(argv[0], "--map-threshold") ) {
@@ -392,7 +396,7 @@ int main(int argc, const char **argv) {
 
     // action selection
     random_slam_policy_t policy(cellmap);
-    exploration_slam_policy_t policy2(cellmap, epsilon);
+    exploration_slam_policy_t policy2(cellmap, map_epsilon);
 
     // set initial loc
     cellmap.initial_loc_ = 0;
@@ -481,7 +485,7 @@ int main(int argc, const char **argv) {
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
             for( int var = 0; var < nrows * ncols; ++var ) {
-                tracking_algorithms[i]->MAP_on_var(repos[i], var, map_values, epsilon);
+                tracking_algorithms[i]->MAP_on_var(repos[i], var, map_values, map_epsilon);
                 assert(!map_values.empty());
                 if( map_values[0].first < map_threshold ) {
                     cout << " *";
@@ -506,14 +510,14 @@ int main(int argc, const char **argv) {
             }
 
             cout << "], loc=";
-            tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values, epsilon);
+            tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values, map_epsilon);
             assert(!map_values.empty());
             if( map_values.size() == 1 ) {
-                cout << coord_t(map_values.back().second) << ":" << map_values.back().second << endl;
+                cout << coord_t(map_values.back().second) << ":" << setprecision(4) << map_values.back().first << endl;
             } else {
-                cout << " {";
+                cout << "{";
                 for( size_t k = 0; k < map_values.size(); ++k ) {
-                    cout << coord_t(map_values[k].second) << ":" << map_values[k].second;
+                    cout << coord_t(map_values[k].second) << ":" << setprecision(4) << map_values[k].first;
                     if( k < map_values.size() - 1 ) cout << ",";
                 }
                 cout << "}" << endl;
@@ -626,7 +630,7 @@ int main(int argc, const char **argv) {
                     cout << "raw_data <- append(raw_data, list(matrix(c(";
                     for( int var = 0; var < nrows * ncols; ++var ) {
                         vector<pair<float, int> > map_values;
-                        tracker.MAP_on_var(repos.back(), t, var, map_values, epsilon);
+                        tracker.MAP_on_var(repos.back(), t, var, map_values, map_epsilon);
                         assert(!map_values.empty());
                         if( map_values[0].first < map_threshold )
                             cout << .50;
