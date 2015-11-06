@@ -120,8 +120,9 @@ int main(int argc, const char **argv) {
     bool oreslam = false;
     int gtype = -1;
     int ptype = 0;
-    int execution_length = 10;
+    int num_covering_loops = 10;
     float map_threshold = .70;
+    float epsilon = .05;
 
     bool do_stochastic_universal_sampling = false;
 
@@ -213,7 +214,12 @@ int main(int argc, const char **argv) {
             argv += 2;
         } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
             ptype = atoi(argv[1]);
-            execution_length = atoi(argv[2]);
+            int n = atoi(argv[2]);
+            if( ptype < 2 ) {
+                num_covering_loops = n;
+            } else if( ptype == 2 ) {
+                nsteps = n;
+            }
             argc -= 3;
             argv += 3;
         } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
@@ -385,7 +391,8 @@ int main(int argc, const char **argv) {
         size_longest_name = size_longest_name > tracking_algorithms[i]->name_.size() ? size_longest_name : tracking_algorithms[i]->name_.size();
 
     // action selection
-    naive_action_selection_t policy(cellmap, .30);
+    random_slam_policy_t policy(cellmap);
+    exploration_slam_policy_t policy2(cellmap, epsilon);
 
     // set initial loc
     cellmap.initial_loc_ = 0;
@@ -440,9 +447,8 @@ int main(int argc, const char **argv) {
             fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::left));
             fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
         }
-    } else {
-        //cellmap.compute_random_execution(0, execution_length, fixed_execution);
-        cellmap.compute_covering_execution(0, fixed_execution, execution_length);
+    } else if( ptype == 1 ) {
+        cellmap.compute_covering_execution(0, fixed_execution, num_covering_loops);
     }
     cout << "# fixed-execution[sz=" << fixed_execution.size() << "]=" << fixed_execution << endl;
 
@@ -454,7 +460,7 @@ int main(int argc, const char **argv) {
         if( !fixed_execution.empty() )
             cellmap.run_execution(repos, fixed_execution, output_execution, tracking_algorithms, verbose);
         else
-            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, policy, tracking_algorithms, verbose);
+            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, policy2, tracking_algorithms, verbose);
 
         // calculate final marginals
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
@@ -475,7 +481,7 @@ int main(int argc, const char **argv) {
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
             for( int var = 0; var < nrows * ncols; ++var ) {
-                tracking_algorithms[i]->MAP_on_var(repos[i], var, map_values, .1);
+                tracking_algorithms[i]->MAP_on_var(repos[i], var, map_values, epsilon);
                 assert(!map_values.empty());
                 if( map_values[0].first < map_threshold ) {
                     cout << " *";
@@ -500,7 +506,7 @@ int main(int argc, const char **argv) {
             }
 
             cout << "], loc=";
-            tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values, .1);
+            tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values, epsilon);
             assert(!map_values.empty());
             if( map_values.size() == 1 ) {
                 cout << coord_t(map_values.back().second) << ":" << map_values.back().second << endl;
@@ -620,7 +626,7 @@ int main(int argc, const char **argv) {
                     cout << "raw_data <- append(raw_data, list(matrix(c(";
                     for( int var = 0; var < nrows * ncols; ++var ) {
                         vector<pair<float, int> > map_values;
-                        tracker.MAP_on_var(repos.back(), t, var, map_values, .1);
+                        tracker.MAP_on_var(repos.back(), t, var, map_values, epsilon);
                         assert(!map_values.empty());
                         if( map_values[0].first < map_threshold )
                             cout << .50;

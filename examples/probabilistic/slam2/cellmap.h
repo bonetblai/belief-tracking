@@ -65,13 +65,25 @@ inline int calculate_index(int slabels, int obs, int loc_type) {
 }
 
 struct coord_t {
+    static int ncols_;
     int col_;
     int row_;
-    static int ncols_;
 
     coord_t(int col, int row) : col_(col), row_(row) { }
     coord_t(int loc) : col_(loc % ncols_), row_(loc / ncols_) { }
-    int as_index() const { return row_ * ncols_ + col_; }
+    coord_t(const coord_t &loc) : col_(loc.col_), row_(loc.row_) { }
+
+    bool operator==(const coord_t &loc) const {
+        return (col_ == loc.col_) && (row_ == loc.row_);
+    }
+    bool operator!=(const coord_t &loc) const {
+        return !(*this == loc);
+    }
+
+    int as_index() const {
+        return row_ * ncols_ + col_;
+    }
+
     void print(std::ostream &os) const {
         os << "(" << col_ << "," << row_ << ")";
     }
@@ -623,9 +635,8 @@ struct cellmap_t {
         }
     }
 
-    int action_for(int target_loc, int current_loc) const {
-        assert(target_loc != current_loc);
-        coord_t target(target_loc), current(current_loc);
+    int action_for(const coord_t &current, const coord_t &target) const {
+        assert(current != target);
         if( target.row_ != current.row_ ) {
             if( target.col_ != current.col_ ) {
                 // row and col are different, first try to get to the right column
@@ -638,6 +649,9 @@ struct cellmap_t {
             assert(target.col_ != current.col_);
             return target.col_ > current.col_ ? right : left;
         }
+    }
+    int action_for(int current, int target) const {
+        return action_for(coord_t(current), coord_t(target));
     }
 
     void compute_random_execution(int initial_loc, int length, execution_t &execution) const {
@@ -665,7 +679,7 @@ struct cellmap_t {
             while( !cells_to_visit.empty() ) {
                 int target = *cells_to_visit.begin();
                 int current_loc = execution.back().loc_;
-                int action = action_for(target, current_loc);
+                int action = action_for(current_loc, target);
                 int new_loc = sample_loc(current_loc, action);
                 int obs = sample_obs(new_loc, action);
                 execution.push_back(execution_step_t(new_loc, obs, action));
@@ -716,9 +730,9 @@ struct cellmap_t {
             } else {
                 assert(!tracking_algorithms.empty());
                 last_action = policy->select_action(tracking_algorithms[0]);
+                if( last_action == -1 ) break;
                 hidden_loc = sample_loc(hidden_loc, last_action);
                 obs = sample_obs(hidden_loc, last_action);
-                std::cerr << "step (t=" << t << "): last_action=" << last_action << ", obs=" << obs << ", loc=" << hidden_loc << std::endl;
             }
 
             // update tracking

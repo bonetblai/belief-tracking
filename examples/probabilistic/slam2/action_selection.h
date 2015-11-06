@@ -26,7 +26,7 @@ template <typename T> struct action_selection_t {
     const T &base_;
     action_selection_t(const T &base) : base_(base) { }
     virtual ~action_selection_t() { }
-    virtual int select_action(const tracking_t<T> *tracking = 0) const = 0;
+    virtual int select_action(const tracking_t<T> *tracking) const = 0;
 };
 
 #endif

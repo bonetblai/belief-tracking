@@ -161,7 +161,8 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 #endif
 
         // 2. sampling next particles
-        standard_history_container_t history_container;
+        null_history_container_t history_container;
+        //standard_history_container_t history_container;
         std::vector<particle_t> new_particles;
         for( int i = 0; i < int(indices.size()); ++i ) {
             int index = indices[i];
@@ -202,7 +203,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         float total_mass = 0.0;
         multiplicity_ = std::vector<int>(new_particles.size(), 0);
         for( int i = 0; i < int(new_particles.size()); ++i ) {
-            assert(history_container.contains(new_particles[i].p_->history()));
+            //assert(history_container.contains(new_particles[i].p_->history()));
             multiplicity_[i] = history_container.multiplicity(new_particles[i].p_->history());
             total_mass += new_particles[i].weight_ * multiplicity_[i];
             nparticles += multiplicity_[i];

@@ -77,12 +77,16 @@ template <typename BASE> struct tracking_t : public mpi_base_t {
         return good;
     }
 
-    void store_marginals(repository_t &repository) const {
-        float *marginals = new float[base_.marginals_size_];
+    void store_marginals(float *marginals) const {
         float *ptr = marginals;
         for( int var = 0; var < base_.nvars_; ++var )
             ptr = get_marginal(var, ptr);
         verify_marginals(marginals);
+    }
+
+    void store_marginals(repository_t &repository) const {
+        float *marginals = new float[base_.marginals_size_];
+        store_marginals(marginals);
         repository.push_back(marginals);
     }
 
@@ -112,15 +116,14 @@ template <typename BASE> struct tracking_t : public mpi_base_t {
 
     void MAP_on_var(const float *marginals, int var, std::vector<std::pair<float, int> > &map_values, float epsilon = EPSILON) const {
         const float *marginal = &marginals[base_.variable_offset(var)];
-        map_values.clear();
         float max_probability = 0;
+        for( int value = 0; value < base_.variable_size(var); ++value )
+            max_probability = std::max(max_probability, marginal[value]);
+
+        map_values.clear();
         for( int value = 0; value < base_.variable_size(var); ++value ) {
-            if( (marginal[value] - max_probability > epsilon) || (fabs(max_probability - marginal[value]) < epsilon) ) {
-                if( marginal[value] - max_probability > epsilon )
-                    map_values.clear();
-                max_probability = marginal[value];
-                map_values.push_back(std::make_pair(max_probability, value));
-            }
+            if( marginal[value] + epsilon >= max_probability )
+                map_values.push_back(std::make_pair(marginal[value], value));
         }
     }
 
