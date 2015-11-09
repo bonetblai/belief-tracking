@@ -124,6 +124,9 @@ int main(int argc, const char **argv) {
     float map_threshold = .70;
     float map_epsilon = .15;
 
+    float epsilon = .001;
+    float discount = .95;
+
     bool do_stochastic_universal_sampling = false;
 
     // inference algorithm
@@ -222,6 +225,8 @@ int main(int argc, const char **argv) {
             if( ptype < 2 ) {
                 num_covering_loops = n;
             } else if( ptype == 2 ) {
+                nsteps = n;
+            } else if( ptype == 3 ) {
                 nsteps = n;
             }
             argc -= 3;
@@ -397,6 +402,7 @@ int main(int argc, const char **argv) {
     // action selection
     random_slam_policy_t policy(cellmap);
     exploration_slam_policy_t policy2(cellmap, map_epsilon);
+    murphy_nips99_slam_policy_t policy3(cellmap, discount, epsilon);
 
     // set initial loc
     cellmap.initial_loc_ = 0;
@@ -464,7 +470,7 @@ int main(int argc, const char **argv) {
         if( !fixed_execution.empty() )
             cellmap.run_execution(repos, fixed_execution, output_execution, tracking_algorithms, verbose);
         else
-            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, policy2, tracking_algorithms, verbose);
+            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, policy3, tracking_algorithms, verbose);
 
         // calculate final marginals
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )

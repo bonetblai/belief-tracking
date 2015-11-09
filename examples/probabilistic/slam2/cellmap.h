@@ -168,7 +168,13 @@ struct cellmap_t {
     enum { up, down, right, left };
 
     // model for dynamics (locations)
-    float probability_tr_loc(int action, int old_loc, int new_loc) const {
+    float probability_tr_loc(int action, int old_loc, int new_loc, float pa = -1) const {
+        return oreslam_ ? probability_tr_loc_oreslam(action, old_loc, new_loc, pa) : probability_tr_loc_standard(action, old_loc, new_loc, pa);
+    }
+    float probability_tr_loc_standard(int action, int old_loc, int new_loc, float pa = -1) const {
+        if( action == 4 ) return old_loc == new_loc ? 1 : 0;
+
+        float q = pa == -1 ? pa_ : pa;
         float p = 0;
         coord_t coord(old_loc), new_coord(new_loc);
         if( action == -1 ) {
@@ -178,7 +184,7 @@ struct cellmap_t {
                 p = 0;
             } else {
                 if( coord.row_ + 1 < nrows_ ) {
-                    p = new_coord.row_ == coord.row_ + 1 ? pa_ : (new_coord.row_ == coord.row_ ? 1 - pa_ : 0);
+                    p = new_coord.row_ == coord.row_ + 1 ? q : (new_coord.row_ == coord.row_ ? 1 - q : 0);
                 } else {
                     assert(coord.row_ + 1 == nrows_);
                     p = new_coord.row_ == coord.row_ ? 1 : 0;
@@ -189,7 +195,7 @@ struct cellmap_t {
                 p = 0;
             } else {
                 if( coord.col_ + 1 < ncols_ ) {
-                    p = new_coord.col_ == coord.col_ + 1 ? pa_ : (new_coord.col_ == coord.col_ ? 1 - pa_ : 0);
+                    p = new_coord.col_ == coord.col_ + 1 ? q : (new_coord.col_ == coord.col_ ? 1 - q : 0);
                 } else {
                     assert(coord.col_ + 1 == ncols_);
                     p = new_coord.col_ == coord.col_ ? 1 : 0;
@@ -200,7 +206,7 @@ struct cellmap_t {
                 p = 0;
             } else {
                 if( coord.row_ > 0 ) {
-                    p = new_coord.row_ + 1 == coord.row_ ? pa_ : (new_coord.row_ == coord.row_ ? 1 - pa_ : 0);
+                    p = new_coord.row_ + 1 == coord.row_ ? q : (new_coord.row_ == coord.row_ ? 1 - q : 0);
                 } else {
                     assert(coord.row_ == 0);
                     p = new_coord.row_ == coord.row_ ? 1 : 0;
@@ -211,7 +217,7 @@ struct cellmap_t {
                 p = 0;
             } else {
                 if( coord.col_ > 0 ) {
-                    p = new_coord.col_ + 1 == coord.col_ ? pa_ : (new_coord.col_ == coord.col_ ? 1 - pa_ : 0);
+                    p = new_coord.col_ + 1 == coord.col_ ? q : (new_coord.col_ == coord.col_ ? 1 - q : 0);
                 } else {
                     assert(coord.col_ == 0);
                     p = new_coord.col_ == coord.col_ ? 1 : 0;
@@ -220,9 +226,8 @@ struct cellmap_t {
         }
         return p;
     }
-
-    float probability_tr_loc_oreslam(int action, int old_loc, int new_loc) const {
-        return probability_tr_loc(action, old_loc, new_loc);
+    float probability_tr_loc_oreslam(int action, int old_loc, int new_loc, float pa = -1) const {
+        return probability_tr_loc_standard(action, old_loc, new_loc, pa);
     }
 
     int sample_loc(int loc, int action) const {
@@ -714,7 +719,7 @@ struct cellmap_t {
         // run execution
         std::cout << "# steps:";
         for( size_t t = 1; true; ++t ) {
-            std::cout << " " << t << std::flush;
+            std::cout << " #" << t << std::flush;
             if( (policy == 0) && (t >= input_execution.size()) ) break;
             if( (policy != 0) && (t >= size_t(nsteps)) ) break;
 
