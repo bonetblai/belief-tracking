@@ -165,16 +165,14 @@ struct cellmap_t {
     }
 
     // action labels
-    enum { up, down, right, left };
+    enum { up, down, right, left, noop };
 
     // model for dynamics (locations)
-    float probability_tr_loc(int action, int old_loc, int new_loc, float pa = -1) const {
-        return oreslam_ ? probability_tr_loc_oreslam(action, old_loc, new_loc, pa) : probability_tr_loc_standard(action, old_loc, new_loc, pa);
-    }
-    float probability_tr_loc_standard(int action, int old_loc, int new_loc, float pa = -1) const {
-        if( action == 4 ) return old_loc == new_loc ? 1 : 0;
+  private:
+    float probability_tr_loc_standard(int action, int old_loc, int new_loc, float q) const {
+        assert((q >= 0) && (q <= 1));
+        if( action == noop ) return old_loc == new_loc ? 1 : 0;
 
-        float q = pa == -1 ? pa_ : pa;
         float p = 0;
         coord_t coord(old_loc), new_coord(new_loc);
         if( action == -1 ) {
@@ -226,16 +224,29 @@ struct cellmap_t {
         }
         return p;
     }
-    float probability_tr_loc_oreslam(int action, int old_loc, int new_loc, float pa = -1) const {
-        return probability_tr_loc_standard(action, old_loc, new_loc, pa);
+    float probability_tr_loc_oreslam(int action, int old_loc, int new_loc, float q) const {
+        return probability_tr_loc_standard(action, old_loc, new_loc, q);
     }
 
-    int sample_loc(int loc, int action) const {
+  public:
+    float probability_tr_loc(int action, int old_loc, int new_loc, float pa = -1) const {
+        float q = pa == -1 ? pa_ : pa;
+        return !oreslam_ ? probability_tr_loc_standard(action, old_loc, new_loc, q)
+                         : probability_tr_loc_oreslam(action, old_loc, new_loc, q);
+    }
+
+    bool is_noop_action(int action, int loc, float pa = -1) const {
+        return probability_tr_loc(action, loc, loc, pa) >= 1 - 1e-5;
+    }
+
+  private:
+    int sample_loc_standard(int loc, int action, float q) const {
+        assert((q >= 0) && (q <= 1));
         if( action == -1 ) {
             return loc;
         } else {
             coord_t coord(loc), new_coord(loc);
-            if( drand48() < pa_ ) {
+            if( drand48() < q ) {
                 if( action == up )
                     new_coord = coord_t(coord.col_, coord.row_ + 1 < nrows_ ? coord.row_ + 1 : coord.row_);
                 else if( action == right )
@@ -244,9 +255,21 @@ struct cellmap_t {
                     new_coord = coord_t(coord.col_, coord.row_ > 0 ? coord.row_ - 1 : coord.row_);
                 else if( action == left )
                     new_coord = coord_t(coord.col_ > 0 ? coord.col_ - 1 : coord.col_, coord.row_);
+                else if( action == noop )
+                    new_coord = coord;
             }
             return new_coord.as_index();
         }
+    }
+    int sample_loc_oreslam(int loc, int action, float q) const {
+        return sample_loc_standard(loc, action, q);
+    }
+
+  public:
+    int sample_loc(int loc, int action, float pa = -1) const {
+        float q = pa == -1 ? pa_ : pa;
+        return !oreslam_ ? sample_loc_standard(loc, action, q)
+                         : sample_loc_oreslam(loc, action, q);
     }
 
     // model for observations.
@@ -264,13 +287,11 @@ struct cellmap_t {
         return probability_obs_standard(obs, loc, labels[loc], last_action);
     }
 
-    int sample_obs(int loc, int last_action) const {
-        return !oreslam_ ? sample_obs_standard(loc, last_action) : sample_obs_oreslam(loc, last_action);
-    }
-
-    int sample_obs_standard(int /*loc*/, int label, int /*last_action*/) const {
+  private:
+    int sample_obs_standard(int /*loc*/, int label, int /*last_action*/, float q) const {
+        assert((q >= 0) && (q <= 1));
         assert(!oreslam_);
-        if( drand48() > po_ ) {
+        if( drand48() > q ) {
             int i = lrand48() % (nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {
                 if( (label != j) && (i == 0) ) {
@@ -283,11 +304,40 @@ struct cellmap_t {
         }
         return label;
     }
-
-    int sample_obs_standard(int loc, int last_action) const {
+    int sample_obs_standard(int loc, int last_action, float q) const {
         assert((loc >= 0) && (loc < nloc_));
         int label = cells_[loc].label_;
-        return sample_obs_standard(loc, label, last_action);
+        return sample_obs_standard(loc, label, last_action, q);
+    }
+
+    int sample_obs_oreslam(int loc, int /*last_action*/, float q) const {
+        assert((q >= 0) && (q <= 1));
+        assert(oreslam_);
+        assert((loc >= 0) && (loc < nloc_));
+        int obs = 0;
+        int row = loc / ncols_, col = loc % ncols_;
+        for( int dr = -1; dr < 2; ++dr ) {
+            int nrow = row + dr;
+            if( (nrow < 0) || (nrow >= nrows_) ) continue; // for outside-of-the-grid cell, sampled value = 0
+            for( int dc = -1; dc < 2; ++dc ) {
+                int ncol = col + dc;
+                if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, sampled value = 0
+                int new_loc = nrow * ncols_ + ncol;
+                int label = cells_[new_loc].label_;
+                assert((label == 0) || (label == 1));
+                float p = base_obs_noise_ * (dr != 0 ? q : 1) * (dc != 0 ? q : 1);
+                obs += drand48() < p ? label : 1 - label;
+            }
+        }
+        assert((obs >= 0) && (obs < 10));
+        return obs;
+    }
+
+  public:
+    int sample_obs(int loc, int last_action, float po = -1) const {
+        float q = po == -1 ? po_ : po;
+        return !oreslam_ ? sample_obs_standard(loc, last_action, q)
+                         : sample_obs_oreslam(loc, last_action, q);
     }
 
     // For the ore-slam case, observation is a number from 0 to 9 that is computed from
@@ -301,6 +351,7 @@ struct cellmap_t {
     // to label[loc] with probability equal to po^dist(loc,cloc) where dist(loc,cloc)
     // is the Manhattan distance between loc and cloc.
 
+  public:
     float probability_obs_oreslam(int obs, int loc, int slabels, int /*last_action*/) const {
         assert(oreslam_);
         return probability_obs_oreslam_[calculate_index(slabels, obs, loc_type_[loc])];
@@ -324,28 +375,6 @@ struct cellmap_t {
         }
         assert((slabels >= 0) && (slabels < 512));
         return probability_obs_oreslam(obs, loc, slabels, last_action);
-    }
-
-    int sample_obs_oreslam(int loc, int /*last_action*/) const {
-        assert(oreslam_);
-        assert((loc >= 0) && (loc < nloc_));
-        int obs = 0;
-        int row = loc / ncols_, col = loc % ncols_;
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue; // for outside-of-the-grid cell, sampled value = 0
-            for( int dc = -1; dc < 2; ++dc ) {
-                int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, sampled value = 0
-                int new_loc = nrow * ncols_ + ncol;
-                int label = cells_[new_loc].label_;
-                assert((label == 0) || (label == 1));
-                float q = base_obs_noise_ * (dr != 0 ? po_ : 1) * (dc != 0 ? po_ : 1);
-                obs += drand48() <= q ? label : 1 - label;
-            }
-        }
-        assert((obs >= 0) && (obs < 10));
-        return obs;
     }
 
     // precompute information for efficient computation of observation
@@ -615,7 +644,7 @@ struct cellmap_t {
         execution_step_t(int loc = 0, int obs = 0, int last_action = 0)
           : loc_(loc), obs_(obs), last_action_(last_action) { }
         void print(std::ostream &os) const {
-            os << "(" << loc_ << "," << obs_ << "," << last_action_ << ")";
+            os << "[" << coord_t(loc_) << "," << obs_ << "," << last_action_ << "]";
         }
     };
     struct execution_t : public std::vector<execution_step_t> {
@@ -623,10 +652,12 @@ struct cellmap_t {
         execution_t(int n, const execution_step_t &step)
           : std::vector<execution_step_t>(n, step) { }
         void print(std::ostream &os) const {
+            os << "<";
             for( int i = 0; i < int(size()); ++i ) {
                 (*this)[i].print(os);
                 if( i < int(size()) - 1 ) os << ",";
             }
+            os << ">";
         }
     };
 
@@ -641,8 +672,9 @@ struct cellmap_t {
     }
 
     int action_for(const coord_t &current, const coord_t &target) const {
-        assert(current != target);
-        if( target.row_ != current.row_ ) {
+        if( current == target ) {
+            return noop;
+        } else if( target.row_ != current.row_ ) {
             if( target.col_ != current.col_ ) {
                 // row and col are different, first try to get to the right column
                 return target.col_ > current.col_ ? right : left;

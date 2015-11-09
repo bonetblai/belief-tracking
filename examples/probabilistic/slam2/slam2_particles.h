@@ -448,7 +448,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
                 int slabels = get_slabels(new_loc, p_marginal.vars(), value);
                 prob += p_marginal[value] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action);
             }
-            cdf.push_back(previous + base_->probability_tr_loc_oreslam(last_action, current_loc, new_loc) * prob);
+            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
             previous = cdf.back();
         }
 

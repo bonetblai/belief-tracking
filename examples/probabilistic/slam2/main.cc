@@ -471,6 +471,7 @@ int main(int argc, const char **argv) {
             cellmap.run_execution(repos, fixed_execution, output_execution, tracking_algorithms, verbose);
         else
             cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, policy3, tracking_algorithms, verbose);
+        cout << "# output-execution[sz=" << output_execution.size() << "]=" << output_execution << endl;
 
         // calculate final marginals
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
@@ -488,6 +489,8 @@ int main(int argc, const char **argv) {
         cout << "# final(" << setw(size_longest_name) << "real" << "): map=";
         cellmap.print_labels(cout);
         cout << ", loc=" << coord_t(output_execution.back().loc_) << ":" << output_execution.back().loc_ << endl;
+
+        int num_unknowns = 0;
         for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
             cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
             for( int var = 0; var < nrows * ncols; ++var ) {
@@ -495,6 +498,7 @@ int main(int argc, const char **argv) {
                 assert(!map_values.empty());
                 if( map_values[0].first < map_threshold ) {
                     cout << " *";
+                    ++num_unknowns;
                 } else {
                     if( map_values.size() == 1 ) {
                         cout << " " << map_values.back().second;
@@ -530,6 +534,7 @@ int main(int argc, const char **argv) {
             }
         }
         cout << "# '*' means more than one label in MAP for given position" << endl;
+        cout << "# unknowns=" << num_unknowns << endl;
 
 
         if( !tracking_algorithms.empty() ) {
