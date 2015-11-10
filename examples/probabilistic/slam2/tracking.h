@@ -61,6 +61,7 @@ template <typename BASE> struct tracking_t : public mpi_base_t {
     virtual void get_marginal(int var, dai::Factor &marginal) const = 0;
     virtual float* get_marginal(int var, float *ptr) const = 0;
     virtual std::string id() const = 0;
+    virtual void print(std::ostream &os) const = 0;
 
     bool verify_marginals(const float *marginals) const {
         int good = true;

@@ -43,6 +43,7 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
         PTYPE *p_;
         int wid_;
         particle_t(float weight, PTYPE *p, int wid = -1) : weight_(weight), p_(p), wid_(wid) { }
+        void print(std::ostream &os) const { p_->print(os); }
     };
 
     int nparticles_;
@@ -54,6 +55,19 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
       : tracking_t<BASE>(name, base), nparticles_(nparticles) {
     }
     ~PF_t() { }
+
+    virtual void print(std::ostream &os) const {
+        for( int i = 0; i < int(particles_.size()); ++i ) {
+            const particle_t &p = particles_[i];
+            os << "particle: index=" << i
+               << ", weight=" << p.weight_
+               << ", multiplicity=" << multiplicity_[i]
+               << ": "
+               << std::flush;
+            p.print(os);
+            os << std::endl;
+        }
+    }
 
     void stochastic_sampling(int k, std::vector<int> &indices) const {
         assert(!particles_.empty());

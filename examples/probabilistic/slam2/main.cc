@@ -121,8 +121,8 @@ int main(int argc, const char **argv) {
     int gtype = -1;
     int ptype = 0;
     int num_covering_loops = 10;
-    float map_threshold = .70;
-    float map_epsilon = .15;
+    float map_threshold = .55;
+    float map_epsilon = .01;
 
     float epsilon = .001;
     float discount = .95;
@@ -400,9 +400,11 @@ int main(int argc, const char **argv) {
         size_longest_name = size_longest_name > tracking_algorithms[i]->name_.size() ? size_longest_name : tracking_algorithms[i]->name_.size();
 
     // action selection
-    random_slam_policy_t policy(cellmap);
-    exploration_slam_policy_t policy2(cellmap, map_epsilon);
-    murphy_nips99_slam_policy_t policy3(cellmap, discount, epsilon);
+    vector<action_selection_t<cellmap_t>*> policy;
+    policy.push_back(0);
+    policy.push_back(new random_slam_policy_t(cellmap));
+    policy.push_back(new exploration_slam_policy_t(cellmap, map_epsilon));
+    policy.push_back(new murphy_nips99_slam_policy_t(cellmap, discount, epsilon, map_epsilon));
 
     // set initial loc
     cellmap.initial_loc_ = 0;
@@ -470,8 +472,9 @@ int main(int argc, const char **argv) {
         if( !fixed_execution.empty() )
             cellmap.run_execution(repos, fixed_execution, output_execution, tracking_algorithms, verbose);
         else
-            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, policy3, tracking_algorithms, verbose);
+            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, *policy[ptype], tracking_algorithms, verbose);
         cout << "# output-execution[sz=" << output_execution.size() << "]=" << output_execution << endl;
+        //tracking_algorithms[0]->print(cout);
 
         // calculate final marginals
         for( size_t i = 0; i < tracking_algorithms.size(); ++i )
@@ -523,11 +526,11 @@ int main(int argc, const char **argv) {
             tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values, map_epsilon);
             assert(!map_values.empty());
             if( map_values.size() == 1 ) {
-                cout << coord_t(map_values.back().second) << ":" << setprecision(4) << map_values.back().first << endl;
+                cout << coord_t(map_values.back().second) << ":" << map_values.back().second << ":" << setprecision(4) << map_values.back().first << endl;
             } else {
                 cout << "{";
                 for( size_t k = 0; k < map_values.size(); ++k ) {
-                    cout << coord_t(map_values[k].second) << ":" << setprecision(4) << map_values[k].first;
+                    cout << coord_t(map_values[k].second) << ":" << map_values[k].second << ":" << setprecision(4) << map_values[k].first;
                     if( k < map_values.size() - 1 ) cout << ",";
                 }
                 cout << "}" << endl;

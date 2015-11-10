@@ -35,12 +35,12 @@ struct random_slam_policy_t : public action_selection_t<cellmap_t> {
 };
 
 struct exploration_slam_policy_t : public action_selection_t<cellmap_t> {
-    float epsilon_;
+    float map_epsilon_;
     mutable std::set<int> agenda_;
     mutable float *marginals_;
 
-    exploration_slam_policy_t(const cellmap_t &cellmap, float epsilon)
-      : action_selection_t<cellmap_t>(cellmap), epsilon_(epsilon) {
+    exploration_slam_policy_t(const cellmap_t &cellmap, float map_epsilon)
+      : action_selection_t<cellmap_t>(cellmap), map_epsilon_(map_epsilon) {
         marginals_ = new float[base_.marginals_size_];
     }
     virtual ~exploration_slam_policy_t() {
@@ -54,7 +54,7 @@ struct exploration_slam_policy_t : public action_selection_t<cellmap_t> {
         // get current position(s) from agenda
         std::vector<coord_t> current_loc;
         std::vector<std::pair<float, int> > map_values;
-        tracking->MAP_on_var(marginals_, base_.nloc_, map_values, epsilon_);
+        tracking->MAP_on_var(marginals_, base_.nloc_, map_values, map_epsilon_);
         current_loc.reserve(map_values.size());
         for( int i = 0; i < int(map_values.size()); ++i ) {
             current_loc.push_back(coord_t(map_values[i].second));
@@ -112,7 +112,7 @@ struct exploration_slam_policy_t : public action_selection_t<cellmap_t> {
         assert(agenda_.empty());
         std::vector<std::pair<float, int> > map_values;
         for( int loc = 0; loc < base_.nloc_; ++loc ) {
-            tracking->MAP_on_var(marginals_, loc, map_values, epsilon_);
+            tracking->MAP_on_var(marginals_, loc, map_values, map_epsilon_);
 #if 0
             std::cout << "policy: mapsz[loc=" << loc << "]=" << map_values.size() << ", map={";
             for( int i = 0; i < int(map_values.size()); ++i )
@@ -131,6 +131,9 @@ struct exploration_slam_policy_t : public action_selection_t<cellmap_t> {
 struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
     float discount_;
     float epsilon_;
+    float map_epsilon_;
+
+    std::vector<std::vector<std::pair<int, float> >*> tr_model_;
 
     mutable float *reward_;
     mutable float *value_function_;
@@ -140,13 +143,26 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
 
     mutable std::vector<int> reversed_plan_;
 
-    murphy_nips99_slam_policy_t(const cellmap_t &cellmap, float discount, float epsilon)
-      : action_selection_t<cellmap_t>(cellmap), discount_(discount), epsilon_(epsilon) {
+    murphy_nips99_slam_policy_t(const cellmap_t &cellmap, float discount, float epsilon, float map_epsilon)
+      : action_selection_t<cellmap_t>(cellmap), discount_(discount), epsilon_(epsilon), map_epsilon_(map_epsilon) {
         reward_ = new float[base_.nloc_];
         value_function_ = new float[base_.nloc_];
         marginals_ = new float[base_.marginals_size_];
         best_action_ = new int[base_.nloc_];
         reversed_plan_.reserve(base_.nloc_);
+
+        // calculate tr model
+        tr_model_ = std::vector<std::vector<std::pair<int, float> >*>(5 * base_.nloc_, 0);
+        for( int action = 0; action < 5; ++action ) {
+            for( int loc = 0; loc < base_.nloc_; ++loc ) {
+                std::vector<std::pair<int, float> > *model = new std::vector<std::pair<int, float> >;
+                for( int nloc = 0; nloc < base_.nloc_; ++nloc ) {
+                    float p = base_.probability_tr_loc(action, loc, nloc);
+                    if( p != 0 ) model->push_back(std::make_pair(nloc, p));
+                }
+                tr_model_[action * base_.nloc_ + loc] = model;
+            }
+        }
     }
     virtual ~murphy_nips99_slam_policy_t() {
         delete[] best_action_;
@@ -156,7 +172,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
     }
 
     virtual int select_action(const tracking_t<cellmap_t> *tracking) const {
-#if 0
+#if 1
         // read marginals and solve MDP
         tracking->store_marginals(marginals_);
         solve_mdp(marginals_);
@@ -164,16 +180,14 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         // get current loc
         int current_loc = 0;
         std::vector<std::pair<float, int> > map_values;
-        tracking->MAP_on_var(marginals_, base_.nloc_, map_values, .001);
+        tracking->MAP_on_var(marginals_, base_.nloc_, map_values, map_epsilon_);
         assert(!map_values.empty());
         current_loc = map_values.begin()->second;
-#ifdef DEBUG
-        std::cout << "#policy: current_loc=" << coord_t(current_loc) << ", p=" << map_values.begin()->first << std::endl;
-#endif
+        //std::cout << "#policy: current_loc=" << coord_t(current_loc) << ", p=" << map_values.begin()->first << std::endl;
 
         // calculate best action and return
-        //int action = greedy_action(current_loc);
-        int action = base_.action_for(current_loc, loc_with_best_reward_);
+        int action = greedy_action(current_loc);
+        //int action = base_.action_for(current_loc, loc_with_best_reward_);
         return base_.is_noop_action(action, current_loc) ? lrand48() % 4 : action;
 #else
         if( !reversed_plan_.empty() ) {
@@ -191,19 +205,17 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
             // get current loc
             int current_loc = 0;
             std::vector<std::pair<float, int> > map_values;
-            tracking->MAP_on_var(marginals_, base_.nloc_, map_values, .001);
+            tracking->MAP_on_var(marginals_, base_.nloc_, map_values, map_epsilon_);
             assert(!map_values.empty());
             current_loc = map_values.begin()->second;
-#ifdef DEBUG
-            std::cout << "#policy: current_loc=" << coord_t(current_loc) << ", p=" << map_values.begin()->first << std::endl;
-#endif
+            //std::cout << "#policy: current_loc=" << coord_t(current_loc) << ", p=" << map_values.begin()->first << std::endl;
 
             // fill in reversed plan: path from current loc to best cell
             //int i = 0;
             std::vector<int> plan;
             std::set<int> visited_loc;
             int action = greedy_action(current_loc, 1);
-            while( !base_.is_noop_action(action, current_loc) && (visited_loc.find(current_loc) == visited_loc.end()) ) {//!base_.is_noop_action(action, current_loc, 1) ) {
+            while( !base_.is_noop_action(action, current_loc) && (visited_loc.find(current_loc) == visited_loc.end()) ) {
                 plan.push_back(action);
                 visited_loc.insert(current_loc);
                 current_loc = base_.sample_loc(current_loc, action); // deterministic actions
@@ -221,47 +233,42 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
 #endif
     }
 
+    const std::vector<std::pair<int, float> > &tr_model(int action, int loc) const {
+        return *tr_model_[action * base_.nloc_ + loc];
+    }
+
     float normalized_entropy_dist(const float *distribution, int n) const {
         float entropy = 0;
         for( int i = 0; i < n; ++i ) {
             float p = distribution[i];
             if( (p > 0) && (p < 1) ) entropy += p * -log2f(p);
         }
-        //std::cout << " #H=" << std::setprecision(15) << entropy << std::flush;
         entropy /= log2f(n);
         if( (entropy < 0) && (entropy + 1e-5 > 0) ) entropy = 0;
         if( (entropy > 1) && (entropy - 1e-5 < 1) ) entropy = 1;
-        //std::cout << " (normalized " << std::setprecision(15) << entropy << ")" << std::endl;
         assert((entropy >= 0) && (entropy <= 1));
         return entropy;
     }
-
     float normalized_entropy(const float *marginals, int var) const {
         int n = var < base_.nloc_ ? base_.nlabels_ : base_.nloc_;
         return normalized_entropy_dist(&marginals[base_.variable_offset(var)], n);
     }
 
     void solve_mdp(const float *marginals, float q = -1) const {
-        // calculate (normalized) entropy for loc that is used to define rewards for entering cells
+        // calculate (normalized) entropy for loc (used to define rewards for entering cells)
         float loc_entropy = normalized_entropy(marginals, base_.nloc_);
 
         // calculate rewards
         loc_with_best_reward_ = -1;
         for( int loc = 0; loc < base_.nloc_; ++loc ) {
-            // calculate (normalized) entropies for cells used to define rewards for entering cells
+            // calculate (normalized) entropies for cells (used to define rewards for entering cells)
             float map_entropy = normalized_entropy(marginals, loc);
-            //std::cout << "#h[" << coord_t(loc) << "]=" << h << std::endl;
 
-            // calculate reward
+            // calculate reward and loc with best reward
             reward_[loc] = loc_entropy * (1 - map_entropy) + (1 - loc_entropy) * map_entropy;
             if( (loc_with_best_reward_ == -1) || (reward_[loc_with_best_reward_] < reward_[loc]) )
                 loc_with_best_reward_ = loc;
-
-            //assert((reward_[loc] >= 0) && (reward_[loc] <= 1));
-            //std::cout << "#reward[" << coord_t(loc) << "]=" << reward_[loc] << std::endl;
         }
-        assert(loc_with_best_reward_ != -1);
-        //std::cout << "policy: loc-entropy=" << loc_entropy << ", min-h=" << min_h << ", loc=" << coord_t(best_h) << ", reward=" << reward_[best_h] << std::endl;
 
         // solve MDP
         bzero(value_function_, base_.nloc_ * sizeof(float));
@@ -270,14 +277,15 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
             residual = 0;
             for( int loc = 0; loc < base_.nloc_; ++loc ) {
                 float value = -1;
-                for( int action = 0; action < 5; ++action ) { // extra action (id=4)
+                for( int action = 0; action < 5; ++action ) { // action with index 4 is noop
+                    const std::vector<std::pair<int, float> > &tr = tr_model(action, loc);
                     float qvalue = 0;
-                    for( int nloc = 0; nloc < base_.nloc_; ++nloc ) {
-                        float p = base_.probability_tr_loc(action, loc, nloc, q);
+                    for( int i = 0; i < int(tr.size()); ++i ) {
+                        int nloc = tr[i].first;
+                        float p = tr[i].second;
                         qvalue += p * (reward_[nloc] + discount_ * value_function_[nloc]);
                     }
                     assert(qvalue >= 0);
-
                     if( qvalue > value ) {
                         value = qvalue;
                         best_action_[loc] = action;
@@ -286,30 +294,11 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
                 residual = std::max(fabsf(value_function_[loc] - value), residual);
                 value_function_[loc] = value;
             }
-            //std::cout << "residual=" << residual << std::endl;
         }
     }
 
     int greedy_action(int current_loc, float q = -1) const {
         return best_action_[current_loc];
-#if 0
-        int best_action = -1;
-        float best_value = -1;
-        for( int action = 0; action < 5; ++action ) {
-            float qvalue = 0;
-            for( int nloc = 0; nloc < base_.nloc_; ++nloc ) {
-                float p = base_.probability_tr_loc(action, current_loc, nloc, q);
-                qvalue += p * (reward_[nloc] + discount_ * value_function_[nloc]);
-            }
-            assert(qvalue >= 0);
-            if( qvalue > best_value ) {
-                best_action = action;
-                best_value = qvalue;
-            }
-        }
-        assert(best_action >= 0);
-        return best_action;
-#endif
     }
 };
 

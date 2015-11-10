@@ -84,6 +84,10 @@ struct slam_particle_t : public base_particle_t {
 
     void initialize_mpi_worker(mpi_slam_t * /*mpi*/, int /*wid*/) { } 
     void mpi_update_marginals(mpi_slam_t * /*mpi*/, int /*wid*/) { }
+
+    void print(std::ostream &os) const {
+        os << "loc=" << current_loc_;
+    }
 };
 
 // Particle for the SIS filter
@@ -154,17 +158,15 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
     }
 
     void sample_from_pi(motion_model_sir_slam_particle_t &np,
-                        const motion_model_sir_slam_particle_t &p,
                         int last_action,
                         int /*obs*/) const {
 #ifdef DEBUG
-        assert(np == p);
+        assert(*this == np);
 #endif
-        np.current_loc_ = base_->sample_loc(p.current_loc_, last_action);
+        np.current_loc_ = base_->sample_loc(current_loc_, last_action);
     }
 
     float importance_weight(const motion_model_sir_slam_particle_t &np,
-                            const motion_model_sir_slam_particle_t &/*p*/,
                             int last_action,
                             int obs) const {
         return base_->probability_obs_standard(obs, np.current_loc_, np.labels_, last_action);
@@ -235,14 +237,13 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
         if( np.labels_ == p.labels_ ) {
             float prob = base_->probability_obs_standard(obs, np.current_loc_, np.labels_, last_action);
             prob *= base_->probability_tr_loc(last_action, p.current_loc_, np.current_loc_);
-            return prob / importance_weight(np, p, last_action, obs);
+            return prob / importance_weight(np, last_action, obs);
         } else {
             return 0;
         }
     }
 
     float importance_weight(const optimal_sir_slam_particle_t &/*np*/,
-                            const optimal_sir_slam_particle_t &p,
                             int last_action,
                             int obs) const {
         // weight = P(obs|np,last_action) * P(np|p,last_action) / pi(np|p,last_action,obs)
@@ -254,9 +255,9 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
         // since P(np|p,last_action) = 0 if p and np have different labels,
         // we can simplify the sum over locations instead of maps
         float weight = 0;
-        int loc = p.current_loc_;
+        int loc = current_loc_;
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc )
-            weight += base_->probability_obs_standard(obs, new_loc, p.labels_, last_action) * base_->probability_tr_loc(last_action, loc, new_loc);
+            weight += base_->probability_obs_standard(obs, new_loc, labels_, last_action) * base_->probability_tr_loc(last_action, loc, new_loc);
         return weight;
     }
 
@@ -330,19 +331,24 @@ struct rbpf_slam_particle_t : public base_particle_t {
     int value_for(int /*var*/) const { return -1; }
 
     virtual void sample_from_pi(rbpf_slam_particle_t &np,
-                                const rbpf_slam_particle_t &p,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
                                 mpi_slam_t *mpi,
                                 int wid) const = 0;
     virtual float importance_weight(const rbpf_slam_particle_t &np,
-                                    const rbpf_slam_particle_t &p,
                                     int last_action,
                                     int obs) const = 0;
 
     void initialize_mpi_worker(mpi_slam_t * /*mpi*/, int /*wid*/) { } 
     void mpi_update_marginals(mpi_slam_t * /*mpi*/, int /*wid*/) { }
+
+    void print(std::ostream &os) const {
+        if( loc_history_.empty() )
+            os << "loc=<empty history>";
+        else
+            os << "loc=" << loc_history_.back();
+    }
 };
 
 // Particle for the motion model RBPF filter
@@ -373,28 +379,26 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     }
 
     virtual void sample_from_pi(rbpf_slam_particle_t &np,
-                                const rbpf_slam_particle_t &p,
                                 int last_action,
                                 int obs,
                                 const history_container_t &/*history_container*/,
                                 mpi_slam_t * /*mpi*/,
                                 int /*wid*/) const {
 #ifdef DEBUG
-        assert(np == p);
+        assert(*this == np);
 #endif
-        int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
+        int next_loc = base_->sample_loc(loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
         np.update_factors(last_action, obs);
     }
 
     virtual float importance_weight(const rbpf_slam_particle_t &np,
-                                    const rbpf_slam_particle_t &p,
                                     int last_action,
                                     int obs) const {
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
         for( int label = 0; label < base_->nlabels_; ++label ) // marginalize over possible labels at current loc
-            weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * p.probability(label, np_current_loc);
+            weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * probability(label, np_current_loc);
         return weight;
     }
 
@@ -434,7 +438,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         return std::string("opt_rbpf_sir");
     }
 
-    void calculate_cdf(const rbpf_slam_particle_t &p, int last_action, int obs, std::vector<float> &cdf) const {
+    void calculate_cdf(int last_action, int obs, std::vector<float> &cdf) const {
         cdf.clear();
         cdf.reserve(base_->nloc_);
 
@@ -442,13 +446,14 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         //                            = alpha * P(obs | nloc, loc, action) * P(nloc | loc, action)
         //                            = alpha * P(obs | nloc, action) * P(nloc | loc, action)
         //
+        // where alpha = P(obs | loc, action)
 
         float previous = 0;
-        int current_loc = p.loc_history_.back();
+        int current_loc = loc_history_.back();
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
             float prob = 0;
             for( int label = 0; label < base_->nlabels_; ++label )
-                prob += base_->probability_obs_standard(obs, new_loc, label, last_action) * p.probability(label, new_loc);
+                prob += base_->probability_obs_standard(obs, new_loc, label, last_action) * probability(label, new_loc);
             cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
             previous = cdf.back();
         }
@@ -461,22 +466,21 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     }
 
     virtual void sample_from_pi(rbpf_slam_particle_t &np,
-                                const rbpf_slam_particle_t &p,
                                 int last_action,
                                 int obs,
                                 const history_container_t &/*history_container*/,
                                 mpi_slam_t * /*mpi*/,
                                 int /*wid*/) const {
 #ifdef DEBUG
-        assert(np == p);
+        assert(*this == np);
 #endif
-        calculate_cdf(p, last_action, obs, cdf_);
+        calculate_cdf(last_action, obs, cdf_);
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);
         np.loc_history_.push_back(next_loc);
         np.update_factors(last_action, obs);
     }
 
-    virtual float importance_weight(const rbpf_slam_particle_t &, const rbpf_slam_particle_t &, int, int) const {
+    virtual float importance_weight(const rbpf_slam_particle_t &, int, int) const {
         return 1;
     }
 

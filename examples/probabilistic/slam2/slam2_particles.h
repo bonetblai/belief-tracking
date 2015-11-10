@@ -329,6 +329,13 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         mpi->read_marginals_from_worker(marginals_, wid);
 #endif
     }
+
+    void print(std::ostream &os) const {
+        if( loc_history_.empty() )
+            os << "loc=<empty history>";
+        else
+            os << "loc=" << loc_history_.back();
+    }
 };
 
 // Particle for the motion model RBPF filter (slam2)
@@ -359,16 +366,15 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
     }
 
     virtual void sample_from_pi(rbpf_slam2_particle_t &np,
-                                const rbpf_slam2_particle_t &p,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
                                 mpi_slam_t *mpi,
                                 int wid) const {
 #ifdef DEBUG
-        assert(np == p);
+        assert(*this == np);
 #endif
-        int next_loc = base_->sample_loc(p.loc_history_.back(), last_action);
+        int next_loc = base_->sample_loc(loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
         if( !history_container.contains(np.loc_history_) ) {
             // this is a new loc history, perform update
@@ -378,16 +384,15 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &np,
-                                    const rbpf_slam2_particle_t &p,
                                     int last_action,
                                     int obs) const {
-        assert(p.indices_for_updated_factors_.empty());
+        assert(indices_for_updated_factors_.empty());
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
-        const dai::Factor &p_marginal = p.marginals_[np_current_loc];
-        for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
-            int slabels = get_slabels(np_current_loc, p_marginal.vars(), value);
-            weight += p_marginal[value] * base_->probability_obs_oreslam(obs, np_current_loc, slabels, last_action);
+        const dai::Factor &marginal = marginals_[np_current_loc];
+        for( int value = 0; value < int(marginal.nrStates()); ++value ) {
+            int slabels = get_slabels(np_current_loc, marginal.vars(), value);
+            weight += marginal[value] * base_->probability_obs_oreslam(obs, np_current_loc, slabels, last_action);
         }
         return weight;
     }
@@ -428,9 +433,9 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return std::string("opt_rbpf2_sir");
     }
 
-    void calculate_cdf(const rbpf_slam2_particle_t &p, int last_action, int obs, std::vector<float> &cdf) const {
+    void calculate_cdf(int last_action, int obs, std::vector<float> &cdf) const {
         // make sure there is no pending inference on factor model
-        assert(p.indices_for_updated_factors_.empty());
+        assert(indices_for_updated_factors_.empty());
 
         cdf.clear();
         cdf.reserve(base_->nloc_);
@@ -440,9 +445,9 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         //                            = alpha * P(obs | nloc, action) * P(nloc | loc, action)
 
         float previous = 0;
-        int current_loc = p.loc_history_.back();
+        int current_loc = loc_history_.back();
         for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
-            const dai::Factor &p_marginal = p.marginals_[new_loc];
+            const dai::Factor &p_marginal = marginals_[new_loc];
             float prob = 0;
             for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
                 int slabels = get_slabels(new_loc, p_marginal.vars(), value);
@@ -460,16 +465,15 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
     }
 
     virtual void sample_from_pi(rbpf_slam2_particle_t &np,
-                                const rbpf_slam2_particle_t &p,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
                                 mpi_slam_t *mpi,
                                 int wid) const {
 #ifdef DEBUG
-        assert(np == p);
+        assert(*this == np);
 #endif
-        calculate_cdf(p, last_action, obs, cdf_);
+        calculate_cdf(last_action, obs, cdf_);
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);
         np.loc_history_.push_back(next_loc);
         if( !history_container.contains(np.loc_history_) ) {
@@ -479,7 +483,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         }
     }
 
-    virtual float importance_weight(const rbpf_slam2_particle_t &, const rbpf_slam2_particle_t &, int, int) const {
+    virtual float importance_weight(const rbpf_slam2_particle_t &, int, int) const {
         return 1;
     }
 

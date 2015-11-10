@@ -51,7 +51,7 @@ template <typename PTYPE, typename BASE, typename CDF> struct optimal_SIR_t : pu
     }
 
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
-        return p.importance_weight(np, p, last_action, obs);
+        return p.importance_weight(np, last_action, obs);
     }
 };
 

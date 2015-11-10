@@ -32,10 +32,10 @@ template <typename PTYPE, typename BASE> struct motion_model_SIR_t : public SIR_
     virtual ~motion_model_SIR_t() { }
 
     virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &/*history_container*/, int /*wid*/) const {
-        p.sample_from_pi(np, p, last_action, obs);
+        p.sample_from_pi(np, last_action, obs);
     }
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
-        return p.importance_weight(np, p, last_action, obs);
+        return p.importance_weight(np, last_action, obs);
     }
 };
 
