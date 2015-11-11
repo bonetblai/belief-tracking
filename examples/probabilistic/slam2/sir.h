@@ -41,40 +41,45 @@
 typedef std::vector<int> history_t;
 
 struct history_container_t {
+    virtual int size() const = 0;
     virtual bool contains(const history_t &history) const = 0;
-    virtual void insert(const history_t &history) = 0;
+    virtual void insert(const history_t &history, int index) = 0;
     virtual int multiplicity(const history_t &history) const = 0;
+    virtual int index(const history_t &history) const = 0;
     virtual void increase_multiplicity(const history_t &history) = 0;
+    virtual void get_multiplicity(std::vector<int> &multiplicity) const = 0;
 };
 
 struct standard_history_container_t : public history_container_t {
     std::map<history_t, int> container_;
+    std::map<history_t, int> index_;
 
+    virtual int size() const {
+        assert(container_.size() == index_.size());
+        return container_.size();
+    }
     virtual bool contains(const history_t &history) const {
         return container_.find(history) != container_.end();
     }
-    virtual void insert(const history_t &history) {
+    virtual void insert(const history_t &history, int index) {
         container_.insert(std::make_pair(history, 1));
+        index_.insert(std::make_pair(history, index));
     }
     virtual int multiplicity(const history_t &history) const {
         return container_.find(history)->second;
     }
+    virtual int index(const history_t &history) const {
+        return index_.find(history)->second;
+    }
     virtual void increase_multiplicity(const history_t &history) {
         ++container_[history];
     }
-};
-
-struct null_history_container_t : public history_container_t {
-    virtual bool contains(const history_t &history) const {
-        return false;
+    virtual void get_multiplicity(std::vector<int> &multiplicity) const {
+        multiplicity = std::vector<int>(index_.size(), 0);
+        for( std::map<history_t, int>::const_iterator it = index_.begin(); it != index_.end(); ++it )
+            multiplicity[it->second] = container_.find(it->first)->second;
     }
-    virtual void insert(const history_t &history) { }
-    virtual int multiplicity(const history_t &history) const {
-        return 1;
-    }
-    virtual void increase_multiplicity(const history_t &history) { }
 };
-
 
 // Generic Sequential Importance Resampling (SIR) Particle Filter
 template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE> {
@@ -136,7 +141,133 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 #endif
     }
 
+    // From Grisetti, Stachniss and Burgard. Improved Techniques
+    // for Grid Mapping with Rao-Blackwellized Particle Filters
     virtual void update(int last_action, int obs) {
+        // 1. Sampling: The next generation of particles is obtained
+        // from the current generation by sampling from the proposal
+        // distribution \pi.
+        //
+        // 2. Importance weighting: An individual importance weight
+        // is assigned to each (new) particle according to the importance
+        // sampling principle:
+        //
+        // w = p( x(1:t) | z(1:t), u(1:t-1) ) / pi( x(1:t) | z(1:t), u(1:t-1) )
+        //
+        // The weights account for the fact that the proposal distribution
+        // \pi is in general not equal to the target distribution of 
+        // successors states.
+
+        standard_history_container_t history_container;
+        std::vector<particle_t> new_particles;
+        for( int i = 0; i < int(particles_.size()); ++i ) {
+            const PTYPE &p = *particles_[i].p_;
+            float weight = particles_[i].weight_;
+            for( int j = 0; j < multiplicity_[i]; ++j ) {
+                int wid = -1;
+
+#ifdef      USE_MPI
+                // do load balancing: find wid for machine with lowest load
+                int best_mid = -1;
+                for( int mid = 0; mid < int(mpi_budget.size()); ++mid ) {
+                    if( !mpi_budget[mid].empty() && ((best_mid == -1) || (mpi_load[best_mid] > mpi_load[mid])) )
+                        best_mid = mid;
+                }
+                assert(best_mid >= 0);
+                wid = mpi_budget[best_mid].back();
+                mpi_budget[best_mid].pop_back();
+                ++mpi_load[best_mid];
+                //std::cout << "best: mid=" << best_mid << ", wid=" << wid << ", load=" << mpi_load[best_mid] - 1 << std::endl;
+#endif
+
+                // sample new particle using the proposal distribution \pi
+                PTYPE *np = sample_from_pi(p, last_action, obs, history_container, wid);
+
+                // update histories and multiplicities
+                if( !history_container.contains(np->history()) ) {
+                    history_container.insert(np->history(), new_particles.size());
+                } else {
+                    history_container.increase_multiplicity(np->history());
+                    delete np;
+                    continue;
+                }
+
+                // compute new weight using recursive formula and add new particle
+                float new_weight = weight * importance_weight(*np, p, last_action, obs);
+                new_particles.push_back(particle_t(new_weight, np, wid));
+            }
+        }
+        assert(int(new_particles.size()) == history_container.size());
+        std::vector<int> new_multiplicity;
+        history_container.get_multiplicity(new_multiplicity);
+
+        // 3. Resampling: Particles are drawn with replacement proportional
+        // to their importance weight. This step is necessary since only a
+        // finite number of particles is used to approximate a (continuous)
+        // distribution. Furthermore, resampling allows us to apply a
+        // particle filter in situations in which the target distribution
+        // differs from the proposal. ***After resampling, all the particles
+        // have the same weight.***
+
+        // normalize weights before resampling
+        float total_mass = 0.0;
+        for( int i = 0; i < int(new_particles.size()); ++i )
+            total_mass += new_particles[i].weight_ * new_multiplicity[i];
+        assert(total_mass > 0);
+
+        for( int i = 0; i < int(new_particles.size()); ++i )
+            new_particles[i].weight_ /= total_mass;
+
+        // resampling
+        std::vector<int> indices;
+        if( do_resampling_ ) {
+            if( do_stochastic_universal_sampling_ )
+                PF_t<PTYPE, BASE>::stochastic_universal_sampling(new_particles, new_multiplicity, nparticles_, indices);
+            else
+                PF_t<PTYPE, BASE>::stochastic_sampling(new_particles, new_multiplicity, nparticles_, indices);
+        } else {
+            indices.reserve(nparticles_);
+            for( int i = 0; i < int(new_particles.size()); ++i ) {
+                for( int j = 0; j < new_multiplicity[i]; ++j )
+                    indices.push_back(i);
+            }
+        }
+        assert(int(indices.size()) == nparticles_);
+
+        // clean current filter
+        for( int i = 0; i < int(particles_.size()); ++i )
+            delete particles_[i].p_;
+        particles_.clear();
+
+        // set new particles as the particles in the updated filter
+        multiplicity_.clear();
+        std::map<int, int> index_map;
+        for( int i = 0; i < int(indices.size()); ++i ) {
+            int index = indices[i];
+            std::map<int, int>::const_iterator it = index_map.find(index);
+            if( it == index_map.end() ) {
+                index_map.insert(std::make_pair(index, particles_.size()));
+                particles_.push_back(new_particles[index]);
+                multiplicity_.push_back(1);
+            } else {
+                assert(it->second < int(multiplicity_.size()));
+                ++multiplicity_[it->second];
+            }
+        }
+
+#ifdef USE_MPI 
+        // processes were lauched to calculate marginals, now collect marginals
+        assert(mpi_base_t::mpi_ != 0);
+        assert(mpi_base_t::mpi_->nworkers_ >= 1);
+        for( int i = 0; i < int(particles_.size()); ++i ) {
+            PTYPE *p = particles_[i].p_;
+            p->mpi_update_marginals(mpi_base_t::mpi_, particles_[i].wid_);
+        }   
+#endif
+
+
+
+#if 0
         // 1. re-sampling according to importance weights
         std::vector<int> indices;
         if( do_resampling_ ) {
@@ -232,6 +363,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             PTYPE *p = particles_[i].p_;
             p->mpi_update_marginals(mpi_base_t::mpi_, particles_[i].wid_);
         }   
+#endif
 #endif
     }
 

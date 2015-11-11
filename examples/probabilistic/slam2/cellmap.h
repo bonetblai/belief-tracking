@@ -166,6 +166,18 @@ struct cellmap_t {
 
     // action labels
     enum { up, down, right, left, noop };
+    std::string action_label(int action) const {
+        if( action == 0 )
+            return std::string("up");
+        else if( action == 1 )
+            return std::string("down");
+        else if( action == 2 )
+            return std::string("right");
+        else if( action == 3 )
+            return std::string("left");
+        else
+            return std::string("noop");
+    }
 
     // model for dynamics (locations)
   private:

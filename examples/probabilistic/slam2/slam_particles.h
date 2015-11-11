@@ -395,10 +395,20 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     virtual float importance_weight(const rbpf_slam_particle_t &np,
                                     int last_action,
                                     int obs) const {
+        float alpha = 0;
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
+            for( int label = 0; label < base_->nlabels_; ++label )
+                alpha += base_->probability_obs_standard(obs, nloc, label, last_action) * probability(label, nloc);
+       }
+
+        int current_loc = loc_history_.back();
         int np_current_loc = np.loc_history_.back();
+
         float weight = 0;
-        for( int label = 0; label < base_->nlabels_; ++label ) // marginalize over possible labels at current loc
+        for( int label = 0; label < base_->nlabels_; ++label )
             weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * probability(label, np_current_loc);
+        weight /= base_->probability_tr_loc(last_action, current_loc, np_current_loc) * alpha;
+
         return weight;
     }
 
