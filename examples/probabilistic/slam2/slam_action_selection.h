@@ -280,7 +280,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
             }
 
             // calculate reward and loc with best reward
-            reward_[loc] = loc_entropy * (1 - map_entropy) + 2 * (1 - loc_entropy) * map_entropy;
+            reward_[loc] = loc_entropy * (1 - map_entropy) + (1 - loc_entropy) * map_entropy;
             if( (loc_with_best_reward_ == -1) || (reward_[loc_with_best_reward_] < reward_[loc]) )
                 loc_with_best_reward_ = loc;
         }

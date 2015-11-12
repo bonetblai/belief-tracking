@@ -48,12 +48,19 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
             marginals_on_vars_[var] = dai::Factor(dai::VarSet(dai::Var(var, base_.variable_size(var))), 0.0);
         }
 
-        // aggregate info from particles into marginals
         assert(particles_.size() == multiplicity_.size());
+
+        // calcualte number of particles in filter
+        int num_particles = 0;
+        for( int i = 0; i < int(particles_.size()); ++i )
+            num_particles += multiplicity_[i];
+
+        // aggregate info from particles into marginals
+        float weight = 1 / float(num_particles);
         for( int i = 0; i < int(particles_.size()); ++i ) {
-            float weight = particles_[i].weight_ * multiplicity_[i];
+            //float weight = particles_[i].weight_ * multiplicity_[i]; // CHECK
             const PTYPE &p = *particles_[i].p_;
-            p.update_marginals(weight, marginals_on_vars_);
+            p.update_marginals(multiplicity_[i] * weight, marginals_on_vars_);
         }
 
         // verify
@@ -68,8 +75,8 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
         }
     }
 
-    virtual void sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int wid) const {
-        p.sample_from_pi(np, last_action, obs, history_container, mpi_base_t::mpi_, wid);
+    virtual bool sample_from_pi(PTYPE &np, const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int wid) const {
+        return p.sample_from_pi(np, last_action, obs, history_container, mpi_base_t::mpi_, wid);
     }
 
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {

@@ -42,7 +42,9 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
         float weight_;
         PTYPE *p_;
         int wid_;
-        particle_t(float weight, PTYPE *p, int wid = -1) : weight_(weight), p_(p), wid_(wid) { }
+        particle_t(float weight, PTYPE *p, int wid = -1)
+          : weight_(weight), p_(p), wid_(wid) {
+        }
         void print(std::ostream &os) const { p_->print(os); }
     };
 
@@ -79,6 +81,8 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
         cdf[0] = particles[0].weight_ * multiplicity[0];
         for( int i = 1; i < int(particles.size()); ++i )
             cdf[i] = cdf[i - 1] + particles[i].weight_ * multiplicity[i];
+        for( int i = 1; i < int(particles.size()); ++i )
+            cdf[i] /= cdf.back();
         Utils::stochastic_sampling(cdf.size(), &cdf[0], k, indices);
     }
     void stochastic_sampling(int k, std::vector<int> &indices) const {
@@ -95,6 +99,8 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
         cdf[0] = particles[0].weight_ * multiplicity[0];
         for( int i = 1; i < int(particles.size()); ++i )
             cdf[i] = cdf[i - 1] + particles[i].weight_ * multiplicity[i];
+        for( int i = 1; i < int(particles.size()); ++i )
+            cdf[i] /= cdf.back();
         Utils::stochastic_universal_sampling(cdf.size(), &cdf[0], k, indices);
     }
     void stochastic_universal_sampling(int k, std::vector<int> &indices) const {

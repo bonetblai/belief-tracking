@@ -114,8 +114,8 @@ int main(int argc, const char **argv) {
     string tmp_path = "";
     vector<string> tracking_algorithms_str;
 
-    float pa = 0.9;
-    float po = 0.9;
+    float pa = 0.9; // default value in K. P. Murphy's paper
+    float po = 0.8; // default value in K. P. Murphy's paper
 
     bool oreslam = false;
     int gtype = -1;
@@ -372,9 +372,9 @@ int main(int argc, const char **argv) {
                     tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
             } else if( name == "opt_rbpf" ) {
                 if( !oreslam )
-                    tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles, false, do_stochastic_universal_sampling);
+                    tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
                 else
-                    tracker = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles, false, do_stochastic_universal_sampling);
+                    tracker = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
             } else {
                 cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
             }
@@ -462,7 +462,8 @@ int main(int argc, const char **argv) {
     } else if( ptype == 1 ) {
         cellmap.compute_covering_execution(0, fixed_execution, num_covering_loops);
     }
-    cout << "# fixed-execution[sz=" << fixed_execution.size() << "]=" << fixed_execution << endl;
+    cout << "# fixed-execution: sz=" << fixed_execution.size() << endl;
+    //cout << "# fixed-execution[sz=" << fixed_execution.size() << "]=" << fixed_execution << endl;
 
     // run for the specified number of trials
     vector<repository_t> repos;

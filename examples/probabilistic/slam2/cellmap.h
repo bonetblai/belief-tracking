@@ -254,7 +254,7 @@ struct cellmap_t {
   private:
     int sample_loc_standard(int loc, int action, float q) const {
         assert((q >= 0) && (q <= 1));
-        if( action == -1 ) {
+        if( (action == -1) || (action == noop) ) {
             return loc;
         } else {
             coord_t coord(loc), new_coord(loc);
@@ -265,10 +265,8 @@ struct cellmap_t {
                     new_coord = coord_t(coord.col_ + 1 < ncols_ ? coord.col_ + 1 : coord.col_, coord.row_);
                 else if( action == down )
                     new_coord = coord_t(coord.col_, coord.row_ > 0 ? coord.row_ - 1 : coord.row_);
-                else if( action == left )
+                else // action == left
                     new_coord = coord_t(coord.col_ > 0 ? coord.col_ - 1 : coord.col_, coord.row_);
-                else if( action == noop )
-                    new_coord = coord;
             }
             return new_coord.as_index();
         }

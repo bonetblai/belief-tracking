@@ -107,7 +107,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     }
     virtual ~SIR_t() { }
 
-    virtual void sample_from_pi(PTYPE &np,
+    virtual bool sample_from_pi(PTYPE &np,
                                 const PTYPE &p,
                                 int last_action,
                                 int obs,
@@ -144,6 +144,15 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     // From Grisetti, Stachniss and Burgard. Improved Techniques
     // for Grid Mapping with Rao-Blackwellized Particle Filters
     virtual void update(int last_action, int obs) {
+#if 0
+        std::cout << std::endl;
+        std::cout << "***weights:";
+        for( int i = 0; i < int(particles_.size()); ++i )
+            std::cout << " " << particles_[i].weight_;
+        std::cout << std::endl;
+        std::cout << "obs=" << obs << std::endl;
+#endif
+
         // 1. Sampling: The next generation of particles is obtained
         // from the current generation by sampling from the proposal
         // distribution \pi.
@@ -182,19 +191,22 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
                 // sample new particle using the proposal distribution \pi
                 PTYPE *np = sample_from_pi(p, last_action, obs, history_container, wid);
+                if( np != 0 ) {
+                    // update histories and multiplicities
+                    if( !history_container.contains(np->history()) ) {
+                        history_container.insert(np->history(), new_particles.size());
+                    } else {
+                        history_container.increase_multiplicity(np->history());
+                        delete np;
+                        continue;
+                    }
 
-                // update histories and multiplicities
-                if( !history_container.contains(np->history()) ) {
-                    history_container.insert(np->history(), new_particles.size());
+                    // compute new importance weight using recursive formula and add new particle
+                    float new_weight = weight * importance_weight(*np, p, last_action, obs);
+                    new_particles.push_back(particle_t(new_weight, np, wid));
                 } else {
-                    history_container.increase_multiplicity(np->history());
-                    delete np;
-                    continue;
+                    //std::cout << "Removing particle!" << std::endl;
                 }
-
-                // compute new weight using recursive formula and add new particle
-                float new_weight = weight * importance_weight(*np, p, last_action, obs);
-                new_particles.push_back(particle_t(new_weight, np, wid));
             }
         }
         assert(int(new_particles.size()) == history_container.size());
@@ -209,16 +221,17 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         // differs from the proposal. ***After resampling, all the particles
         // have the same weight.***
 
-        // normalize weights before resampling
-        float total_mass = 0.0;
+        // normalize weights and importance weights before resampling
+        float total_weight = 0.0;
         for( int i = 0; i < int(new_particles.size()); ++i )
-            total_mass += new_particles[i].weight_ * new_multiplicity[i];
-        assert(total_mass > 0);
+            total_weight += new_particles[i].weight_ * new_multiplicity[i];
+        assert(total_weight > 0);
 
         for( int i = 0; i < int(new_particles.size()); ++i )
-            new_particles[i].weight_ /= total_mass;
+            new_particles[i].weight_ /= total_weight;
 
         // resampling
+        assert(!new_particles.empty());
         std::vector<int> indices;
         if( do_resampling_ ) {
             if( do_stochastic_universal_sampling_ )
@@ -232,7 +245,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
                     indices.push_back(i);
             }
         }
-        assert(int(indices.size()) == nparticles_);
+        assert(!do_resampling_ || (int(indices.size()) == nparticles_));
 
         // clean current filter
         for( int i = 0; i < int(particles_.size()); ++i )
@@ -242,8 +255,10 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         // set new particles as the particles in the updated filter
         multiplicity_.clear();
         std::map<int, int> index_map;
+        //std::cout << "       indices:";
         for( int i = 0; i < int(indices.size()); ++i ) {
             int index = indices[i];
+            //std::cout << " " << index << std::flush;
             std::map<int, int>::const_iterator it = index_map.find(index);
             if( it == index_map.end() ) {
                 index_map.insert(std::make_pair(index, particles_.size()));
@@ -254,6 +269,17 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
                 ++multiplicity_[it->second];
             }
         }
+#if 0
+        std::cout << std::endl;
+        std::cout << "multiplicities:";
+        for( int i = 0; i < int(multiplicity_.size()); ++i )
+            std::cout << " " << multiplicity_[i];
+        std::cout << std::endl;
+        std::cout << "       weights:";
+        for( int i = 0; i < int(particles_.size()); ++i )
+            std::cout << " " << particles_[i].weight_;
+        std::cout << std::endl;
+#endif
 
 #ifdef USE_MPI 
         // processes were lauched to calculate marginals, now collect marginals
@@ -397,8 +423,12 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
     PTYPE* sample_from_pi(const PTYPE &p, int last_action, int obs, const history_container_t &history_container, int wid = -1) const {
         PTYPE *np = new PTYPE(p);
-        sample_from_pi(*np, p, last_action, obs, history_container, wid);
-        return np;
+        if( !sample_from_pi(*np, p, last_action, obs, history_container, wid) ) {
+            delete np;
+            return 0;
+        } else {
+            return np;
+        }
     }
 
     virtual std::string id() const {

@@ -35,38 +35,6 @@ inline float read_time_in_seconds() {
     return time;
 }
 
-inline void stochastic_sampling(int n, const float *cdf, int k, std::vector<int> &indices) {
-    assert(cdf[n-1] != 0);
-    indices.clear();
-    indices.reserve(k);
-    for( int j = 0; j < k; ++j ) {
-        float u = drand48();
-        if( u >= cdf[n - 1] ) {
-            indices.push_back(n - 1);
-        } else {
-            for( int i = 0; i < n; ++i ) {
-                if( u < cdf[i] ) {
-                    indices.push_back(i);
-                    break;
-                }
-            }
-        }
-    }
-    assert(k == int(indices.size()));
-}
-
-inline void stochastic_universal_sampling(int n, const float *cdf, int k, std::vector<int> &indices) {
-    indices.clear();
-    indices.reserve(k);
-    float u = drand48() / float(k);
-    for( int i = 0, j = 0; j < k; ++j ) {
-        while( (i < n) && (u > cdf[i]) ) ++i;
-        indices.push_back(i == n ? n - 1 : i);
-        u += 1.0 / float(k);
-    }
-    assert(k == int(indices.size()));
-}
-
 inline int sample_from_distribution(int n, const float *cdf) {
 #if 1 // do sampling in log(n) time
     assert(n > 0);
@@ -97,6 +65,13 @@ inline int sample_from_distribution(int n, const float *cdf) {
         if( lcdf > p ) {
             upper = mid;
         } else {
+            if( !(p >= cdf[mid]) ) {
+                std::cout << std::endl;
+                std::cout << "cdf:";
+                for( int i = 0; i < n; ++i ) std::cout << " " << cdf[i];
+                std::cout << std::endl;
+                std::cout << "p=" << p << ", mid=" << mid << std::endl;
+            }
             assert(p >= cdf[mid]);
             lower = 1 + mid;
         }
@@ -116,6 +91,28 @@ inline int sample_from_distribution(int n, const float *cdf) {
         if( p < cdf[i] ) return i;
     return n - 1;
 #endif
+}
+
+inline void stochastic_sampling(int n, const float *cdf, int k, std::vector<int> &indices) {
+    indices.clear();
+    indices.reserve(k);
+    for( int i = 0; i < k; ++i ) {
+        int index = Utils::sample_from_distribution(n, cdf);
+        indices.push_back(index);
+    }
+    assert(k == int(indices.size()));
+}
+
+inline void stochastic_universal_sampling(int n, const float *cdf, int k, std::vector<int> &indices) {
+    indices.clear();
+    indices.reserve(k);
+    float u = drand48() / float(k);
+    for( int i = 0, j = 0; j < k; ++j ) {
+        while( (i < n) && (u > cdf[i]) ) ++i;
+        indices.push_back(i == n ? n - 1 : i);
+        u += 1.0 / float(k);
+    }
+    assert(k == int(indices.size()));
 }
 
 };

@@ -365,7 +365,7 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return std::string("mm_rbpf2_sir");
     }
 
-    virtual void sample_from_pi(rbpf_slam2_particle_t &np,
+    virtual bool sample_from_pi(rbpf_slam2_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
@@ -381,6 +381,7 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             np.update_factors(last_action, obs);
             np.calculate_marginals(mpi, wid, false);
         }
+        return true;
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &np,
@@ -464,7 +465,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         }
     }
 
-    virtual void sample_from_pi(rbpf_slam2_particle_t &np,
+    virtual bool sample_from_pi(rbpf_slam2_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
@@ -481,6 +482,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             np.update_factors(last_action, obs);
             np.calculate_marginals(mpi, wid, false);
         }
+        return true; // CHECK: what happens with incompatible obs?
     }
 
     virtual float importance_weight(const rbpf_slam2_particle_t &, int, int) const {

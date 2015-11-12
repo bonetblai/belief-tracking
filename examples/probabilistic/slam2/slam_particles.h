@@ -118,9 +118,9 @@ struct sis_slam_particle_t : public slam_particle_t {
     }
 
     void update(float &weight, int last_action, int obs) {
-        int new_loc = base_->sample_loc(current_loc_, last_action);
-        weight *= base_->probability_obs_standard(obs, new_loc, labels_[new_loc], last_action);
-        current_loc_ = new_loc;
+        int nloc = base_->sample_loc(current_loc_, last_action);
+        weight *= base_->probability_obs_standard(obs, nloc, labels_[nloc], last_action);
+        current_loc_ = nloc;
     }
 
     sis_slam_particle_t* initial_sampling() {
@@ -157,13 +157,14 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
         return std::string("mm_sir");
     }
 
-    void sample_from_pi(motion_model_sir_slam_particle_t &np,
+    bool sample_from_pi(motion_model_sir_slam_particle_t &np,
                         int last_action,
                         int /*obs*/) const {
 #ifdef DEBUG
         assert(*this == np);
 #endif
         np.current_loc_ = base_->sample_loc(current_loc_, last_action);
+        return true;
     }
 
     float importance_weight(const motion_model_sir_slam_particle_t &np,
@@ -256,8 +257,8 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
         // we can simplify the sum over locations instead of maps
         float weight = 0;
         int loc = current_loc_;
-        for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc )
-            weight += base_->probability_obs_standard(obs, new_loc, labels_, last_action) * base_->probability_tr_loc(last_action, loc, new_loc);
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc )
+            weight += base_->probability_obs_standard(obs, nloc, labels_, last_action) * base_->probability_tr_loc(last_action, loc, nloc);
         return weight;
     }
 
@@ -313,7 +314,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
         factor.normalize();
     }
 
-    float probability(int label, int loc) const {
+    float probability(int loc, int label) const {
         assert(loc < int(factors_.size()));
         assert(label < int(factors_[loc].nrStates()));
         return factors_[loc][label];
@@ -323,14 +324,14 @@ struct rbpf_slam_particle_t : public base_particle_t {
         int current_loc = loc_history_.back();
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             for( int label = 0; label < base_->nlabels_; ++label )
-                marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * probability(label, loc));
+                marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * probability(loc, label));
         }
         marginals_on_vars[base_->nloc_].set(current_loc, marginals_on_vars[base_->nloc_][current_loc] + weight);
     }
 
     int value_for(int /*var*/) const { return -1; }
 
-    virtual void sample_from_pi(rbpf_slam_particle_t &np,
+    virtual bool sample_from_pi(rbpf_slam_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
@@ -378,7 +379,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         return std::string("mm_rbpf_sir");
     }
 
-    virtual void sample_from_pi(rbpf_slam_particle_t &np,
+    virtual bool sample_from_pi(rbpf_slam_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &/*history_container*/,
@@ -389,25 +390,36 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 #endif
         int next_loc = base_->sample_loc(loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
-        np.update_factors(last_action, obs);
+        try {
+            np.update_factors(last_action, obs);
+        } catch( dai::Exception &e ) {
+            return false;
+        }
+        return true;
     }
 
     virtual float importance_weight(const rbpf_slam_particle_t &np,
                                     int last_action,
                                     int obs) const {
-        float alpha = 0;
-        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
-            for( int label = 0; label < base_->nlabels_; ++label )
-                alpha += base_->probability_obs_standard(obs, nloc, label, last_action) * probability(label, nloc);
-       }
-
         int current_loc = loc_history_.back();
         int np_current_loc = np.loc_history_.back();
-
+#if 0
+        float weight = 0;
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
+            float p = 0;
+            for( int label = 0; label < base_->nlabels_; ++label )
+                p += base_->probability_obs_standard(obs, nloc, label, last_action) * probability(nloc, label);
+            alpha += base_->probability_tr_loc(last_action, current_loc, nloc) * p;
+            if( nloc == np_current_loc ) weight = p;
+        }
+        weight /= alpha;
+        assert(base_->probability_tr_loc(last_action, current_loc, np_current_loc) * weight >= 0);
+        assert(base_->probability_tr_loc(last_action, current_loc, np_current_loc) * weight <= 1);
+#else
         float weight = 0;
         for( int label = 0; label < base_->nlabels_; ++label )
-            weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * probability(label, np_current_loc);
-        weight /= base_->probability_tr_loc(last_action, current_loc, np_current_loc) * alpha;
+            weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * probability(np_current_loc, label);
+#endif
 
         return weight;
     }
@@ -460,22 +472,29 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 
         float previous = 0;
         int current_loc = loc_history_.back();
-        for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
-            float prob = 0;
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
+            float p = 0;
             for( int label = 0; label < base_->nlabels_; ++label )
-                prob += base_->probability_obs_standard(obs, new_loc, label, last_action) * probability(label, new_loc);
-            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
+                p += base_->probability_obs_standard(obs, nloc, label, last_action) * probability(nloc, label);
+            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, nloc) * p);
             previous = cdf.back();
         }
 
         // normalize (i.e. calculate alpha)
-        assert(cdf.back() > 0);
-        for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
-            cdf[new_loc] /= cdf.back();
+        if( cdf.back() == 0 ) {
+            throw dai::Exception(dai::Exception::NOT_NORMALIZABLE,
+                                 "slam_particles.h",
+                                 "opt_rbpf::calculate_cdf()",
+                                 "485",
+                                 "none");
+        }
+
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
+            cdf[nloc] /= cdf.back();
         }
     }
 
-    virtual void sample_from_pi(rbpf_slam_particle_t &np,
+    virtual bool sample_from_pi(rbpf_slam_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &/*history_container*/,
@@ -484,10 +503,15 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 #ifdef DEBUG
         assert(*this == np);
 #endif
-        calculate_cdf(last_action, obs, cdf_);
-        int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);
-        np.loc_history_.push_back(next_loc);
-        np.update_factors(last_action, obs);
+        try {
+            calculate_cdf(last_action, obs, cdf_);
+            int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);
+            np.loc_history_.push_back(next_loc);
+            np.update_factors(last_action, obs);
+        } catch( dai::Exception &e ) {
+            return false;
+        }
+        return true;
     }
 
     virtual float importance_weight(const rbpf_slam_particle_t &, int, int) const {
