@@ -153,7 +153,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         std::cout << "obs=" << obs << std::endl;
 #endif
 
-        // 1. Sampling: The next generation of particles is obtained
+        // 1. Importance sampling: The next generation of particles is obtained
         // from the current generation by sampling from the proposal
         // distribution \pi.
         //
@@ -218,22 +218,31 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         // finite number of particles is used to approximate a (continuous)
         // distribution. Furthermore, resampling allows us to apply a
         // particle filter in situations in which the target distribution
-        // differs from the proposal. ***After resampling, all the particles
-        // have the same weight.***
+        // differs from the proposal.
+        //
+        // *** After resampling, all the particles have the same weight. ***
 
-        // normalize weights and importance weights before resampling
+        // compute total weight in particles for normalization
         float total_weight = 0.0;
         for( int i = 0; i < int(new_particles.size()); ++i )
             total_weight += new_particles[i].weight_ * new_multiplicity[i];
         assert(total_weight > 0);
 
-        for( int i = 0; i < int(new_particles.size()); ++i )
+        // normalize and compute N_eff criterion
+        float Neff = 0;
+        for( int i = 0; i < int(new_particles.size()); ++i ) {
             new_particles[i].weight_ /= total_weight;
+            Neff = new_multiplicity[i] * new_particles[i].weight_ * new_particles[i].weight_;
+        }
+        Neff = 1 / Neff;
 
-        // resampling
-        assert(!new_particles.empty());
+        // decide resampling
+        float resampling_threshold = float(nparticles_) / 2;
+        bool do_resampling = do_resampling_ && (Neff < resampling_threshold);
+
+        // do resampling
         std::vector<int> indices;
-        if( do_resampling_ ) {
+        if( do_resampling ) {
             if( do_stochastic_universal_sampling_ )
                 PF_t<PTYPE, BASE>::stochastic_universal_sampling(new_particles, new_multiplicity, nparticles_, indices);
             else
@@ -245,7 +254,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
                     indices.push_back(i);
             }
         }
-        assert(!do_resampling_ || (int(indices.size()) == nparticles_));
+        assert(!do_resampling || (int(indices.size()) == nparticles_));
 
         // clean current filter
         for( int i = 0; i < int(particles_.size()); ++i )
@@ -269,16 +278,35 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
                 ++multiplicity_[it->second];
             }
         }
-#if 0
+
+        // if resampling was performed, set all particle's weight to same value
+        if( do_resampling ) {
+            // calcualte number of particles in new filter
+            int num_particles = 0;
+            for( int i = 0; i < int(particles_.size()); ++i )
+                num_particles += multiplicity_[i];
+
+            // set weights
+            float weight = 1 / float(num_particles);
+            for( int i = 0; i < int(particles_.size()); ++i )
+                particles_[i].weight_ = weight;
+        }
+
+#if 1
+if( true || do_resampling ) {
         std::cout << std::endl;
-        std::cout << "multiplicities:";
+        std::cout << "#         N_eff: " << Neff << std::endl;
+        std::cout << "#     threshold: " << resampling_threshold << std::endl;
+        std::cout << "#    resampling: " << do_resampling << std::endl;
+        std::cout << "#multiplicities:";
         for( int i = 0; i < int(multiplicity_.size()); ++i )
             std::cout << " " << multiplicity_[i];
         std::cout << std::endl;
-        std::cout << "       weights:";
+        std::cout << "#       weights:";
         for( int i = 0; i < int(particles_.size()); ++i )
             std::cout << " " << particles_[i].weight_;
         std::cout << std::endl;
+}
 #endif
 
 #ifdef USE_MPI 
@@ -290,6 +318,9 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             p->mpi_update_marginals(mpi_base_t::mpi_, particles_[i].wid_);
         }   
 #endif
+
+
+
 
 
 

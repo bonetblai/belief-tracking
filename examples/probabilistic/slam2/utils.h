@@ -41,6 +41,16 @@ inline int sample_from_distribution(int n, const float *cdf) {
     if( n == 1 ) return 0;
 
     float p = drand48();
+    if( p == 1 ) { // border condition (it can only happens when converting drand48() to float)
+        for( int i = n - 1; i > 0; --i ) {
+            if( cdf[i - 1] < cdf[i] )
+                return i;
+        }
+        assert(cdf[0] > 0);
+        return 0;
+    }
+    assert(p < 1);
+
     int lower = 0;
     int upper = n;
     int mid = (lower + upper) >> 1;
@@ -65,13 +75,6 @@ inline int sample_from_distribution(int n, const float *cdf) {
         if( lcdf > p ) {
             upper = mid;
         } else {
-            if( !(p >= cdf[mid]) ) {
-                std::cout << std::endl;
-                std::cout << "cdf:";
-                for( int i = 0; i < n; ++i ) std::cout << " " << cdf[i];
-                std::cout << std::endl;
-                std::cout << "p=" << p << ", mid=" << mid << std::endl;
-            }
             assert(p >= cdf[mid]);
             lower = 1 + mid;
         }

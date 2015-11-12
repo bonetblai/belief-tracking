@@ -474,7 +474,8 @@ int main(int argc, const char **argv) {
             cellmap.run_execution(repos, fixed_execution, output_execution, tracking_algorithms, verbose);
         else
             cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, *policy[ptype], tracking_algorithms, verbose);
-        cout << "# output-execution[sz=" << output_execution.size() << "]=" << output_execution << endl;
+        cout << "# output-execution: sz=" << output_execution.size() << endl;
+        //cout << "# output-execution[sz=" << output_execution.size() << "]=" << output_execution << endl;
         //tracking_algorithms[0]->print(cout);
 
         // calculate final marginals

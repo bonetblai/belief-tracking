@@ -514,8 +514,16 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         return true;
     }
 
-    virtual float importance_weight(const rbpf_slam_particle_t &, int, int) const {
-        return 1;
+    virtual float importance_weight(const rbpf_slam_particle_t &, int last_action, int obs) const {
+        float weight = 0;
+        int current_loc = loc_history_.back();
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
+            float p = 0;
+            for( int label = 0; label < base_->nlabels_; ++label )
+                p += base_->probability_obs_standard(obs, nloc, label, last_action) * probability(nloc, label);
+            weight += base_->probability_tr_loc(last_action, current_loc, nloc) * p;
+        }
+        return weight;
     }
 
     optimal_rbpf_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*wid*/) {

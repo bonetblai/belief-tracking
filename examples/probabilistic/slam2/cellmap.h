@@ -301,7 +301,7 @@ struct cellmap_t {
     int sample_obs_standard(int /*loc*/, int label, int /*last_action*/, float q) const {
         assert((q >= 0) && (q <= 1));
         assert(!oreslam_);
-        if( drand48() > q ) {
+        if( drand48() >= q ) {
             int i = lrand48() % (nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {
                 if( (label != j) && (i == 0) ) {
@@ -756,12 +756,12 @@ struct cellmap_t {
         initialize(tracking_algorithms, repos);
         output_execution.push_back(initial_step);
         advance_step(repos, -1, obs, tracking_algorithms, print_marginals);
-        std::cout << "done!" << std::endl;
+        std::cout << std::endl;
 
         // run execution
         std::cout << "# steps:";
         for( size_t t = 1; true; ++t ) {
-            std::cout << " #" << t << std::flush;
+            std::cout << std::endl << " #" << t << std::flush;
             if( (policy == 0) && (t >= input_execution.size()) ) break;
             if( (policy != 0) && (t >= size_t(nsteps)) ) break;
 
@@ -780,6 +780,7 @@ struct cellmap_t {
                 if( last_action == -1 ) break;
                 hidden_loc = sample_loc(hidden_loc, last_action);
                 obs = sample_obs(hidden_loc, last_action);
+                std::cout << "[hidden-loc=" << coord_t(hidden_loc) << ",obs=" << obs << "]";
             }
 
             // update tracking

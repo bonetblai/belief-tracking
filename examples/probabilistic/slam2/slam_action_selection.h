@@ -178,17 +178,18 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
 #if 1
         // read marginals and solve MDP
         tracking->store_marginals(marginals_);
-        solve_mdp(marginals_);
 
-#if 0
+#if 1
         // get current loc
-        int current_loc = 0;
+{
         std::vector<std::pair<float, int> > map_values;
         tracking->MAP_on_var(marginals_, base_.nloc_, map_values, map_epsilon_);
         assert(!map_values.empty());
-        current_loc = map_values.begin()->second;
-        //std::cout << "#policy: current_loc=" << coord_t(current_loc) << ", p=" << map_values.begin()->first << std::endl;
+        std::cout << "(cloc=" << coord_t(map_values[0].second) << ",p=" << map_values[0].first << ")" << std::flush;
+}
 #endif
+
+        solve_mdp(marginals_);
 
         // calculate best action and return
         int action = greedy_action(&marginals_[base_.variable_offset(base_.nloc_)]);
@@ -267,7 +268,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         float loc_entropy = normalized_entropy(marginals, base_.nloc_);
 
         // calculate rewards
-        float loc_with_max_entropy = 0;
+        int loc_with_max_entropy = 0;
         float entropy_loc_with_max_entropy = 0;
         loc_with_best_reward_ = -1;
         for( int loc = 0; loc < base_.nloc_; ++loc ) {
@@ -284,7 +285,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
             if( (loc_with_best_reward_ == -1) || (reward_[loc_with_best_reward_] < reward_[loc]) )
                 loc_with_best_reward_ = loc;
         }
-        std::cout << "(loc=" << coord_t(loc_with_max_entropy) << ",H=" << entropy_loc_with_max_entropy << ")" << std::flush;
+        std::cout << "(loc-maxH=" << coord_t(loc_with_max_entropy) << ",H=" << entropy_loc_with_max_entropy << ")" << std::flush;
 
         // solve MDP
         bzero(value_function_, base_.nloc_ * sizeof(float));
@@ -313,6 +314,15 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
                 value_function_[loc] = value;
             }
         }
+        int loc_with_max_value = 0;
+        int value_loc_with_max_value = 0;
+        for( int loc = 0; loc < base_.nloc_; ++loc ) {
+            if( value_function_[loc] > value_loc_with_max_value ) {
+                loc_with_max_value = loc;
+                value_loc_with_max_value = value_function_[loc];
+            }
+        }
+        std::cout << "(loc-maxV=" << coord_t(loc_with_max_value) << ",V=" << value_loc_with_max_value << ")" << std::flush;
     }
 
     int greedy_action(int current_loc, float q = -1) const {
