@@ -292,8 +292,8 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
                 particles_[i].weight_ = weight;
         }
 
-#if 1
-if( true || do_resampling ) {
+#if 0
+if( do_resampling ) {
         std::cout << std::endl;
         std::cout << "#         N_eff: " << Neff << std::endl;
         std::cout << "#     threshold: " << resampling_threshold << std::endl;

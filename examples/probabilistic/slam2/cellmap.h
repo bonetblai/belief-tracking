@@ -144,6 +144,13 @@ struct cellmap_t {
         return var == nloc_ ? nloc_ : 2;
     }
 
+    int manhattan_distance(const coord_t &loc1, const coord_t &loc2) const {
+        return std::abs(loc1.row_ - loc2.row_) + std::abs(loc1.col_ - loc2.col_);
+    }
+    int manhattan_distance(int loc1, int loc2) const {
+        return manhattan_distance(coord_t(loc1), coord_t(loc2));
+    }
+
     void set_labels(const int *labels, size_t size) {
         assert(size == cells_.size());
         for( size_t i = 0; i < size; ++i )
@@ -183,16 +190,12 @@ struct cellmap_t {
   private:
     float probability_tr_loc_standard(int action, int old_loc, int new_loc, float q) const {
         assert((q >= 0) && (q <= 1));
-        if( action == noop ) return old_loc == new_loc ? 1 : 0;
+        if( (action == -1) || (action == noop) ) return old_loc == new_loc ? 1 : 0;
 
         float p = 0;
         coord_t coord(old_loc), new_coord(new_loc);
-        if( action == -1 ) {
-            p = old_loc == new_loc ? 1 : 0;
-        } else if( action == up ) {
-            if( new_coord.col_ != coord.col_ ) {
-                p = 0;
-            } else {
+        if( action == up ) {
+            if( new_coord.col_ == coord.col_ ) {
                 if( coord.row_ + 1 < nrows_ ) {
                     p = new_coord.row_ == coord.row_ + 1 ? q : (new_coord.row_ == coord.row_ ? 1 - q : 0);
                 } else {
@@ -201,9 +204,7 @@ struct cellmap_t {
                 }
             }
         } else if( action == right ) {
-            if( new_coord.row_ != coord.row_ ) {
-                p = 0;
-            } else {
+            if( new_coord.row_ == coord.row_ ) {
                 if( coord.col_ + 1 < ncols_ ) {
                     p = new_coord.col_ == coord.col_ + 1 ? q : (new_coord.col_ == coord.col_ ? 1 - q : 0);
                 } else {
@@ -212,9 +213,7 @@ struct cellmap_t {
                 }
             }
         } else if( action == down ) {
-            if( new_coord.col_ != coord.col_ ) {
-                p = 0;
-            } else {
+            if( new_coord.col_ == coord.col_ ) {
                 if( coord.row_ > 0 ) {
                     p = new_coord.row_ + 1 == coord.row_ ? q : (new_coord.row_ == coord.row_ ? 1 - q : 0);
                 } else {
@@ -223,9 +222,7 @@ struct cellmap_t {
                 }
             }
         } else if( action == left ) {
-            if( new_coord.row_ != coord.row_ ) {
-                p = 0;
-            } else {
+            if( new_coord.row_ == coord.row_ ) {
                 if( coord.col_ > 0 ) {
                     p = new_coord.col_ + 1 == coord.col_ ? q : (new_coord.col_ == coord.col_ ? 1 - q : 0);
                 } else {
@@ -761,7 +758,7 @@ struct cellmap_t {
         // run execution
         std::cout << "# steps:";
         for( size_t t = 1; true; ++t ) {
-            std::cout << std::endl << " #" << t << std::flush;
+            std::cout << /*std::endl <<*/ " #" << t << std::flush;
             if( (policy == 0) && (t >= input_execution.size()) ) break;
             if( (policy != 0) && (t >= size_t(nsteps)) ) break;
 
@@ -780,7 +777,7 @@ struct cellmap_t {
                 if( last_action == -1 ) break;
                 hidden_loc = sample_loc(hidden_loc, last_action);
                 obs = sample_obs(hidden_loc, last_action);
-                std::cout << "[hidden-loc=" << coord_t(hidden_loc) << ",obs=" << obs << "]";
+                //std::cout << "[hidden-loc=" << coord_t(hidden_loc) << ",obs=" << obs << "]";
             }
 
             // update tracking

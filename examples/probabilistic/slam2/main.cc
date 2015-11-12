@@ -404,7 +404,7 @@ int main(int argc, const char **argv) {
     policy.push_back(0);
     policy.push_back(new random_slam_policy_t(cellmap));
     policy.push_back(new exploration_slam_policy_t(cellmap, map_epsilon));
-    policy.push_back(new murphy_nips99_slam_policy_t(cellmap, discount, epsilon, map_epsilon));
+    policy.push_back(new murphy_nips99_slam_policy_t(cellmap, discount, epsilon));
 
     // set initial loc
     cellmap.initial_loc_ = 0;
