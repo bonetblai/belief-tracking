@@ -90,7 +90,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
     typedef typename PF_t<PTYPE, BASE>::particle_t particle_t;
 
-    bool do_resampling_;
+    bool force_resampling_;
     bool do_stochastic_universal_sampling_;
     std::vector<std::pair<int, int> > execution_;
 
@@ -100,9 +100,9 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     static std::vector<std::vector<int> > mpi_fixed_budget_;
 #endif
 
-    SIR_t(const std::string &name, const BASE &base, int nparticles, bool do_resampling, bool do_stochastic_universal_sampling)
+    SIR_t(const std::string &name, const BASE &base, int nparticles, bool force_resampling, bool do_stochastic_universal_sampling)
       : PF_t<PTYPE, BASE>(name, base, nparticles),
-        do_resampling_(do_resampling),
+        force_resampling_(force_resampling),
         do_stochastic_universal_sampling_(do_stochastic_universal_sampling) {
     }
     virtual ~SIR_t() { }
@@ -238,7 +238,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
         // decide resampling
         float resampling_threshold = float(nparticles_) / 2;
-        bool do_resampling = do_resampling_ && (Neff < resampling_threshold);
+        bool do_resampling = force_resampling_ || (Neff < resampling_threshold);
 
         // do resampling
         std::vector<int> indices;

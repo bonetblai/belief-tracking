@@ -403,23 +403,10 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
                                     int obs) const {
         int current_loc = loc_history_.back();
         int np_current_loc = np.loc_history_.back();
-#if 0
-        float weight = 0;
-        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
-            float p = 0;
-            for( int label = 0; label < base_->nlabels_; ++label )
-                p += base_->probability_obs_standard(obs, nloc, label, last_action) * probability(nloc, label);
-            alpha += base_->probability_tr_loc(last_action, current_loc, nloc) * p;
-            if( nloc == np_current_loc ) weight = p;
-        }
-        weight /= alpha;
-        assert(base_->probability_tr_loc(last_action, current_loc, np_current_loc) * weight >= 0);
-        assert(base_->probability_tr_loc(last_action, current_loc, np_current_loc) * weight <= 1);
-#else
+
         float weight = 0;
         for( int label = 0; label < base_->nlabels_; ++label )
             weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * probability(np_current_loc, label);
-#endif
 
         return weight;
     }
@@ -488,7 +475,6 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
                                  "485",
                                  "none");
         }
-
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
             cdf[nloc] /= cdf.back();
         }

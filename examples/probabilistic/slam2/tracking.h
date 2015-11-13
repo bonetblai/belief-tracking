@@ -50,8 +50,11 @@ template <typename BASE> struct tracking_t : public mpi_base_t {
     std::string name_;
     const BASE &base_;
 
+    float elapsed_time_;
+    int num_steps_;
+
     tracking_t(const std::string &name, const BASE &base)
-      : name_(name), base_(base) {
+      : name_(name), base_(base), elapsed_time_(0), num_steps_(0) {
     }
     virtual ~tracking_t() { }
 

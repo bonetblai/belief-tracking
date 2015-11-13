@@ -30,6 +30,8 @@
 #include "tracking.h"
 #include "cellmap.h"
 #include "slam_action_selection.h"
+#include "generate_plot.h"
+#include "stats.h"
 
 ////#include "pcbt.h"
 
@@ -66,6 +68,67 @@ template <typename PTYPE, typename BASE> int SIR_t<PTYPE, BASE>::mpi_machine_for
 template <typename PTYPE, typename BASE> vector<vector<int> > SIR_t<PTYPE, BASE>::mpi_fixed_budget_;
 #endif
 
+
+void set_labels_and_execution(cellmap_t &cellmap, int ptype, int num_covering_loops, cellmap_t::execution_t &execution) {
+    // set labels
+    vector<int> labels;
+#if 0
+    if( (gtype >= 0) && (gtype < 2) ) {
+        if( gtype == 0 ) { // 1x8 grid with fixed labels
+            int _labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
+            labels = vector<int>(&_labels[0], &_labels[8]);
+        } else { // 1x8 grid with random labels
+            cellmap.sample_labels(labels);
+        }
+    } else if( (gtype >= 0) && (gtype < 3) ) {
+        if( gtype == 2 ) { // 10x10 grid with fixed labels: 0=empty, 1=wall, 2=opened door, 3=closed door
+            int _labels[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                              1, 0, 0, 2, 0, 3, 0, 0, 0, 1,
+                              1, 0, 0, 1, 0, 1, 0, 0, 0, 1,
+                              1, 3, 1, 1, 0, 1, 1, 1, 2, 1,
+                              1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                              1, 1, 1, 1, 0, 1, 1, 1, 3, 1,
+                              1, 0, 0, 2, 0, 1, 0, 0, 0, 1,
+                              1, 0, 0, 1, 0, 1, 0, 0, 0, 1,
+                              1, 0, 0, 1, 0, 2, 0, 0, 0, 1,
+                              1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+            labels = vector<int>(&_labels[0], &_labels[100]);
+            cellmap.initial_loc_ = coord_t(1, 1).as_index();
+        }
+    }
+#endif
+    cellmap.sample_labels(labels);
+    cellmap.set_labels(labels);
+
+    // set execution
+    execution.clear();
+#if 0
+    if( ptype == 0 ) {
+        if( gtype < 2 ) {
+            execution.push_back(cellmap_t::execution_step_t(0, 0, -1));
+            execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::right));
+            execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::right));
+            execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
+            execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
+            execution.push_back(cellmap_t::execution_step_t(4, 0, cellmap_t::right));
+            execution.push_back(cellmap_t::execution_step_t(5, 1, cellmap_t::right));
+            execution.push_back(cellmap_t::execution_step_t(6, 0, cellmap_t::right));
+            execution.push_back(cellmap_t::execution_step_t(7, 1, cellmap_t::right));
+            execution.push_back(cellmap_t::execution_step_t(6, 0, cellmap_t::left));
+            execution.push_back(cellmap_t::execution_step_t(5, 1, cellmap_t::left));
+            execution.push_back(cellmap_t::execution_step_t(4, 0, cellmap_t::left));
+            execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::left));
+            execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::left));
+            execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::left));
+            execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
+        }
+    }
+#endif
+    if( ptype == 1 )
+        cellmap.compute_covering_execution(0, execution, num_covering_loops);
+    cout << "# fixed-execution: sz=" << execution.size() << endl;
+    //cout << "# fixed-execution[sz=" << execution.size() << "]=" << execution << endl;
+}
 
 void finalize() {
 #ifdef USE_MPI
@@ -112,7 +175,7 @@ int main(int argc, const char **argv) {
     int seed = 0;
     bool verbose = false;
     string tmp_path = "";
-    vector<string> tracking_algorithms_str;
+    vector<string> tracker_strings;
 
     float pa = 0.9; // default value in K. P. Murphy's paper
     float po = 0.8; // default value in K. P. Murphy's paper
@@ -122,12 +185,14 @@ int main(int argc, const char **argv) {
     int ptype = 0;
     int num_covering_loops = 10;
     float map_threshold = .55;
-    float map_epsilon = .01;
+    float map_epsilon = .05;
 
     float epsilon = .001;
     float discount = .95;
 
+    bool force_resampling = false;
     bool do_stochastic_universal_sampling = false;
+    bool R_plot = false;
 
     // inference algorithm
     string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-5,maxtime=3)";
@@ -137,6 +202,9 @@ int main(int argc, const char **argv) {
     //string inference_algorithm = "lc(updates=SEQRND,cavity=FULL,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
     //string inference_algorithm = "mr(updates=LINEAR,inits=RESPPROP,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
     //string inference_algorithm = "hak(doubleloop=true,clusters=MIN,init=UNIFORM,tol=1e-3,maxiter=100,maxtime=1)";
+
+    // start global timer
+    float start_time = Utils::read_time_in_seconds();
 
 #ifdef USE_MPI
     mpi_base_t::mpi_ = new mpi_slam_t(argc, argv);
@@ -235,7 +303,15 @@ int main(int argc, const char **argv) {
             seed = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "-o") || !strcmp(argv[0], "--ore-slam") ) {
+        } else if( !strcmp(argv[0], "--fr") || !strcmp(argv[0], "--force-resampling") ) {
+            force_resampling = true;
+            --argc;
+            ++argv;
+        } else if( !strcmp(argv[0], "--sus") || !strcmp(argv[0], "--stochastic-universal-sampling") ) {
+            do_stochastic_universal_sampling = true;
+            --argc;
+            ++argv;
+        } else if( !strcmp(argv[0], "--ore-slam") ) {
             oreslam = true;
             --argc;
             ++argv;
@@ -243,10 +319,14 @@ int main(int argc, const char **argv) {
             char *str = strdup(&argv[0][10]);
             char *token = strtok(str, ",");
             while( token != 0 ) {
-                tracking_algorithms_str.push_back(token);
+                tracker_strings.push_back(token);
                 token = strtok(0, ",");
             }
             free(str);
+            --argc;
+            ++argv;
+        } else if( !strcmp(argv[0], "--plot") || !strcmp(argv[0], "--generate-plot-R") ) {
+            R_plot = true;
             --argc;
             ++argv;
         } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
@@ -293,13 +373,13 @@ int main(int argc, const char **argv) {
     inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
 
     // tracking algorithms
-    vector<tracking_t<cellmap_t>*> tracking_algorithms;
+    vector<tracking_t<cellmap_t>*> trackers;
     dai::PropertySet opts;
     int nparticles = 100;
     //int memory = 0;
 
-    for( size_t i = 0; i < tracking_algorithms_str.size(); ++i ) {
-        char *str = strdup(tracking_algorithms_str[i].c_str());
+    for( size_t i = 0; i < tracker_strings.size(); ++i ) {
+        char *str = strdup(tracker_strings[i].c_str());
         string name = strtok(str, ":");
         char *token = strtok(0, ":");
         tracking_t<cellmap_t> *tracker = 0;
@@ -350,7 +430,7 @@ int main(int argc, const char **argv) {
 #ifdef USE_MPI
             // check that we have at least one worker for each particle
             if( 1 + nparticles > mpi_base_t::mpi_->nworkers_ ) {
-                cout << "MPI: there are not enough workers for tracker '" << tracking_algorithms_str[i]
+                cout << "MPI: there are not enough workers for tracker '" << tracker_strings[i]
                      << "' (nworkers=" << mpi_base_t::mpi_->nworkers_ - 1
                      << "); continuing without this tracker"
                      << endl;
@@ -361,43 +441,79 @@ int main(int argc, const char **argv) {
             if( name == "sis" ) {
                 tracker = new SIS_t<sis_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
             } else if( name == "mm_sir" ) {
-                tracker = new motion_model_SIR_t<motion_model_sir_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
+                tracker = new motion_model_SIR_t<motion_model_sir_slam_particle_t,
+                                                 cellmap_t>(full_name,
+                                                            cellmap,
+                                                            nparticles,
+                                                            force_resampling,
+                                                            do_stochastic_universal_sampling);
             } else if( name == "opt_sir" ) {
-                cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf = new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
-                tracker = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(full_name, cellmap, *cdf, nparticles, false, do_stochastic_universal_sampling);
+                cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf =
+                  new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
+                tracker = new optimal_SIR_t<optimal_sir_slam_particle_t,
+                                            cellmap_t,
+                                            cdf_for_optimal_sir_t<optimal_sir_slam_particle_t,
+                                                                  cellmap_t> >(full_name,
+                                                                               cellmap,
+                                                                               *cdf,
+                                                                               nparticles,
+                                                                               force_resampling,
+                                                                               do_stochastic_universal_sampling);
             } else if( name == "mm_rbpf" ) {
-                if( !oreslam )
-                    tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
-                else
-                    tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
+                if( !oreslam ) {
+                    tracker = new RBPF_t<motion_model_rbpf_slam_particle_t,
+                                         cellmap_t>(full_name,
+                                                    cellmap,
+                                                    nparticles,
+                                                    force_resampling,
+                                                    do_stochastic_universal_sampling);
+                } else {
+                    tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t,
+                                         cellmap_t>(full_name,
+                                                    cellmap,
+                                                    nparticles,
+                                                    force_resampling,
+                                                    do_stochastic_universal_sampling);
+                }
             } else if( name == "opt_rbpf" ) {
-                if( !oreslam )
-                    tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
-                else
-                    tracker = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(full_name, cellmap, nparticles, true, do_stochastic_universal_sampling);
+                if( !oreslam ) {
+                    tracker = new RBPF_t<optimal_rbpf_slam_particle_t,
+                                         cellmap_t>(full_name,
+                                                    cellmap,
+                                                    nparticles,
+                                                    force_resampling,
+                                                    do_stochastic_universal_sampling);
+                } else {
+                    tracker = new RBPF_t<optimal_rbpf_slam2_particle_t,
+                                         cellmap_t>(full_name,
+                                                    cellmap,
+                                                    nparticles,
+                                                    force_resampling,
+                                                    do_stochastic_universal_sampling);
+                }
             } else {
                 cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
             }
         }
         free(str);
-        if( tracker != 0 ) tracking_algorithms.push_back(tracker);
+        if( tracker != 0 ) trackers.push_back(tracker);
     }
 
     // check that there is something to do
-    if( tracking_algorithms.empty() ) {
+    if( trackers.empty() ) {
         cout << "warning: no tracker specified. Terminating..." << endl;
         finalize();
         return 0;
     }
 
     // print identity of trackers
-    for( size_t i = 0; i < tracking_algorithms.size(); ++i )
-        cout << "# tracker[" << i << "].id=\"" << tracking_algorithms[i]->id() << "\"" << endl;
+    for( size_t i = 0; i < trackers.size(); ++i )
+        cout << "# tracker[" << i << "].id=\"" << trackers[i]->id() << "\"" << endl;
 
     // compute longest name
     size_t size_longest_name = 0;
-    for( size_t i = 0; i < tracking_algorithms.size(); ++i )
-        size_longest_name = size_longest_name > tracking_algorithms[i]->name_.size() ? size_longest_name : tracking_algorithms[i]->name_.size();
+    for( size_t i = 0; i < trackers.size(); ++i )
+        size_longest_name = size_longest_name > trackers[i]->name_.size() ? size_longest_name : trackers[i]->name_.size();
 
     // action selection
     vector<action_selection_t<cellmap_t>*> policy;
@@ -409,85 +525,43 @@ int main(int argc, const char **argv) {
     // set initial loc
     cellmap.initial_loc_ = 0;
 
-    // set labels
-    vector<int> labels;
-    if( (gtype >= 0) && (gtype < 2) ) {
-        if( gtype == 0 ) { // 1x8 grid with fixed labels
-            int _labels[] = { 0, 1, 0, 1, 0, 1, 0, 1 };
-            labels = vector<int>(&_labels[0], &_labels[8]);
-        } else { // 1x8 grid with random labels
-            cellmap.sample_labels(labels);
-        }
-    } else if( (gtype >= 0) && (gtype < 3) ) {
-        if( gtype == 2 ) { // 10x10 grid with fixed labels: 0=empty, 1=wall, 2=opened door, 3=closed door
-            int _labels[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                              1, 0, 0, 2, 0, 3, 0, 0, 0, 1,
-                              1, 0, 0, 1, 0, 1, 0, 0, 0, 1,
-                              1, 3, 1, 1, 0, 1, 1, 1, 2, 1,
-                              1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-                              1, 1, 1, 1, 0, 1, 1, 1, 3, 1,
-                              1, 0, 0, 2, 0, 1, 0, 0, 0, 1,
-                              1, 0, 0, 1, 0, 1, 0, 0, 0, 1,
-                              1, 0, 0, 1, 0, 2, 0, 0, 0, 1,
-                              1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
-            labels = vector<int>(&_labels[0], &_labels[100]);
-            cellmap.initial_loc_ = coord_t(1, 1).as_index();
-        }
-    } else { // general grid with random labels
-        cellmap.sample_labels(labels);
-    }
-    cellmap.set_labels(labels);
+    // set common elements for R plots
+    if( R_plot )
+        generate_R_plot_commons();
 
-    // set execution
+    // run for the specified number of trials and collect statistics
     cellmap_t::execution_t fixed_execution;
-    if( ptype == 0 ) {
-        if( gtype < 2 ) {
-            fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, -1));
-            fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::right));
-            fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::right));
-            fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
-            fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::right));
-            fixed_execution.push_back(cellmap_t::execution_step_t(4, 0, cellmap_t::right));
-            fixed_execution.push_back(cellmap_t::execution_step_t(5, 1, cellmap_t::right));
-            fixed_execution.push_back(cellmap_t::execution_step_t(6, 0, cellmap_t::right));
-            fixed_execution.push_back(cellmap_t::execution_step_t(7, 1, cellmap_t::right));
-            fixed_execution.push_back(cellmap_t::execution_step_t(6, 0, cellmap_t::left));
-            fixed_execution.push_back(cellmap_t::execution_step_t(5, 1, cellmap_t::left));
-            fixed_execution.push_back(cellmap_t::execution_step_t(4, 0, cellmap_t::left));
-            fixed_execution.push_back(cellmap_t::execution_step_t(3, 1, cellmap_t::left));
-            fixed_execution.push_back(cellmap_t::execution_step_t(2, 0, cellmap_t::left));
-            fixed_execution.push_back(cellmap_t::execution_step_t(1, 1, cellmap_t::left));
-            fixed_execution.push_back(cellmap_t::execution_step_t(0, 0, cellmap_t::left));
-        }
-    } else if( ptype == 1 ) {
-        cellmap.compute_covering_execution(0, fixed_execution, num_covering_loops);
-    }
-    cout << "# fixed-execution: sz=" << fixed_execution.size() << endl;
-    //cout << "# fixed-execution[sz=" << fixed_execution.size() << "]=" << fixed_execution << endl;
-
-    // run for the specified number of trials
-    vector<repository_t> repos;
+    vector<Utils::stat_t> unknown_stats(trackers.size());
+    vector<Utils::stat_t> error_stats(trackers.size());
     for( int trial = 0; trial < ntrials; ++trial ) {
-        float start_time = Utils::read_time_in_seconds();
+        cout << "# trial = " << trial << endl;
+
+        // set labels and fixed execution (if appropriate)
+        set_labels_and_execution(cellmap, ptype, num_covering_loops, fixed_execution);
+
+        // run execution
+        vector<repository_t> repos;
         cellmap_t::execution_t output_execution;
         if( !fixed_execution.empty() )
-            cellmap.run_execution(repos, fixed_execution, output_execution, tracking_algorithms, verbose);
+            cellmap.run_execution(repos, fixed_execution, output_execution, trackers, verbose);
         else
-            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, *policy[ptype], tracking_algorithms, verbose);
+            cellmap.run_execution(repos, output_execution, cellmap.initial_loc_, nsteps, *policy[ptype], trackers, verbose);
         cout << "# output-execution: sz=" << output_execution.size() << endl;
         //cout << "# output-execution[sz=" << output_execution.size() << "]=" << output_execution << endl;
-        //tracking_algorithms[0]->print(cout);
+        //trackers[0]->print(cout);
 
         // calculate final marginals
-        for( size_t i = 0; i < tracking_algorithms.size(); ++i )
-            tracking_algorithms[i]->calculate_marginals();
+        for( size_t i = 0; i < trackers.size(); ++i )
+            trackers[i]->calculate_marginals();
 
+#if 0
         // compute and print scores
         vector<cellmap_t::score_t> scores;
-        cellmap.compute_scores(output_execution, tracking_algorithms, scores);
+        cellmap.compute_scores(output_execution, trackers, scores);
         for( size_t i = 0; i < scores.size(); ++i ) {
-            cout << "# score(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): score=" << scores[i] << endl;
+            cout << "# score(" << setw(size_longest_name) << trackers[i]->name_ << "): score=" << scores[i] << endl;
         }
+#endif
 
         // print final (tracked) map and location
         vector<pair<float, int> > map_values;
@@ -495,221 +569,84 @@ int main(int argc, const char **argv) {
         cellmap.print_labels(cout);
         cout << ", loc=" << coord_t(output_execution.back().loc_) << ":" << output_execution.back().loc_ << endl;
 
-        int num_unknowns = 0;
-        for( size_t i = 0; i < tracking_algorithms.size(); ++i ) {
-            cout << "# final(" << setw(size_longest_name) << tracking_algorithms[i]->name_ << "): map=[";
-            for( int var = 0; var < nrows * ncols; ++var ) {
-                tracking_algorithms[i]->MAP_on_var(repos[i], var, map_values, map_epsilon);
-                assert(!map_values.empty());
-                if( map_values[0].first < map_threshold ) {
-                    cout << " *";
-                    ++num_unknowns;
-                } else {
-                    if( map_values.size() == 1 ) {
-                        cout << " " << map_values.back().second;
-                    } else {
-#if 1
-                        cout << " +";
-#else
-                        cout << " {";
-                        for( size_t k = 0; k < map_values.size(); ++k ) {
-                            cout << map_values[k].second;
-                            if( k < map_values.size() - 1 ) cout << ",";
-                        }
-                        cout << "}";
+        // do plots and print final MAP for each tracker
+        for( size_t i = 0; i < trackers.size(); ++i ) {
+            const tracking_t<cellmap_t> &tracker = *trackers[i];
+
+            // do plots
+            if( R_plot ) {
+                generate_R_plot(string("plot_") + to_string(trial) + "_" + to_string(i) + ".pdf",
+                                tracker,
+                                repos[i],
+                                cellmap,
+                                inference_algorithm,
+                                map_epsilon,
+                                map_threshold);
+
+#if 0
+                cout << "library(\"reshape2\");" << endl << "library(\"ggplot2\");" << endl;
+                for( size_t i = 0; i < trackers.size(); ++i )
+                    cellmap.generate_R_plot(cout, *trackers[i], repos[i]);
 #endif
-                    }
+            }
+
+            // print map and stats
+            int unknowns = 0;
+            int errors = 0;
+            cout << "# final(" << setw(size_longest_name) << tracker.name_ << "): map=[";
+            for( int loc = 0; loc < nrows * ncols; ++loc ) {
+                tracker.MAP_on_var(repos[i], loc, map_values, map_epsilon);
+                assert(!map_values.empty());
+                if( (map_values[0].first < map_threshold) || (map_values.size() > 1) ) {
+                    cout << " *";
+                    ++unknowns;
+                } else {
+                    cout << " " << map_values.back().second;
+                    errors += map_values.back().second == cellmap.cells_[loc].label_ ? 0 : 1;
                 }
-                if( (var + 1 < nrows * ncols) && (((var + 1) % ncols) == 0) )
+                if( (loc + 1 < nrows * ncols) && (((loc + 1) % ncols) == 0) )
                     cout << " |";
             }
 
             cout << "], loc=";
-            tracking_algorithms[i]->MAP_on_var(repos[i], nrows * ncols, map_values, map_epsilon);
+            tracker.MAP_on_var(repos[i], nrows * ncols, map_values, map_epsilon);
             assert(!map_values.empty());
             if( map_values.size() == 1 ) {
-                cout << coord_t(map_values.back().second) << ":" << map_values.back().second << ":" << setprecision(4) << map_values.back().first << endl;
+                cout << coord_t(map_values.back().second)
+                     << ":" << map_values.back().second
+                     << ":" << setprecision(4) << map_values.back().first;
             } else {
                 cout << "{";
                 for( size_t k = 0; k < map_values.size(); ++k ) {
                     cout << coord_t(map_values[k].second) << ":" << map_values[k].second << ":" << setprecision(4) << map_values[k].first;
                     if( k < map_values.size() - 1 ) cout << ",";
                 }
-                cout << "}" << endl;
+                cout << "}";
             }
+
+            cout << ", #unknowns=" << unknowns << ", #errors=" << errors << ", elapsed-time=" << tracker.elapsed_time_ << endl;
+            unknown_stats[i].update(unknowns);
+            error_stats[i].update(errors);
         }
-        cout << "# '*' means more than one label in MAP for given position" << endl;
-        cout << "# unknowns=" << num_unknowns << endl;
-
-
-        if( !tracking_algorithms.empty() ) {
-            const tracking_t<cellmap_t> &tracker = *tracking_algorithms.back();
-
-            cout << "library(ggplot2)" << endl
-                 << "library(reshape)" << endl
-                 << "library(zoo)" << endl
-                 << "#library(gtable)" << endl
-                 << "library(grid)" << endl
-                 << "library(gridExtra)" << endl;
-
-            cout << endl
-                 << "pdf(\"plot.pdf\", width = 12, height = 10)" << endl;
-
-            // useful R functions
-            cout << "define_region <- function(row, col) { viewport(layout.pos.row = row, layout.pos.col = col); }"
-                 << endl
-                 << "get_legend <- function(myggplot) { tmp <- ggplot_gtable(ggplot_build(myggplot)); leg <- which(sapply(tmp$grobs, function(x) x$name) == \"guide-box\"); legend <- tmp$grobs[[leg]]; return(legend); }"
-                 << endl;
-
-            cout << endl;
-
-            // color themes from http://colorbrewer2.org
-            cout << "color_theme1 <- c(\"#543005\",\"#8c510a\",\"#bf812d\",\"#dfc27d\",\"#f6e8c3\",\"#f5f5f5\",\"#c7eae5\",\"#80cdc1\",\"#35978f\",\"#01665e\",\"#003c30\")" << endl;
-            cout << "color_theme2 <- c(\"#276419\",\"#4d9221\",\"#7fbc41\",\"#b8e186\",\"#e6f5d0\",\"#f7f7f7\",\"#fde0ef\",\"#f1b6da\",\"#de77ae\",\"#c51b7d\",\"#8e0152\")" << endl;
-            cout << "color_theme3 <- c(\"#00441b\",\"#1b7837\",\"#5aae61\",\"#a6dba0\",\"#d9f0d3\",\"#f7f7f7\",\"#e7d4e8\",\"#c2a5cf\",\"#9970ab\",\"#762a83\",\"#40004b\")" << endl;
-            cout << "color_theme4 <- c(\"#7f3b08\",\"#b35806\",\"#e08214\",\"#fdb863\",\"#fee0b6\",\"#f7f7f7\",\"#d8daeb\",\"#b2abd2\",\"#8073ac\",\"#542788\",\"#2d004b\")" << endl;
-            cout << "color_theme5 <- c(\"#053061\",\"#2166ac\",\"#4393c3\",\"#92c5de\",\"#d1e5f0\",\"#f7f7f7\",\"#fddbc7\",\"#f4a582\",\"#d6604d\",\"#b2182b\",\"#67001f\")" << endl;
-            cout << "color_theme6 <- c(\"#67001f\",\"#b2182b\",\"#d6604d\",\"#f4a582\",\"#fddbc7\",\"#ffffff\",\"#e0e0e0\",\"#bababa\",\"#878787\",\"#4d4d4d\",\"#1a1a1a\")" << endl;
-            cout << "color_theme7 <- c(\"#313695\",\"#4575b4\",\"#74add1\",\"#abd9e9\",\"#e0f3f8\",\"#e8e8e8\",\"#fee090\",\"#fdae61\",\"#f46d43\",\"#d73027\",\"#a50026\")" << endl;
-            cout << "color_theme8 <- c(\"#006837\",\"#1a9850\",\"#66bd63\",\"#a6d96a\",\"#d9ef8b\",\"#b8b8b8\",\"#fee08b\",\"#fdae61\",\"#f46d43\",\"#d73027\",\"#a50026\")" << endl;
-            cout << "color_theme9 <- c(\"#5e4fa2\",\"#3288bd\",\"#66c2a5\",\"#abdda4\",\"#e6f598\",\"#ffffbf\",\"#fee08b\",\"#fdae61\",\"#f46d43\",\"#d53e4f\",\"#9e0142\")" << endl;
-
-            cout << endl;
-
-            // prepare colors and labels for legend: 10 levels
-            cout << "quantile_range <- c(0, .01, .05, .1, .25, .45, .55, .75, .9, .95, .99, 1)" << endl;
-            cout << "color_palette <- colorRampPalette(color_theme2)(length(quantile_range) - 1)" << endl;
-            cout << "label_text <- rollapply(round(quantile_range, 2), width = 2, by = 1, FUN = function(i) paste(i, collapse = \"-\"))" << endl;
-
-            cout << endl;
-
-            // define minimal theme
-            cout << "minimal_theme <- theme(" << endl
-                 << "    plot.background = element_blank()," << endl
-                 << "    panel.grid.minor = element_blank()," << endl
-                 << "    panel.grid.major = element_blank()," << endl
-                 << "    panel.background = element_blank()," << endl
-                 << "    panel.border = element_blank()," << endl
-                 << "    axis.line = element_blank()," << endl
-                 << "    axis.ticks = element_blank()," << endl
-                 << "    axis.text.x = element_blank()," << endl
-                 << "    axis.text.y = element_blank()," << endl
-                 << "    axis.title.x = element_blank()," << endl
-                 << "    axis.title.y = element_blank()," << endl
-                 << "    plot.margin = unit(c(-.25, -.5, -1.25, -.5), \"lines\")," << endl
-                 << "    legend.title = element_blank()" << endl
-                 << ")" << endl;
-
-            cout << endl;
-
-            // define time steps for analysis
-            set<int> focus;
-            int nsteps = int(repos.back().size());
-            for( int t = 0; t < nsteps; ++t ) {
-                if( t == int(.25 * nsteps) ) // raw data at 25% time of total steps
-                    focus.insert(t);
-                else if( t == int(.5 * nsteps) ) // raw data at 50% time of total steps
-                    focus.insert(t);
-                else if( t == int(.75 * nsteps) ) // raw data at 75% time of total steps
-                    focus.insert(t);
-                else if( t == nsteps - 1 ) // raw data at end of time
-                    focus.insert(t);
-            }
-
-            // extract marginals and maps for selected time steps
-            cout << "time_steps <- list()" << endl;
-            cout << "raw_data <- list()" << endl;
-            for( int t = 0; t < nsteps; ++t ) {
-                if( focus.find(t) != focus.end() ) {
-                    cout << "time_steps <- append(time_steps, list(" << t << "))" << endl;
-
-                    // raw data for ore field
-                    cout << "raw_data <- append(raw_data, list(matrix(c(";
-                    for( int var = 0; var < nrows * ncols; ++var ) {
-                        const cell_t &cell = cellmap.cells_[var];
-                        cout << (cell.label_ ? 1 : 0);
-                        if( 1 + var < nrows * ncols ) cout << ", ";
-                    }
-                    cout << "), ncol=" << ncols << ", byrow=T)))" << endl;
-
-                    // raw data for marginals
-                    cout << "raw_data <- append(raw_data, list(matrix(c(";
-                    for( int var = 0; var < nrows * ncols; ++var ) {
-                        const float *marginal = &repos.back()[t][cellmap.variable_offset(var)];
-                        cout << marginal[1];
-                        if( var + 1 < nrows * ncols ) cout << ", ";
-                        assert(fabs(marginal[0] + marginal[1] - 1.0) < EPSILON);
-                    }
-                    cout << "), ncol=" << ncols << ", byrow=T)))" << endl;
-
-                    // raw data for maps on marginals
-                    cout << "raw_data <- append(raw_data, list(matrix(c(";
-                    for( int var = 0; var < nrows * ncols; ++var ) {
-                        vector<pair<float, int> > map_values;
-                        tracker.MAP_on_var(repos.back(), t, var, map_values, map_epsilon);
-                        assert(!map_values.empty());
-                        if( map_values[0].first < map_threshold )
-                            cout << .50;
-                        else
-                            cout << (map_values.size() == 1 ? map_values[0].second : .50);
-                        if( 1 + var < nrows * ncols ) cout << ", ";
-                    }
-                    cout << "), ncol=" << ncols << ", byrow=T)))" << endl;
-                }
-            }
-            cout << endl;
-
-            // apply quantile discretization to field, marginals and maps
-            cout << "mod_data <- lapply(raw_data, function(d) { m <- matrix(findInterval(d, quantile_range, all.inside = TRUE), nrow = nrow(d)); m; })" << endl;
-
-            cout << endl;
-
-            // generate plots and plots without legends
-            cout << "plots <- lapply(mod_data, function(m) { p <- ggplot(melt(m), aes(x = X2, y = X1, fill = factor(value, levels = 1:(length(quantile_range) - 1)))) + geom_tile(color = \"black\") + scale_fill_manual(values = color_palette, name = \"\", labels = label_text, drop = FALSE) + minimal_theme; p })" << endl;
-            cout << "plots_nl <- lapply(plots, function(p) { pnl <- p + theme(legend.position = \"none\"); pnl })" << endl;
-            cout << "plot_legend <- get_legend(plots[[1]])" << endl;
-
-            cout << endl;
-
-            // calculate # errors in maps
-            cout << "map_threshold <- " << map_threshold << endl;
-            cout << "n_rows <- " << nrows << endl;
-            cout << "n_cols <- " << ncols << endl;
-            cout << "n_time_steps <- " << focus.size() << endl;
-            cout << "equals_in_map <- sapply(seq(1, 3 * n_time_steps, 3), function(i) { sum(raw_data[[i+2]] == raw_data[[i]]) })" << endl;
-            cout << "unknowns_in_map <- sapply(seq(1, 3 * n_time_steps, 3), function(i) { sum(raw_data[[i+2]] == 0.5) })" << endl;
-            cout << "errors_in_map <- n_rows * n_cols - equals_in_map - unknowns_in_map" << endl;
-
-            cout << endl;
-
-            // put plots together using viewports and display them
-            //cout << "grid.newpage()" << endl
-            cout << "pushViewport(viewport(layout = grid.layout(2 + n_time_steps, 5, heights = unit(c(1.75, rep(4, n_time_steps), .5), rep(\"null\", 2 + n_time_steps)), widths = unit(rep(4, 5), rep(\"null\", 5)))))" << endl
-                 << "sapply(seq_along(plots_nl), function(i) { print(plots_nl[[i]], vp = define_region(2 + ((i - 1) %/% 3), 2 + ((i - 1) %% 3))); i })" << endl
-                 << "grid.text(\"ore field\", vp = define_region(2 + n_time_steps, 2))" << endl
-                 << "grid.text(\"marginals\", vp = define_region(2 + n_time_steps, 3))" << endl
-                 << "grid.text(\"map on marginals\", vp = define_region(2 + n_time_steps, 4))" << endl
-                 << "grid.text(paste(n_rows, \"x\", n_cols, \" grid problem\\n"
-                 << tracker.id()
-                 << "\\n"
-                 << inference_algorithm
-                 << "\", sep=\"\"), vp = viewport(layout.pos.row = 1, layout.pos.col = 1:5))" << endl
-                 << "sapply(seq_along(time_steps), function(i) { grid.text(paste(\"After\", time_steps[[i]], \"steps\\n#error(s) in MAP =\", errors_in_map[[i]], \"\\n#unknown(s) in MAP =\", unknowns_in_map[[i]], sep=\" \"), vp = define_region(1 + i, 1)); i })" << endl
-                 << "pushViewport(viewport(just = c(\"center\", \"center\"), layout.pos.row = 2:(1 + n_time_steps), layout.pos.col = 5))" << endl
-                 << "grid.draw(plot_legend)" << endl
-                 << "dev.off()" << endl;
-
-            // generate R plots
-#if 0
-            cout << "library(\"reshape2\");" << endl << "library(\"ggplot2\");" << endl;
-            for( size_t i = 0; i < tracking_algorithms.size(); ++i )
-                cellmap.generate_R_plot(cout, *tracking_algorithms[i], repos[i]);
-#endif
-        }
-
-        float elapsed_time = Utils::read_time_in_seconds() - start_time;
-        cout << "# elapsed time=" << elapsed_time << endl;
+        //cout << "# '*' means more than one label in MAP for given position" << endl;
     }
+
+    // print average statistics
+    for( size_t i = 0; i < trackers.size(); ++i ) {
+        const tracking_t<cellmap_t> &tracker = *trackers[i];
+        cout << "# stats(" << setw(size_longest_name) << tracker.name_ << "):"
+             << " trials=" << unknown_stats[i].n()
+             << ", total-elapsed-time=" << tracker.elapsed_time_
+             << ", avg-unknowns-per-trial=" << unknown_stats[i].mean() << " (" << unknown_stats[i].confidence(.05) << ")"
+             << ", avg-errors-per-trial=" << error_stats[i].mean() << " (" << error_stats[i].confidence(.05) << ")"
+             << ", avg-elapsed-time-per-trial=" << tracker.elapsed_time_ / ntrials
+             << ", avg-elapsed-time-per-step=" << tracker.elapsed_time_ / tracker.num_steps_
+             << endl;
+    }
+
+    // stop timer
+    float elapsed_time = Utils::read_time_in_seconds() - start_time;
+    cout << "# total time = " << elapsed_time << endl;
 
     finalize();
     return 0;

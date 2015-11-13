@@ -29,7 +29,7 @@
 struct random_slam_policy_t : public action_selection_t<cellmap_t> {
     random_slam_policy_t(const cellmap_t &cellmap) : action_selection_t<cellmap_t>(cellmap) { }
     virtual ~random_slam_policy_t() { }
-    virtual int select_action(const tracking_t<cellmap_t> *tracking) const {
+    virtual int select_action(const tracking_t<cellmap_t> *tracker) const {
         return base_.random_action();
     }
 };
@@ -47,14 +47,14 @@ struct exploration_slam_policy_t : public action_selection_t<cellmap_t> {
         delete[] marginals_;
     }
 
-    virtual int select_action(const tracking_t<cellmap_t> *tracking) const {
+    virtual int select_action(const tracking_t<cellmap_t> *tracker) const {
         // read marginals
-        tracking->store_marginals(marginals_);
+        tracker->store_marginals(marginals_);
 
         // get current position(s) from agenda
         std::vector<coord_t> current_loc;
         std::vector<std::pair<float, int> > map_values;
-        tracking->MAP_on_var(marginals_, base_.nloc_, map_values, map_epsilon_);
+        tracker->MAP_on_var(marginals_, base_.nloc_, map_values, map_epsilon_);
         current_loc.reserve(map_values.size());
         for( int i = 0; i < int(map_values.size()); ++i ) {
             current_loc.push_back(coord_t(map_values[i].second));
@@ -75,7 +75,7 @@ struct exploration_slam_policy_t : public action_selection_t<cellmap_t> {
 
         // rebuild agenda if necessary
         if( agenda_.empty() ) {
-            build_agenda(tracking);
+            build_agenda(tracker);
             if( agenda_.empty() ) { // if agenda still empty, return random action
                 //std::cout << "policy: random action" << std::endl;
                 return base_.random_action();
@@ -108,11 +108,11 @@ struct exploration_slam_policy_t : public action_selection_t<cellmap_t> {
             return candidates[lrand48() % candidates.size()];
     }
 
-    void build_agenda(const tracking_t<cellmap_t> *tracking) const {
+    void build_agenda(const tracking_t<cellmap_t> *tracker) const {
         assert(agenda_.empty());
         std::vector<std::pair<float, int> > map_values;
         for( int loc = 0; loc < base_.nloc_; ++loc ) {
-            tracking->MAP_on_var(marginals_, loc, map_values, map_epsilon_);
+            tracker->MAP_on_var(marginals_, loc, map_values, map_epsilon_);
 #if 0
             std::cout << "policy: mapsz[loc=" << loc << "]=" << map_values.size() << ", map={";
             for( int i = 0; i < int(map_values.size()); ++i )
@@ -171,15 +171,15 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         delete[] reward_;
     }
 
-    virtual int select_action(const tracking_t<cellmap_t> *tracking) const {
+    virtual int select_action(const tracking_t<cellmap_t> *tracker) const {
         // read marginals and solve MDP
-        tracking->store_marginals(marginals_);
+        tracker->store_marginals(marginals_);
 
-#if 1
+#if 0
         // get current loc
 {
         std::vector<std::pair<float, int> > map_values;
-        tracking->MAP_on_var(marginals_, base_.nloc_, map_values, .001);
+        tracker->MAP_on_var(marginals_, base_.nloc_, map_values, .001);
         assert(!map_values.empty());
         //std::cout << "(cloc=" << coord_t(map_values[0].second) << ",p=" << map_values[0].first << ",best-action=" << base_.action_label(best_action_[map_values[0].second]) << ")" << std::flush;
 }
@@ -237,7 +237,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
             }
 
             // calculate reward and loc with best reward
-            reward_[loc] = loc_entropy * (1 - map_entropy) + (1 - loc_entropy) * map_entropy;
+            reward_[loc] = loc_entropy * (1 - map_entropy) + 2 * (1 - loc_entropy) * map_entropy;
             if( reward_[loc] > reward_loc_with_max_reward ) {
                 loc_with_max_reward = loc;
                 reward_loc_with_max_reward = reward_[loc];
@@ -251,6 +251,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         std::cout << "(loc-maxH=" << coord_t(loc_with_max_entropy) << ",H=" << entropy_loc_with_max_entropy << ")" << std::flush;
 #endif
 
+#if 0
         // calculate benefits
         for( int loc = 0; loc < base_.nloc_; ++loc ) {
             int best_target = 0;
@@ -265,6 +266,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
             benefit_[loc] = best_benefit;
             //std::cout << "(benefit[" << coord_t(loc) << "]=" << benefit_[loc] << ")" << std::flush;
         }
+#endif
 
         // solve MDP
         bzero(value_function_, base_.nloc_ * sizeof(float));
