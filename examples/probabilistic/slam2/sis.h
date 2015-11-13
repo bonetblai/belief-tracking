@@ -50,6 +50,10 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
     }
     virtual ~SIS_t() { }
 
+    virtual void clear() {
+        PF_t<PTYPE, BASE>::clear_particles();
+    }
+
     virtual void initialize() {
         PTYPE sampler;
         particles_.reserve(nparticles_);

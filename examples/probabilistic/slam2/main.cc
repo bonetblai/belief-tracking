@@ -531,8 +531,8 @@ int main(int argc, const char **argv) {
 
     // run for the specified number of trials and collect statistics
     cellmap_t::execution_t fixed_execution;
-    vector<Utils::stat_t> unknown_stats(trackers.size());
-    vector<Utils::stat_t> error_stats(trackers.size());
+    vector<Utils::stat_t> stats_unknown(trackers.size());
+    vector<Utils::stat_t> stats_error(trackers.size());
     for( int trial = 0; trial < ntrials; ++trial ) {
         cout << "# trial = " << trial << endl;
 
@@ -624,23 +624,34 @@ int main(int argc, const char **argv) {
                 cout << "}";
             }
 
-            cout << ", #unknowns=" << unknowns << ", #errors=" << errors << ", elapsed-time=" << tracker.elapsed_time_ << endl;
-            unknown_stats[i].update(unknowns);
-            error_stats[i].update(errors);
+            cout << ", #unknowns=" << unknowns
+                 << ", #errors=" << errors
+                 << ", elapsed-time=" << tracker.elapsed_time()
+                 << endl;
+            stats_unknown[i].add(unknowns);
+            stats_error[i].add(errors);
         }
-        //cout << "# '*' means more than one label in MAP for given position" << endl;
+
+        // clean trackers and repos
+        assert(trackers.size() == repos.size());
+        for( int i = 0; i < int(trackers.size()); ++i ) {
+            tracking_t<cellmap_t> &tracker = *trackers[i];
+            repository_t &repo = repos[i];
+            tracker.clear();
+            repo.clear_marginals();
+        }
     }
 
     // print average statistics
     for( size_t i = 0; i < trackers.size(); ++i ) {
         const tracking_t<cellmap_t> &tracker = *trackers[i];
         cout << "# stats(" << setw(size_longest_name) << tracker.name_ << "):"
-             << " trials=" << unknown_stats[i].n()
-             << ", total-elapsed-time=" << tracker.elapsed_time_
-             << ", avg-unknowns-per-trial=" << unknown_stats[i].mean() << " (" << unknown_stats[i].confidence(.05) << ")"
-             << ", avg-errors-per-trial=" << error_stats[i].mean() << " (" << error_stats[i].confidence(.05) << ")"
-             << ", avg-elapsed-time-per-trial=" << tracker.elapsed_time_ / ntrials
-             << ", avg-elapsed-time-per-step=" << tracker.elapsed_time_ / tracker.num_steps_
+             << " trials=" << stats_unknown[i].n()
+             << ", total-elapsed-time=" << tracker.total_elapsed_time()
+             << ", avg-unknowns-per-trial=" << stats_unknown[i].mean() << " (" << stats_unknown[i].confidence(.95) << ")"
+             << ", avg-errors-per-trial=" << stats_error[i].mean() << " (" << stats_error[i].confidence(.95) << ")"
+             << ", avg-elapsed-time-per-trial=" << tracker.total_elapsed_time() / ntrials
+             << ", avg-elapsed-time-per-step=" << tracker.total_elapsed_time() / tracker.total_num_steps()
              << endl;
     }
 

@@ -48,7 +48,7 @@ struct inference_t {
         inference_algorithm_ = i.inference_algorithm_;
         i.inference_algorithm_ = 0;
     }
-    ~inference_t() {
+    virtual ~inference_t() {
         destroy_inference_algorithm();
     }
 

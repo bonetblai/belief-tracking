@@ -615,11 +615,12 @@ struct cellmap_t {
 
     // tracking function
 
-    void initialize(std::vector<tracking_t<cellmap_t>*> &trackers, std::vector<repository_t> &repos) const {
+    void run_initialize(std::vector<tracking_t<cellmap_t>*> &trackers, std::vector<repository_t> &repos) const {
         repos.clear();
         repos.reserve(trackers.size());
         for( size_t i = 0; i < trackers.size(); ++i ) {
             tracking_t<cellmap_t> &tracker = *trackers[i];
+            tracker.add_run();
             tracker.initialize();
             repos.push_back(repository_t());
         }
@@ -634,8 +635,7 @@ struct cellmap_t {
             tracker.store_marginals(repos[i]);
             float elapsed_time = Utils::read_time_in_seconds() - start_time;
             if( print_marginals ) tracker.print_marginals(std::cout, repos[i]);
-            ++tracker.num_steps_;
-            tracker.elapsed_time_ += elapsed_time;
+            tracker.add_elapsed_time(elapsed_time);
         }
     }
 
@@ -755,7 +755,7 @@ struct cellmap_t {
         // initialize tracking algorithms and output execution
         std::cout << "# initializing... " << std::flush;
         output_execution.clear();
-        initialize(trackers, repos);
+        run_initialize(trackers, repos);
         output_execution.push_back(initial_step);
         advance_step(repos, -1, obs, trackers, print_marginals);
         std::cout << std::endl;

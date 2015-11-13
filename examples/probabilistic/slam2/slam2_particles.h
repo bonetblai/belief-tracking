@@ -447,21 +447,21 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
 
         float previous = 0;
         int current_loc = loc_history_.back();
-        for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
-            const dai::Factor &p_marginal = marginals_[new_loc];
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
+            const dai::Factor &p_marginal = marginals_[nloc];
             float prob = 0;
             for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
-                int slabels = get_slabels(new_loc, p_marginal.vars(), value);
-                prob += p_marginal[value] * base_->probability_obs_oreslam(obs, new_loc, slabels, last_action);
+                int slabels = get_slabels(nloc, p_marginal.vars(), value);
+                prob += p_marginal[value] * base_->probability_obs_oreslam(obs, nloc, slabels, last_action);
             }
-            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, new_loc) * prob);
+            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, nloc) * prob);
             previous = cdf.back();
         }
 
         // normalize (i.e. calculate alpha)
         assert(cdf.back() > 0);
-        for( int new_loc = 0; new_loc < base_->nloc_; ++new_loc ) {
-            cdf[new_loc] /= cdf.back();
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
+            cdf[nloc] /= cdf.back();
         }
     }
 

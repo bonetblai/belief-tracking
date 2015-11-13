@@ -34,12 +34,19 @@
 
 #define EPSILON 1e-4
 
+#include "stats.h"
 #include "mpi_slam.h"
 
 
 // Repositoy of marginals for each time step
-class repository_t : public std::vector<float*> { };
-
+struct repository_t : public std::vector<float*> {
+    void clear_marginals() {
+        while( !empty() ) {
+            delete[] back();
+            pop_back();
+        }
+    }
+};
 
 // General Tracking Algorithm
 struct mpi_base_t {
@@ -50,14 +57,37 @@ template <typename BASE> struct tracking_t : public mpi_base_t {
     std::string name_;
     const BASE &base_;
 
-    float elapsed_time_;
-    int num_steps_;
+    std::vector<Utils::stat_t> stats_elapsed_time_;
 
-    tracking_t(const std::string &name, const BASE &base)
-      : name_(name), base_(base), elapsed_time_(0), num_steps_(0) {
-    }
+    tracking_t(const std::string &name, const BASE &base) : name_(name), base_(base) { }
     virtual ~tracking_t() { }
 
+    void add_run() {
+        stats_elapsed_time_.push_back(Utils::stat_t());
+    }
+    void add_elapsed_time(float elapsed_time) {
+        stats_elapsed_time_.back().add(elapsed_time);
+    }
+    float elapsed_time() const {
+        return stats_elapsed_time_.back().sum();
+    }
+    float total_elapsed_time() const {
+        float elapsed_time = 0;
+        for( int i = 0; i < int(stats_elapsed_time_.size()); ++i )
+            elapsed_time += stats_elapsed_time_[i].sum();
+        return elapsed_time;
+    }
+    int num_steps() const {
+        return stats_elapsed_time_.back().n();
+    }
+    int total_num_steps() const {
+        int num_steps = 0;
+        for( int i = 0; i < int(stats_elapsed_time_.size()); ++i )
+            num_steps += stats_elapsed_time_[i].n();
+        return num_steps;
+    }
+
+    virtual void clear() = 0;
     virtual void initialize() = 0;
     virtual void update(int last_action, int obs) = 0;
     virtual void calculate_marginals() = 0;
@@ -98,13 +128,6 @@ template <typename BASE> struct tracking_t : public mpi_base_t {
         assert(t < int(repository.size()));
         const float *marginals = repository[t];
         return &marginals[base_.variable_offset(var)];
-    }
-
-    void clean(repository_t &repository) const {
-        while( !repository.empty() ) {
-            delete repository.back();
-            repository.pop_back();
-        }
     }
 
     void MAP_on_var(const repository_t &repository, int var, std::vector<std::pair<float, int> > &map_values, float epsilon = EPSILON) const {

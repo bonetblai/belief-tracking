@@ -76,18 +76,18 @@ struct stat_t {
     stat_t() : n_(0), s1_(0), s2_(0) { }
     ~stat_t() { }
 
-    void update(float value) {
+    void add(float value) {
         ++n_;
         s1_ += value;
         s2_ += value * value;
     }
 
     float n() const { return n_; }
+    float sum() const { return s1_; }
     float mean() const { return s1_ / n_; }
     float deviation() const { return sqrtf((n_ * s2_ - s1_ * s1_) / (n_ * (n_ - 1))); }
-
-    float confidence(float alpha) const {
-        return t_value_two_sided(1 - alpha) * deviation() / sqrtf(n_);
+    float confidence(float one_minus_alpha) const {
+        return n_ == 1 ? -1 : t_value_two_sided(one_minus_alpha) * deviation() / sqrtf(n_);
     }
 
     float t_value_two_sided(float one_minus_alpha) const {

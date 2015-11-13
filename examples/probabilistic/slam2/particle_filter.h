@@ -56,7 +56,7 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
     PF_t(const std::string &name, const BASE &base, int nparticles)
       : tracking_t<BASE>(name, base), nparticles_(nparticles) {
     }
-    ~PF_t() { }
+    virtual ~PF_t() { }
 
     virtual void print(std::ostream &os) const {
         for( int i = 0; i < int(particles_.size()); ++i ) {
@@ -69,6 +69,12 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
             p.print(os);
             os << std::endl;
         }
+    }
+
+    void clear_particles() {
+        for( int i = 0; i < int(particles_.size()); ++i )
+            delete particles_[i].p_;
+        particles_.clear();
     }
 
     void stochastic_sampling(const std::vector<particle_t> &particles,

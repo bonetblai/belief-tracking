@@ -118,6 +118,10 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
                                     int last_action,
                                     int obs) const = 0;
 
+    virtual void clear() {
+        PF_t<PTYPE, BASE>::clear_particles();
+    }
+
     virtual void initialize() {
         PTYPE sampler;
 
@@ -257,17 +261,15 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         assert(!do_resampling || (int(indices.size()) == nparticles_));
 
         // clean current filter
-        for( int i = 0; i < int(particles_.size()); ++i )
-            delete particles_[i].p_;
-        particles_.clear();
+        PF_t<PTYPE, BASE>::clear_particles();
 
         // set new particles as the particles in the updated filter
         multiplicity_.clear();
         std::map<int, int> index_map;
-        //std::cout << "       indices:";
+        std::set<int> selected_indices;
         for( int i = 0; i < int(indices.size()); ++i ) {
             int index = indices[i];
-            //std::cout << " " << index << std::flush;
+            selected_indices.insert(index);
             std::map<int, int>::const_iterator it = index_map.find(index);
             if( it == index_map.end() ) {
                 index_map.insert(std::make_pair(index, particles_.size()));
@@ -279,8 +281,14 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
             }
         }
 
-        // if resampling was performed, set all particle's weight to same value
+        // if resampling was performed, clean unsampled particles
+        // and set all particle's weight to same value
         if( do_resampling ) {
+            for( int i = 0; i < int(new_particles.size()); ++i ) {
+                if( selected_indices.find(i) == selected_indices.end() )
+                    delete new_particles[i].p_;
+            }
+
             // calcualte number of particles in new filter
             int num_particles = 0;
             for( int i = 0; i < int(particles_.size()); ++i )
