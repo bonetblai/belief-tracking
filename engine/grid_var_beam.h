@@ -62,11 +62,6 @@ class grid_var_beam_t {
       : nvars_(beam.nvars_), num_particles_(beam.num_particles_),
         beam_(beam.beam_) { }
     grid_var_beam_t(grid_var_beam_t &&beam) = default;
-#if 0
-    grid_var_beam_t(grid_var_beam_t &&beam)
-      : nvars_(beam.nvars_), num_particles_(beam.num_particles_),
-        beam_(beam.beam_) { }
-#endif
     ~grid_var_beam_t() { }
 
     static void initialize(int nrows, int ncols) {

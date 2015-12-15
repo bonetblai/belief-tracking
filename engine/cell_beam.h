@@ -54,11 +54,6 @@ class cell_beam_t {
       : row_(beam.row_), col_(beam.col_), type_(beam.type_),
         beam_(beam.beam_) { }
     cell_beam_t(cell_beam_t &&beam) = default;
-#if 0
-    cell_beam_t(cell_beam_t &&beam)
-      : row_(beam.row_), col_(beam.col_), type_(beam.type_),
-        beam_(beam.beam_) { }
-#endif
     ~cell_beam_t() { }
 
     enum { TOP = 1, BOTTOM = 2, LEFT = 4, RIGHT = 8 };

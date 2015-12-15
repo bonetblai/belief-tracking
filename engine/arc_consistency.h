@@ -48,12 +48,6 @@ class constraint_digraph_t {
         edges_pointing_to_(digraph.edges_pointing_to_) {
     }
     constraint_digraph_t(constraint_digraph_t &&digraph) = default;
-#if 0
-    constraint_digraph_t(constraint_digraph_t &&digraph)
-      : nvars_(digraph.nvars_), nedges_(digraph.nedges_),
-        edges_pointing_to_(digraph.edges_pointing_to_) {
-    }
-#endif
     ~constraint_digraph_t() { }
 
     void create_empty_graph(int nvars) {
@@ -103,14 +97,10 @@ template<typename T> class arc_consistency_t {
     explicit arc_consistency_t(const arc_consistency_t &ac)
       : nvars_(ac.nvars_), domain_(ac.domain_), digraph_(ac.digraph_) { }
     arc_consistency_t(arc_consistency_t &&ac) = default;
-#if 0
-    arc_consistency_t(arc_consistency_t &&ac)
-      : worklist_(ac.worklist_), nvars_(ac.nvars),
-        domain_(ac.domain_), digraph_(ac.digraph_) {
-        ac.domain_.clear();
-    }
-#endif
     ~arc_consistency_t() { clear(); }
+
+    int nvars() const { return nvars_; }
+    const constraint_digraph_t& digraph() const { return digraph_; }
 
     T* domain(int var) { return domain_[var]; }
     const T* domain(int var) const { return domain_[var]; }
