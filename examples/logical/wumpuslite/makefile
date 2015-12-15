@@ -41,7 +41,7 @@ JAVA_INCLUDES=			-I /usr/lib/jvm/default-java/include
 endif
 endif
 
-CFLAGS=					-Wall -Werror -O3 -fPIC $(CC_FLAGS) $(INCLUDES) -DNDEBUG
+CFLAGS=					-Wall -O3 -fPIC $(CC_FLAGS) $(INCLUDES) #-DNDEBUG
 
 ROOT=                   ../../../..
 BELIEF_TRACKING_HOME=	$(ROOT)/belief-tracking
@@ -77,6 +77,7 @@ WumpusAgentProxy.o:
 						$(CXX) -c WumpusAgentProxy.cc $(CFLAGS)
 
 $(LIBRARY):
+						mkdir -p platform
 						$(CXX) $(LD_FLAGS)
 
 wumpus.jar:

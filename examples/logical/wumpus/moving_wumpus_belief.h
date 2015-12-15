@@ -69,14 +69,16 @@ class moving_wumpus_belief_t : public base_belief_t {
       : base_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
         have_gold_(bel.have_gold_), dead_(bel.dead_),
         gold_(bel.gold_), wumpus_(bel.wumpus_) {
+        assert(pits_.nvars() == bel.pits_.nvars());
         for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
             pits_.set_domain(cell, new cell_beam_t(*bel.pits_.domain(cell)));
         }
     }
     moving_wumpus_belief_t(moving_wumpus_belief_t &&bel)
-      : base_belief_t(bel), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
+      : base_belief_t(std::move(bel)), pos_(bel.pos_), heading_(bel.heading_), narrows_(bel.narrows_),
         have_gold_(bel.have_gold_), dead_(bel.dead_),
-        gold_(bel.gold_), wumpus_(bel.wumpus_) {
+        gold_(std::move(bel.gold_)), wumpus_(std::move(bel.wumpus_)) {
+        assert(pits_.nvars() == bel.pits_.nvars());
         for( int cell = 0; cell < nrows_ * ncols_; ++cell ) {
             pits_.set_domain(cell, bel.pits_.domain(cell));
             bel.pits_.set_domain(cell, 0);
@@ -241,8 +243,7 @@ class moving_wumpus_belief_t : public base_belief_t {
         //grid_var_beam_t before(wumpus_);
         if( is_dead_obs(obs) ) {
             dead_ = true;
-        }
-        if( pos_ != OutsideCave ) {
+        } else if( pos_ != OutsideCave ) {
             filter_gold(action, obs);
             filter_pits(action, obs);
             filter_wumpus(action, obs);

@@ -26,12 +26,11 @@
 #include <iostream>
 #include <vector>
 
-#include <dispatcher.h>
-
 
 namespace Wumpus {
 
-struct abstract_api_t {
+class abstract_api_t {
+  protected:
     int nrows_;
     int ncols_;
     int npits_;
@@ -40,9 +39,6 @@ struct abstract_api_t {
     bool nesw_movements_;
     bool moving_;
     int seed_;
-
-    std::string policy_name_;
-    Online::Evaluation::parameters_t eval_pars_;
 
   public:
     abstract_api_t(int nrows, int ncols, int npits, int nwumpus, int narrows, bool nesw_movements, bool moving)
@@ -58,21 +54,15 @@ struct abstract_api_t {
         std::cout << "seed=" << seed_ << std::endl;
     }
 
-    void set_policy_parameters(int width, int depth, float par1, float par2) {
-        eval_pars_.width_ = width;
-        eval_pars_.depth_ = depth;
-        eval_pars_.par1_ = par1;
-        eval_pars_.par2_ = par2;
-    }
-
     bool is_moving() const { return moving_; }
 
-    virtual void select_policy(const std::string &base_name, const std::string &policy_type) = 0;
+    virtual void select_policy(const std::string &request) = 0;
     virtual void prepare_new_trial(int heading, bool diagonal = false) = 0;
     virtual int select_action() const = 0;
     virtual void update(int obs) = 0;
     virtual void apply_action_and_update(int action, int obs) = 0;
     virtual void print(std::ostream &os) const = 0;
+    virtual std::string current_policy() const = 0;
 
     // exact inference
     virtual bool is_world_explored() const = 0;
@@ -80,20 +70,19 @@ struct abstract_api_t {
 };
 
 template<typename T> struct template_wumpus_api_t : public abstract_api_t {
+  protected:
     template_problem_t<T> *problem_;
     char *sensed_info_;
     T *state_;
 
-    std::vector<std::pair<const Online::Policy::policy_t<T>*, std::string> > bases_;
-    std::vector<std::pair<const Heuristic::heuristic_t<T>*, std::string> > heuristics_;
-
+    const Online::Policy::policy_t<T> *current_policy_;
+    Dispatcher::dispatcher_t<T> dispatcher_;
     shortest_distance_to_unvisited_cell_t<T> *heuristic_;
-    const Online::Policy::policy_t<T> *policy_;
 
   public:
     template_wumpus_api_t(int nrows, int ncols, int npits, int nwumpus, int narrows, bool nesw_movements, bool moving)
       : abstract_api_t(nrows, ncols, npits, nwumpus, narrows, nesw_movements, moving),
-        problem_(0), state_(0), heuristic_(0), policy_(0) {
+        problem_(0), state_(0), current_policy_(0) {
         sensed_info_ = new char[nrows_ * ncols_];
 
         T::initialize(nrows_, ncols_);
@@ -102,39 +91,19 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
 
         problem_ = new template_problem_t<T>(nrows_, ncols_, npits_, nwumpus_, narrows_, GOAL_IS_HAVE_GOLD, 1e7);
 
-        // set heuristic
+        // create heuristic
         heuristic_ = new shortest_distance_to_unvisited_cell_t<T>(*problem_, nesw_movements_);
-        heuristics_.push_back(std::make_pair(heuristic_, "shortest_distance_to_unvisited_cell_heuristic"));
-
-
-        // set base policies
-        Online::Policy::greedy_t<T> greedy(*problem_, *heuristic_);
-        bases_.push_back(std::make_pair(greedy.clone(), "greedy_wrt_sduv-heuristic"));
-        Online::Policy::random_greedy_t<T> random_greedy(*problem_, *heuristic_);
-        bases_.push_back(std::make_pair(random_greedy.clone(), "random-greedy_wrt_sduv-heuristic"));
-        Online::Policy::optimistic_greedy_t<T> optimistic_greedy(*problem_, *heuristic_);
-        bases_.push_back(std::make_pair(optimistic_greedy.clone(), "optimistic-greedy_wrt_sduv-heuristic"));
-        Online::Policy::random_t<T> random(*problem_);
-        bases_.push_back(std::make_pair(random.clone(), "random"));
-        //wumpus_base_policy_t<T> wumpus(*problem_, nrows_, ncols_, nesw_movements_);
-        //bases_.push_back(std::make_pair(wumpus.clone(), "wumpus_base"));
+        dispatcher_.insert_heuristic(heuristic_->name(), heuristic_);
     }
     virtual ~template_wumpus_api_t() {
         delete[] sensed_info_;
-        delete heuristic_;
         delete problem_;
     }
 
-    virtual void select_policy(const std::string &base_name, const std::string &policy_type) {
-        std::pair<const Online::Policy::policy_t<T>*, std::string> p =
-          Online::Evaluation::select_policy(*problem_, base_name, policy_type, bases_, heuristics_, eval_pars_);
-        if( p.first == 0 ) {
-            std::cout << "Warning: unrecognized policy '" << policy_type << ":" << base_name << std::endl;
-        } else {
-            policy_ = p.first;
-            policy_name_ = p.second;
-            //std::cout << "template_wumpus_api_t::policy=" << policy_name_ << std::endl;
-        }
+    virtual void select_policy(const std::string &request) {
+        dispatcher_.create_request(*problem_, "policy", request);
+        Online::Policy::policy_t<T> *p = dispatcher_.fetch_policy(request);
+        if( p != 0 ) current_policy_ = p;
     }
 
     virtual void prepare_new_trial(int heading, bool diagonal = false) {
@@ -147,7 +116,7 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
     }
 
     virtual int select_action() const {
-        Problem::action_t action = (*policy_)(*state_);
+        Problem::action_t action = (*current_policy_)(*state_);
         assert(action != Problem::noop);
         assert(state_->applicable(action));
         //std::cout << "pos=(" << (state_->position() % ncols_) << ","
@@ -174,6 +143,10 @@ template<typename T> struct template_wumpus_api_t : public abstract_api_t {
     virtual void print(std::ostream &os) const {
         //os << *state_;
         //os << "heuristic=" << heuristic_->value(*state_) << std::endl;
+    }
+
+    virtual std::string current_policy() const {
+        return current_policy_ == 0 ? std::string("no-such-policy") : current_policy_->name();
     }
 
     // exact inference

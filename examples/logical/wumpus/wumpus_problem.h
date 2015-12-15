@@ -21,6 +21,7 @@
 
 #include "wumpus_state.h"
 
+#include <dispatcher.h>
 #include <problem.h>
 #include <heuristic.h>
 #include <policy.h>
@@ -91,6 +92,10 @@ template<typename T> class template_problem_t : public Problem::problem_t<T> {
     virtual float cost(const T &s, Problem::action_t a) const {
         return (a == ActionExit) && !s.have_gold() ? 1e4 : 1;
     }
+
+    virtual float max_absolute_cost() const { return 1e4; }
+    virtual int max_action_branching() const { return 2; }
+    virtual int max_state_branching() const { return 105; }
 
     virtual void next(const T &s, Problem::action_t a, std::vector<std::pair<T, float> > &outcomes) const {
 

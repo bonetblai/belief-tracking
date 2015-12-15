@@ -2,6 +2,14 @@
 #include "WumpusAgentProxy.h"
 #include <wumpus/wumpus_api.h>
 
+namespace Algorithm {
+    unsigned g_seed = 0;
+};
+
+namespace Online {
+    unsigned g_seed = 0;
+};
+
 using namespace std;
 
 static Wumpus::abstract_api_t *wumpus_agent = 0;
@@ -41,11 +49,13 @@ JNIEXPORT void JNICALL Java_WumpusAgentProxy_init_1cpp_1side
     }
 
     if( wumpus_agent->is_moving() ) {
-        wumpus_agent->set_policy_parameters(50, 25, .5, 5);
-        wumpus_agent->select_policy("shortest_distance_to_unvisited_cell_heuristic", "aot/heuristic");
+        //wumpus_agent->set_policy_parameters(50, 25, .5, 5);
+        //wumpus_agent->select_policy("shortest_distance_to_unvisited_cell_heuristic", "aot/heuristic");
+        wumpus_agent->select_policy("aot(width=50,horizon=5,probability=.5,expansions-per-iteration=5,heuristic=shortest-distance-to-unvisited-cell())");
     } else {
-        wumpus_agent->select_policy("greedy_wrt_sduv-heuristic", "direct");
+        wumpus_agent->select_policy("greedy(heuristic=shortest-distance-to-unvisted-cell(),optimistic=false,random-ties=false,caching=false)");
     }
+    std::cout << "using: policy=" << wumpus_agent->current_policy() << std::endl;
 }
 
 JNIEXPORT void JNICALL Java_WumpusAgentProxy_set_1policy_1parameters

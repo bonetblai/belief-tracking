@@ -169,19 +169,30 @@ template<typename T> class wumpus_distances_t {
 };
 
 template<typename T> struct shortest_distance_to_unvisited_cell_t : public Heuristic::heuristic_t<T> {
-    const template_problem_t<T> &problem_;
+  using Heuristic::heuristic_t<T>::problem_;
+  protected:
+    int ncells_;
     bool nesw_movements_;
     wumpus_distances_t<T> distances_;
     mutable std::vector<bool> visited_cells_;
-    int ncells_;
 
   public:
     shortest_distance_to_unvisited_cell_t(const template_problem_t<T> &problem, bool nesw_movements)
-      : problem_(problem), nesw_movements_(nesw_movements),
-        distances_(problem_.nrows(), problem_.ncols(), nesw_movements) {
-        ncells_ = problem_.nrows() * problem_.ncols();
+      : Heuristic::heuristic_t<T>(problem),
+        ncells_(0),
+        nesw_movements_(nesw_movements),
+        distances_(problem.nrows(), problem.ncols(), nesw_movements) {
+        ncells_ = problem.nrows() * problem.ncols();
     }
     virtual ~shortest_distance_to_unvisited_cell_t() { }
+    virtual Heuristic::heuristic_t<T>* clone() const {
+        return new shortest_distance_to_unvisited_cell_t<T>(*static_cast<const template_problem_t<T>*>(&problem_), nesw_movements_);
+    }
+    virtual std::string name() const {
+        return std::string("shortest-distance-to-unvisited-cell(") +
+            (nesw_movements_ ? std::string("nesw-movements=true") : std::string("")) +
+            ")";
+    }
 
     void prepare_new_trial() const {
         visited_cells_ = std::vector<bool>(ncells_, false);
@@ -223,6 +234,7 @@ template<typename T> struct shortest_distance_to_unvisited_cell_t : public Heuri
     virtual float eval_time() const { return 0; }
     virtual size_t size() const { return 0; }
     virtual void dump(std::ostream &os) const { }
+    virtual void set_parameters(const std::multimap<std::string, std::string> &parameters, Dispatcher::dispatcher_t<T> &dispatcher) { }
     float operator()(const T &s) const { return value(s); }
 };
 
