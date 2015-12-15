@@ -25,6 +25,14 @@
 
 #include "battleship_api.h"
 
+namespace Algorithm {
+    unsigned g_seed = 0;
+};
+
+namespace Online {
+    unsigned g_seed = 0;
+};
+
 using namespace std;
 
 struct cell_t {
@@ -371,19 +379,15 @@ void usage(ostream &os) {
        << "                  [{-v | --verbose}]" << endl
        << "                  [{-S | --store-fields}]" << endl
        << "                  [{-p | --policy} <policy>]" << endl
-       << "                  [{-w | --width} <width>]" << endl
-       << "                  [{-d | --depth} <depth>]" << endl
        << "                  [{-? | --help}]" << endl
        << endl
-       << "where <ntrials> is a non-negative integer telling the number of games to" << endl
-       << "play (default is 1), <nrows> and <ncols> are positive integers telling" << endl
-       << "the dimensions of the battlefield (default is 10x10), <inventory> is a" << endl
-       << "string telling the number and size of ships to be randomly located in the" << endl
-       << "battlefield (default is \"2:1,3:1,4:1,5:1\"), <seed> is an integer for" << endl
-       << "setting the seed of the random number generator (default is 0), <policy>" << endl
-       << "is a string describing the policy to use (default is \"base-policy:direct\")," << endl
-       << "and <width> and <depth> are parameters for the policy (the default policy" << endl
-       << "is parameter-free)." << endl
+       << "where <ntrials> is a non-negative integer tells the number of games to" << endl
+       << "play (default is 1), <nrows> and <ncols> are positive integers tell the" << endl
+       << "dimensions of the battlefield (default is 10x10), <inventory> is a string" << endl
+       << "that tells the number and size of ships to be randomly located in the" << endl
+       << "battlefield (default is \"2:1,3:1,4:1,5:1\"), <seed> tells the seed for the" << endl
+       << "random number generator (default is 0), and <policy> is a string describing"  << endl
+       << "the policy to use," << endl
        << endl
        << "For example," << endl
        << endl
@@ -403,69 +407,49 @@ int main(int argc, const char **argv) {
     int ntrials = 1;
     int nrows = 10;
     int ncols = 10;
-    int seed = 0;
     bool verbose = false;
     bool store_fields = false;
-
-    string policy = "base-policy:direct";
-    int width = 100;
-    int depth = 10;
-
+    string policy = "no-such-policy";
     bool allow_adjacent_ships = false;
     char *inventory_str = strdup("2:1,3:1,4:1,5:1");
     vector<int> ship_inventory;
 
-    --argc;
-    ++argv;
-    while( (argc > 0) && (**argv == '-') ) {
-        if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
-            ntrials = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-r") || !strcmp(argv[0], "--nrows") ) {
-            nrows = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-c") || !strcmp(argv[0], "--ncols") ) {
-            ncols = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-i") || !strcmp(argv[0], "--inventory") ) {
+    // parse arguments
+    for( ++argv, --argc; (argc > 1) && (**argv == '-'); ++argv, --argc ) {
+        if( ((*argv)[1] == 't') || (string(*argv) == "--ntrials") ) {
+            ntrials = strtol(argv[1], 0, 0);
+            ++argv;
+            --argc;
+        } else if( ((*argv)[1] == 'r') || (string(*argv) == "--nrows") ) {
+            nrows = strtol(argv[1], 0, 0);
+            ++argv;
+            --argc;
+        } else if( ((*argv)[1] == 'c') || (string(*argv) == "--ncols") ) {
+            ncols = strtol(argv[1], 0, 0);
+            ++argv;
+            --argc;
+        } else if( ((*argv)[1] == 'i') || (string(*argv) == "--inventory") ) {
             free(inventory_str);
             inventory_str = strdup(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
-            seed = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
+            ++argv;
+            --argc;
+        } else if( ((*argv)[1] == 's') || (string(*argv) == "--seed") ) {
+            Online::g_seed = strtoul(argv[1], 0, 0);
+            ++argv;
+            --argc;
+        } else if( ((*argv)[1] == 'v') || (string(*argv) == "--verbose") ) {
             verbose = true;
-            --argc;
-            ++argv;
-        } else if( !strcmp(argv[0], "-S") || !strcmp(argv[0], "--store-fields") ) {
+        } else if( ((*argv)[1] == 'S') || (string(*argv) == "--store-fields") ) {
             store_fields = true;
-            --argc;
-            ++argv;
-        } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
+        } else if( ((*argv)[1] == 'p') || (string(*argv) == "--policy") ) {
             policy = argv[1];
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-w") || !strcmp(argv[0], "--width") ) {
-            width = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-d") || !strcmp(argv[0], "--depth") ) {
-            depth = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
+            ++argv;
+            --argc;
+        } else if( ((*argv)[1] == '?') || (string(*argv) == "--help") ) {
             usage(cout);
             exit(-1);
         } else {
             cout << "error: unexpected argument: " << argv[0] << endl;
-            --argc;
-            ++argv;
         }
     }
 
@@ -488,9 +472,8 @@ int main(int argc, const char **argv) {
     }
 
     // set seed
-    unsigned short seeds[3];
-    seeds[0] = seeds[1] = seeds[2] = seed;
-    seed48(seeds);
+    cout << "main: seed= " << Online::g_seed << endl;
+    Random::set_seed(Online::g_seed);
 
     // create empty battleship field
     vector<field_t*> fields;
@@ -507,27 +490,15 @@ int main(int argc, const char **argv) {
     }
 
     // create player
-    Battleship::api_t player(nrows, ncols, &ship_inventory[0], max_ship_size, true, allow_adjacent_ships, false);
-
-    // select policy and parameters
-    unsigned pos = policy.find(":");
-    string policy_arg1 = policy.substr(0, pos);
-    string policy_arg2 = policy.substr(pos + 1);
-
-    if( policy_arg2.find("aot") != string::npos ) {
-        player.set_policy_parameters(width, depth, 0.5, 1);
-    } else if( policy_arg2.find("uct") != string::npos ) {
-        player.set_policy_parameters(width, depth, 0, 0);
-    } else {
-        player.set_policy_parameters(width, depth, 1, 0);
-    }
-    player.select_policy(policy_arg1, policy_arg2);
+    Battleship::api_t player(nrows, ncols, &ship_inventory[0], max_ship_size, true, allow_adjacent_ships);
+    if( policy != "no-such-policy" ) player.select_policy(policy);
+    cout << "using: policy=" << player.current_policy()->name() << endl;
 
     // run for the specified number of trials
     int max_steps = nrows * ncols;
     int total_torpedos = 0;
     for( int trial = 0; trial < ntrials; ++trial ) {
-        cout << "TRIAL " << trial << ": " << flush;
+        cout << "trial: t=" << trial << ": " << flush;
         if( verbose ) cout << endl;
 
         // get field

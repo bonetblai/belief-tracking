@@ -22,6 +22,7 @@
 #include "battleship_wrapper_belief.h"
 
 #include <problem.h>
+#include <dispatcher.h>
 #include <policy.h>
 #include <heuristic.h>
 
@@ -73,6 +74,10 @@ class problem_t : public Problem::problem_t<wrapper_belief_t> {
         return 1;
     }
 
+    virtual float max_absolute_cost() const { return 1; }
+    virtual int max_action_branching() const { return nrows_ * ncols_; }
+    virtual int max_state_branching() const { return 2; }
+
     virtual void next(const wrapper_belief_t &s, Problem::action_t a,
                       std::vector<std::pair<wrapper_belief_t, float> > &outcomes) const {
 
@@ -110,28 +115,48 @@ class problem_t : public Problem::problem_t<wrapper_belief_t> {
 
 class base_policy_t : public Online::Policy::policy_t<wrapper_belief_t> {
   protected:
-    bool random_policy_;
+    bool random_;
 
   public:
-    base_policy_t(const Problem::problem_t<wrapper_belief_t> &problem, bool random_policy = false)
-      : Online::Policy::policy_t<wrapper_belief_t>(problem), random_policy_(random_policy) { }
+    base_policy_t(const Problem::problem_t<wrapper_belief_t> &problem, bool random = false)
+      : Online::Policy::policy_t<wrapper_belief_t>(problem), random_(random) { }
     virtual ~base_policy_t() { }
+    virtual Online::Policy::policy_t<wrapper_belief_t>* clone() const {
+        return new base_policy_t(Online::Policy::policy_t<wrapper_belief_t>::problem(), random_);
+    }
+    virtual std::string name() const {
+        return std::string("base-policy(") +
+          (random_ ? std::string("random=true") : std::string("")) +
+          ")";
+    }
 
     virtual Problem::action_t operator()(const wrapper_belief_t &s) const {
-        return s.select_action(random_policy_);
-    }
-    virtual const Online::Policy::policy_t<wrapper_belief_t>* clone() const {
-        return new base_policy_t(Online::Policy::policy_t<wrapper_belief_t>::problem(), random_policy_);
+        return s.select_action(random_);
     }
     virtual void print_stats(std::ostream &os) const { }
+    virtual void set_parameters(const std::multimap<std::string, std::string> &parameters, Dispatcher::dispatcher_t<wrapper_belief_t> &dispatcher) {
+        std::multimap<std::string, std::string>::const_iterator it = parameters.find("random");
+        if( it != parameters.end() )
+            random_ = it->second == "true";
+    }
 };
 
 class admissible_heuristic_t : public Heuristic::heuristic_t<wrapper_belief_t> {
     int num_ship_segments_;
   public:
-    admissible_heuristic_t(int num_ship_segments)
-      : num_ship_segments_(num_ship_segments) { }
+    admissible_heuristic_t(const Problem::problem_t<wrapper_belief_t> &problem, int num_ship_segments)
+      : Heuristic::heuristic_t<wrapper_belief_t>(problem),
+        num_ship_segments_(num_ship_segments) {
+    }
     virtual ~admissible_heuristic_t() { }
+    virtual Heuristic::heuristic_t<wrapper_belief_t>* clone() const {
+        return new admissible_heuristic_t(Heuristic::heuristic_t<wrapper_belief_t>::problem_, num_ship_segments_);
+    }
+    virtual std::string name() const {
+        return std::string("admissible-heuristic(") +
+          std::string("num-ship-segments=") + std::to_string(num_ship_segments_) +
+          ")";
+    }
     virtual float value(const wrapper_belief_t &s) const {
         return num_ship_segments_ - s.num_hit_segments();
     }
@@ -140,19 +165,40 @@ class admissible_heuristic_t : public Heuristic::heuristic_t<wrapper_belief_t> {
     virtual float eval_time() const { return 0; }
     virtual size_t size() const { return 0; }
     virtual void dump(std::ostream &os) const { }
+    virtual void set_parameters(const std::multimap<std::string, std::string> &parameters, Dispatcher::dispatcher_t<wrapper_belief_t> &dispatcher) {
+        std::multimap<std::string, std::string>::const_iterator it = parameters.find("num-ship-segments");
+        if( it != parameters.end() )
+            num_ship_segments_ = strtol(it->second.c_str(), 0, 0);
+    }
 };
 
 class heuristic_t : public Heuristic::heuristic_t<wrapper_belief_t> {
+    int num_ship_segments_;
     int trials_;
     int ncells_;
-    int num_ship_segments_;
     float *values_;
   public:
-    heuristic_t(int trials, int ncells, int num_ship_segments)
-      : trials_(trials), ncells_(ncells), num_ship_segments_(num_ship_segments) {
-        compute_table();
+    heuristic_t(const Problem::problem_t<wrapper_belief_t> &problem, int num_ship_segments, int trials, int ncells, const float *values = 0)
+      : Heuristic::heuristic_t<wrapper_belief_t>(problem),
+        num_ship_segments_(num_ship_segments), trials_(trials), ncells_(ncells), values_(0) {
+        if( values == 0 ) {
+            compute_table();
+        } else {
+            values_ = new float[ncells_ * ncells_];
+            memcpy(values_, values, ncells_ * ncells_ * sizeof(float));
+        }
     }
     virtual ~heuristic_t() { }
+    virtual Heuristic::heuristic_t<wrapper_belief_t>* clone() const {
+        return new heuristic_t(Heuristic::heuristic_t<wrapper_belief_t>::problem_, num_ship_segments_, trials_, ncells_, values_);
+    }
+    virtual std::string name() const {
+        return std::string("heuristic(") +
+          std::string("num_ship_segments=") + std::to_string(num_ship_segments_) +
+          std::string(",trials=") + std::to_string(trials_) +
+          std::string(",ncells=") + std::to_string(ncells_) +
+          ")";
+    }
     virtual float value(const wrapper_belief_t &s) const {
         int n = s.num_covered_cells();
         int m = num_ship_segments_ - s.num_hit_segments();
@@ -164,9 +210,23 @@ class heuristic_t : public Heuristic::heuristic_t<wrapper_belief_t> {
     virtual float eval_time() const { return 0; }
     virtual size_t size() const { return 0; }
     virtual void dump(std::ostream &os) const { }
+    virtual void set_parameters(const std::multimap<std::string, std::string> &parameters, Dispatcher::dispatcher_t<wrapper_belief_t> &dispatcher) {
+        std::multimap<std::string, std::string>::const_iterator it = parameters.find("num-ship-segments");
+        if( it != parameters.end() )
+            num_ship_segments_ = strtol(it->second.c_str(), 0, 0);
+        it = parameters.find("trials");
+        if( it != parameters.end() )
+            trials_ = strtol(it->second.c_str(), 0, 0);
+        it = parameters.find("ncells");
+        if( it != parameters.end() ) {
+            ncells_ = strtol(it->second.c_str(), 0, 0);
+            compute_table();
+        }
+    }
 
     void compute_table() {
         std::cout << "computing table for heuristic values... " << std::flush;
+        delete values_;
         values_ = new float[ncells_ * ncells_];
         char *array = new char[ncells_];
         for( int n = ncells_; n > 0; --n ) {
@@ -207,7 +267,6 @@ inline std::ostream& operator<<(std::ostream &os, const Battleship::problem_t &p
     p.print(os);
     return os;
 }
-
 
 #endif
 

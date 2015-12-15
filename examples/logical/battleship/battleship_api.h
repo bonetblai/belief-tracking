@@ -45,7 +45,6 @@ class api_t {
 
     bool simple_observations_;
     bool allow_adjacent_ships_;
-    bool random_play_;
 
     mutable std::vector<bool> fired_torpedos_;
     mutable int last_selected_action_;
@@ -54,22 +53,16 @@ class api_t {
     problem_t *problem_;
     wrapper_belief_t *belief_;
 
-    std::string policy_name_;
-    const Online::Policy::policy_t<wrapper_belief_t> *policy_;
-
-    std::vector<std::pair<const Online::Policy::policy_t<wrapper_belief_t>*, std::string> > bases_;
-    std::vector<std::pair<const Heuristic::heuristic_t<wrapper_belief_t>*, std::string> > heuristics_;
-
-    Online::Evaluation::parameters_t eval_pars_;
+    const Online::Policy::policy_t<wrapper_belief_t> *current_policy_;
+    Dispatcher::dispatcher_t<wrapper_belief_t> dispatcher_;
 
   public:
-    api_t(int nrows, int ncols, const int *ship_inventory, int max_ship_size, bool simple_observations = false, bool allow_adjacent_ships = true, bool random_play = false)
+    api_t(int nrows, int ncols, const int *ship_inventory, int max_ship_size, bool simple_observations = false, bool allow_adjacent_ships = true)
       : nrows_(nrows), ncols_(ncols),
         ship_inventory_(ship_inventory),
         max_ship_size_(max_ship_size),
         simple_observations_(simple_observations),
-        allow_adjacent_ships_(allow_adjacent_ships),
-        random_play_(random_play) {
+        allow_adjacent_ships_(allow_adjacent_ships) {
 
         num_ship_segments_ = 0;
         for( int d = 1; d <= max_ship_size_; ++d )
@@ -84,46 +77,35 @@ class api_t {
 
         problem_ = new problem_t(nrows_, ncols_, num_ship_segments_);
         belief_ = new wrapper_belief_t();
-        policy_ = 0;
+        current_policy_ = 0;
 
         // construct heuristic
-        admissible_heuristic_t *h = new admissible_heuristic_t(num_ship_segments_);
-        heuristics_.push_back(std::make_pair(h, "admissible_heuristic"));
-        //heuristic_ = new heuristic_t(1000, nrows_ * ncols_, num_ship_segments_);
+        admissible_heuristic_t *h1 = new admissible_heuristic_t(*problem_, num_ship_segments_);
+        dispatcher_.insert_heuristic(h1->name(), h1);
+        heuristic_t *h2 = new heuristic_t(*problem_, 1000, nrows_ * ncols_, num_ship_segments_);
+        dispatcher_.insert_heuristic(h2->name(), h2);
 
         // set base policies and default policy
-        base_policy_t base(*problem_);
-        bases_.push_back(std::make_pair(base.clone(), "base-policy"));
-        base_policy_t random_base(*problem_, true);
-        bases_.push_back(std::make_pair(random_base.clone(), "random-base-policy"));
-        Online::Policy::random_greedy_t<wrapper_belief_t> greedy(*problem_, *h);
-        bases_.push_back(std::make_pair(greedy.clone(), "random-greedy-policy"));
+        base_policy_t *p1 = new base_policy_t(*problem_);
+        dispatcher_.insert_policy(p1->name(), p1);
+        base_policy_t *p2 = new base_policy_t(*problem_, true);
+        Online::Policy::random_greedy_t<wrapper_belief_t> *p3 = new Online::Policy::random_greedy_t<wrapper_belief_t>(*problem_, *h1, true);
+        dispatcher_.insert_policy(p3->name(), p3);
+        current_policy_ = p3;
     }
     virtual ~api_t() {
-        delete policy_;
-        for( size_t i = 0; i < bases_.size(); ++i )
-            delete bases_[i].first;
-        for( size_t i = 0; i < heuristics_.size(); ++i )
-            delete heuristics_[i].first;
         delete belief_;
         delete problem_;
         wrapper_belief_t::finalize();
     }
 
-    void select_policy(const std::string &base_name, const std::string &policy_type) {
-        delete policy_;
-        std::pair<const Online::Policy::policy_t<wrapper_belief_t>*, std::string> p =
-          Online::Evaluation::select_policy(*problem_, base_name, policy_type, bases_, heuristics_, eval_pars_);
-        policy_ = p.first;
-        policy_name_ = p.second;
-        std::cout << "api_t: policy=\"" << policy_name_ << "\" selected!" << std::endl;
+    void select_policy(const std::string &request) {
+        dispatcher_.create_request(*problem_, "policy", request);
+        Online::Policy::policy_t<wrapper_belief_t> *p = dispatcher_.fetch_policy(request);
+        if( p != 0 ) current_policy_ = p;
     }
-
-    void set_policy_parameters(int width, int depth, float par1, float par2) {
-        eval_pars_.width_ = width;
-        eval_pars_.depth_ = depth;
-        eval_pars_.par1_ = par1;
-        eval_pars_.par2_ = par2;
+    const Online::Policy::policy_t<wrapper_belief_t>* current_policy() const {
+        return current_policy_;
     }
 
     void prepare_new_trial() {
@@ -131,7 +113,7 @@ class api_t {
         fired_torpedos_ = std::vector<bool>(nrows_ * ncols_, false);
     }
     int select_action() const {
-        last_selected_action_ = (*policy_)(*belief_);
+        last_selected_action_ = (*current_policy_)(*belief_);
         assert(belief_->applicable(last_selected_action_));
         return last_selected_action_;
     }
