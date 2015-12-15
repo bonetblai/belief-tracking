@@ -45,8 +45,11 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
     typedef typename PF_t<PTYPE, BASE>::particle_t particle_t;
 
-    SIS_t(const std::string &name, const BASE &base, int nparticles)
-      : PF_t<PTYPE, BASE>(name, base, nparticles) {
+    SIS_t(const std::string &name, const BASE &base, const std::multimap<std::string, std::string> &parameters)
+      : PF_t<PTYPE, BASE>(name, base) {
+        std::multimap<std::string, std::string>::const_iterator it = parameters.find("nparticles");
+        if( it != parameters.end() )
+            PF_t<PTYPE, BASE>::set_nparticles(strtol(it->second.c_str(), 0, 0));
     }
     virtual ~SIS_t() { /* who deletes particles? */ }
 

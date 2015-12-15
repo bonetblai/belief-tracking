@@ -102,10 +102,17 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     static std::vector<std::vector<int> > mpi_fixed_budget_;
 #endif
 
-    SIR_t(const std::string &name, const BASE &base, int nparticles, bool force_resampling, bool do_stochastic_universal_sampling)
-      : PF_t<PTYPE, BASE>(name, base, nparticles),
-        force_resampling_(force_resampling),
-        do_stochastic_universal_sampling_(do_stochastic_universal_sampling) {
+    SIR_t(const std::string &name, const BASE &base, const std::multimap<std::string, std::string> &parameters)
+      : PF_t<PTYPE, BASE>(name, base), force_resampling_(false), do_stochastic_universal_sampling_(false) {
+        std::multimap<std::string, std::string>::const_iterator it = parameters.find("nparticles");
+        if( it != parameters.end() )
+            PF_t<PTYPE, BASE>::set_nparticles(strtol(it->second.c_str(), 0, 0));
+        it = parameters.find("force-resampling");
+        if( it != parameters.end() )
+            force_resampling_ = it->second == "true";
+        it = parameters.find("sus");
+        if( it != parameters.end() )
+            do_stochastic_universal_sampling_ = it->second == "true";
     }
     virtual ~SIR_t() { /* who deletes particles? */ }
 

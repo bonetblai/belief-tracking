@@ -39,8 +39,8 @@ template <typename PTYPE, typename BASE, typename CDF> struct optimal_SIR_t : pu
 
     const CDF &cdf_;
 
-    optimal_SIR_t(const std::string &name, const BASE &base, const CDF &cdf, int nparticles, bool do_resampling, bool do_stochastic_universal_sampling)
-      : SIR_t<PTYPE, BASE>(name, base, nparticles, do_resampling, do_stochastic_universal_sampling), cdf_(cdf) {
+    optimal_SIR_t(const std::string &name, const BASE &base, const std::multimap<std::string, std::string> &parameters, const CDF &cdf)
+      : SIR_t<PTYPE, BASE>(name, base, parameters), cdf_(cdf) {
     }
     virtual ~optimal_SIR_t() { }
 

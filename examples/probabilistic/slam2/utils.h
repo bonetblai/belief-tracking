@@ -20,9 +20,14 @@
 #define UTILS_H
 
 #include <cassert>
+#include <iostream>
+#include <map>
 #include <math.h>
+
 #include <sys/resource.h>
 #include <sys/time.h>
+
+//#define DEBUG
 
 namespace Utils {
 
@@ -33,6 +38,88 @@ inline float read_time_in_seconds() {
     getrusage(RUSAGE_CHILDREN, &r_usage);
     time += (float)r_usage.ru_utime.tv_sec + (float)r_usage.ru_utime.tv_usec / (float)1000000;
     return time;
+}
+
+template<typename T> inline T min(const T a, const T b) {
+    return a <= b ? a : b;
+}
+
+template<typename T> inline T max(const T a, const T b) {
+    return a >= b ? a : b;
+}
+
+template<typename T> inline T abs(const T a) {
+    return a < 0 ? -a : a;
+}
+
+void split_request(const std::string &request, std::string &name, std::string &parameter_str) {
+#ifdef DEBUG
+    std::cout << "request=|" << request << "|" << std::endl;
+#endif
+    size_t first = request.find_first_of("(");
+    size_t last = request.find_last_of(")");
+    if( (first != std::string::npos) && (last != std::string::npos) ) {
+        name = request.substr(0, first);
+        parameter_str = request.substr(1 + first, last - first - 1);
+    } else {
+        name = request;
+    }
+#ifdef DEBUG
+    std::cout << "name=|" << name << "|, parameters=|" << parameter_str << "|" << std::endl;
+#endif
+}
+
+void tokenize(const std::string &token_str, std::vector<std::string> &tokens, char separator = ',') {
+    for( size_t i = 0; i < token_str.size(); ++i ) {
+        size_t first = i;
+        int nesting_level = 0;
+        while( i < token_str.size() ) {
+            if( (token_str[i] == separator) && (nesting_level == 0) ) {
+                break;
+            } else if( token_str[i] == ')' ) {
+                assert(nesting_level > 0);
+                --nesting_level;
+            } else if( token_str[i] == '(' ) {
+                ++nesting_level;
+            }
+            ++i;
+        }
+        assert(nesting_level == 0);
+        std::string token = token_str.substr(first, i - first);
+        tokens.push_back(token);
+#ifdef DEBUG
+        std::cout << "token=|" << token << "|" << std::endl;
+#endif
+    }
+}
+
+void tokenize(const std::string &parameter_str, std::multimap<std::string, std::string> &parameters, char separator = ',') {
+    for( size_t i = 0; i < parameter_str.size(); ++i ) {
+        size_t first = i;
+        int nesting_level = 0;
+        while( i < parameter_str.size() ) {
+            if( (parameter_str[i] == separator) && (nesting_level == 0) ) {
+                break;
+            } else if( parameter_str[i] == ')' ) {
+                assert(nesting_level > 0);
+                --nesting_level;
+            } else if( parameter_str[i] == '(' ) {
+                ++nesting_level;
+            }
+            ++i;
+        }
+        assert(nesting_level == 0);
+        std::string par = parameter_str.substr(first, i - first);
+        size_t equal = par.find_first_of("=");
+        assert(equal != std::string::npos);
+        std::string key = par.substr(0, equal);
+        std::string value = par.substr(equal + 1);
+        parameters.insert(std::make_pair(key, value));
+#ifdef DEBUG
+        std::cout << "parameter=|" << par << "|" << std::endl;
+        std::cout << "key=|" << key << "|, value=|" << value << "|" << std::endl;
+#endif
+    }
 }
 
 inline int sample_from_distribution(int n, const float *cdf) {
@@ -56,7 +143,7 @@ inline int sample_from_distribution(int n, const float *cdf) {
     int mid = (lower + upper) >> 1;
     float lcdf = mid == 0 ? 0 : cdf[mid - 1];
 
-# if 0
+#ifdef DEBUG
     std::cout << "sample_from_distribution:" << std::endl << "    cdf:";
     float prev = 0;
     for( int i = 0; i < n; ++i ) {
@@ -67,7 +154,7 @@ inline int sample_from_distribution(int n, const float *cdf) {
               << "    p=" << p << std::endl
               << "    initial: lower=" << lower << ", mid=" << mid << ", upper=" << upper << ", lcdf=" << lcdf
               << std::endl;
-# endif
+#endif
 
     while( !(lcdf <= p) || !(p < cdf[mid]) ) {
         assert(lower < upper);
@@ -80,13 +167,15 @@ inline int sample_from_distribution(int n, const float *cdf) {
         }
         mid = (lower + upper) >> 1;
         lcdf = mid == 0 ? 0 : cdf[mid - 1];
-# if 0
+#ifdef DEBUG
         std::cout << "    update: lower=" << lower << ", mid=" << mid << ", upper=" << upper << ", lcdf=" << lcdf
                   << std::endl;
-# endif
+#endif
     }
     assert((lcdf <= p) && (p < cdf[mid]));
-    //std::cout << "    return: mid=" << mid << std::endl;
+#ifdef DEBUG
+    std::cout << "    return: mid=" << mid << std::endl;
+#endif
     return mid;
 #else
     float p = drand48();
@@ -118,7 +207,9 @@ inline void stochastic_universal_sampling(int n, const float *cdf, int k, std::v
     assert(k == int(indices.size()));
 }
 
-};
+}; // end of namespace
+
+#undef DEBUG
 
 #endif
 

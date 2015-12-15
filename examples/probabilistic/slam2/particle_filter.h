@@ -53,7 +53,7 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
     std::vector<int> multiplicity_;
     std::vector<dai::Factor> marginals_on_vars_;
 
-    PF_t(const std::string &name, const BASE &base, int nparticles)
+    PF_t(const std::string &name, const BASE &base, int nparticles = 0)
       : tracking_t<BASE>(name, base), nparticles_(nparticles) {
     }
     virtual ~PF_t() { }
@@ -69,6 +69,10 @@ template <typename PTYPE, typename BASE> struct PF_t : public tracking_t<BASE> {
             p.print(os);
             os << std::endl;
         }
+    }
+
+    void set_nparticles(int nparticles) {
+        nparticles_ = nparticles;
     }
 
     void clear_particles() {

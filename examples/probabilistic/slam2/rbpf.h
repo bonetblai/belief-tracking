@@ -36,8 +36,8 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
     using SIR_t<PTYPE, BASE>::force_resampling_;;
     using SIR_t<PTYPE, BASE>::do_stochastic_universal_sampling_;
 
-    RBPF_t(const std::string &name, const BASE &base, int nparticles, bool do_resampling, bool do_stochastic_universal_sampling)
-      : SIR_t<PTYPE, BASE>(name, base, nparticles, do_resampling, do_stochastic_universal_sampling) {
+    RBPF_t(const std::string &name, const BASE &base, const std::multimap<std::string, std::string> &parameters)
+      : SIR_t<PTYPE, BASE>(name, base, parameters) {
     }
     virtual ~RBPF_t() { }
 
