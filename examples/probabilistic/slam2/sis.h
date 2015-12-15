@@ -48,7 +48,7 @@ template <typename PTYPE, typename BASE> struct SIS_t : public PF_t<PTYPE, BASE>
     SIS_t(const std::string &name, const BASE &base, int nparticles)
       : PF_t<PTYPE, BASE>(name, base, nparticles) {
     }
-    virtual ~SIS_t() { }
+    virtual ~SIS_t() { /* who deletes particles? */ }
 
     virtual void clear() {
         PF_t<PTYPE, BASE>::clear_particles();

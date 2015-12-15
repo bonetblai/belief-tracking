@@ -33,13 +33,10 @@
 #include "generate_plot.h"
 #include "stats.h"
 
-////#include "pcbt.h"
-
 #include "sis.h"
 #include "motion_model_sir.h"
 #include "optimal_sir.h"
 #include "rbpf.h"
-////#include "ppcbt2.h"
 
 #include "slam_particles.h"
 #include "slam2_particles.h"
@@ -383,117 +380,77 @@ int main(int argc, const char **argv) {
         string name = strtok(str, ":");
         char *token = strtok(0, ":");
         tracking_t<cellmap_t> *tracker = 0;
-        if( name == "jt" ) {
-#if 0
-            memory = token != 0 ? atoi(token) : memory;
-            pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
-            pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
-            tracker = pcbt;
-#endif
-        } else if( name == "bp" ) {
-#if 0
-            memory = token != 0 ? atoi(token) : memory;
-            pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
-            pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
-            tracker = pcbt;
-#endif
-        } else if( name == "hak" ) {
-#if 0
-            memory = token != 0 ? atoi(token) : memory;
-            pcbt_t<cellmap_t> *pcbt = new pcbt_t<cellmap_t>(name + "_" + to_string(memory), cellmap, memory);
-            pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
-            tracker = pcbt;
-#endif
-        } else if( name == "ppcbt_jt" ) {
-#if 0
-            ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 1000);
-            pcbt->set_algorithm_and_options("JT", opts("updates", string("HUGIN")));
-            tracker = pcbt;
-#endif
-        } else if( name == "ppcbt_bp" ) {
-#if 0
-            ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 50);
-            pcbt->set_algorithm_and_options("HAK", opts("doubleloop", true)("clusters", string("MIN"))("init", string("UNIFORM"))("tol", 1e-9)("maxiter", (size_t)10000)("maxtime", double(2)));
-            tracker = pcbt;
-#endif
-        } else if( name == "ppcbt_hak" ) {
-#if 0
-            ppcbt2_t *pcbt = new ppcbt2_t(name + "_" + to_string(memory), cellmap, 50);
-            pcbt->set_algorithm_and_options("BP", opts("updates", string("SEQRND"))("logdomain", false)("tol", 1e-9)("maxiter", (size_t)10000));
-            tracker = pcbt;
-#endif
-        } else {
-            // the tracking algorithm is a particle filter algorithm
-            nparticles = token != 0 ? atoi(token) : nparticles;
-            string full_name = name + "_" + to_string((long long)nparticles);
+
+        // the tracking algorithm is a particle filter algorithm
+        nparticles = token != 0 ? atoi(token) : nparticles;
+        string full_name = name + "_" + to_string((long long)nparticles);
 
 #ifdef USE_MPI
-            // check that we have at least one worker for each particle
-            if( 1 + nparticles > mpi_base_t::mpi_->nworkers_ ) {
-                cout << "MPI: there are not enough workers for tracker '" << tracker_strings[i]
-                     << "' (nworkers=" << mpi_base_t::mpi_->nworkers_ - 1
-                     << "); continuing without this tracker"
-                     << endl;
-                continue;
-            }
+        // check that we have at least one worker for each particle
+        if( 1 + nparticles > mpi_base_t::mpi_->nworkers_ ) {
+            cout << "MPI: there are not enough workers for tracker '" << tracker_strings[i]
+                 << "' (nworkers=" << mpi_base_t::mpi_->nworkers_ - 1
+                 << "); continuing without this tracker"
+                 << endl;
+            continue;
+        }
 #endif
 
-            if( name == "sis" ) {
-                tracker = new SIS_t<sis_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
-            } else if( name == "mm_sir" ) {
-                tracker = new motion_model_SIR_t<motion_model_sir_slam_particle_t,
-                                                 cellmap_t>(full_name,
-                                                            cellmap,
-                                                            nparticles,
-                                                            force_resampling,
-                                                            do_stochastic_universal_sampling);
-            } else if( name == "opt_sir" ) {
-                cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf =
-                  new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
-                tracker = new optimal_SIR_t<optimal_sir_slam_particle_t,
-                                            cellmap_t,
-                                            cdf_for_optimal_sir_t<optimal_sir_slam_particle_t,
-                                                                  cellmap_t> >(full_name,
-                                                                               cellmap,
-                                                                               *cdf,
-                                                                               nparticles,
-                                                                               force_resampling,
-                                                                               do_stochastic_universal_sampling);
-            } else if( name == "mm_rbpf" ) {
-                if( !oreslam ) {
-                    tracker = new RBPF_t<motion_model_rbpf_slam_particle_t,
-                                         cellmap_t>(full_name,
-                                                    cellmap,
-                                                    nparticles,
-                                                    force_resampling,
-                                                    do_stochastic_universal_sampling);
-                } else {
-                    tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t,
-                                         cellmap_t>(full_name,
-                                                    cellmap,
-                                                    nparticles,
-                                                    force_resampling,
-                                                    do_stochastic_universal_sampling);
-                }
-            } else if( name == "opt_rbpf" ) {
-                if( !oreslam ) {
-                    tracker = new RBPF_t<optimal_rbpf_slam_particle_t,
-                                         cellmap_t>(full_name,
-                                                    cellmap,
-                                                    nparticles,
-                                                    force_resampling,
-                                                    do_stochastic_universal_sampling);
-                } else {
-                    tracker = new RBPF_t<optimal_rbpf_slam2_particle_t,
-                                         cellmap_t>(full_name,
-                                                    cellmap,
-                                                    nparticles,
-                                                    force_resampling,
-                                                    do_stochastic_universal_sampling);
-                }
+        if( name == "sis" ) {
+            tracker = new SIS_t<sis_slam_particle_t, cellmap_t>(full_name, cellmap, nparticles);
+        } else if( name == "mm_sir" ) {
+            tracker = new motion_model_SIR_t<motion_model_sir_slam_particle_t,
+                                             cellmap_t>(full_name,
+                                                        cellmap,
+                                                        nparticles,
+                                                        force_resampling,
+                                                        do_stochastic_universal_sampling);
+        } else if( name == "opt_sir" ) {
+            cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf =
+              new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
+            tracker = new optimal_SIR_t<optimal_sir_slam_particle_t,
+                                        cellmap_t,
+                                        cdf_for_optimal_sir_t<optimal_sir_slam_particle_t,
+                                                              cellmap_t> >(full_name,
+                                                                           cellmap,
+                                                                           *cdf,
+                                                                           nparticles,
+                                                                           force_resampling,
+                                                                           do_stochastic_universal_sampling);
+        } else if( name == "mm_rbpf" ) {
+            if( !oreslam ) {
+                tracker = new RBPF_t<motion_model_rbpf_slam_particle_t,
+                                     cellmap_t>(full_name,
+                                                cellmap,
+                                                nparticles,
+                                                force_resampling,
+                                                do_stochastic_universal_sampling);
             } else {
-                cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
+                tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t,
+                                     cellmap_t>(full_name,
+                                                cellmap,
+                                                nparticles,
+                                                force_resampling,
+                                                do_stochastic_universal_sampling);
             }
+        } else if( name == "opt_rbpf" ) {
+            if( !oreslam ) {
+                tracker = new RBPF_t<optimal_rbpf_slam_particle_t,
+                                     cellmap_t>(full_name,
+                                                cellmap,
+                                                nparticles,
+                                                force_resampling,
+                                                do_stochastic_universal_sampling);
+            } else {
+                tracker = new RBPF_t<optimal_rbpf_slam2_particle_t,
+                                     cellmap_t>(full_name,
+                                                cellmap,
+                                                nparticles,
+                                                force_resampling,
+                                                do_stochastic_universal_sampling);
+            }
+        } else {
+            cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
         }
         free(str);
         if( tracker != 0 ) trackers.push_back(tracker);

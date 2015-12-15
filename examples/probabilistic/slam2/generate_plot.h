@@ -26,30 +26,6 @@
 #include "tracking.h"
 #include "cellmap.h"
 
-#if 0
-#include <cassert>
-#include <string>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <set>
-#include <stdlib.h>
-#include <math.h>
-
-#include "slam_action_selection.h"
-
-////#include "pcbt.h"
-
-#include "sis.h"
-#include "motion_model_sir.h"
-#include "optimal_sir.h"
-#include "rbpf.h"
-////#include "ppcbt2.h"
-
-#include "slam_particles.h"
-#include "slam2_particles.h"
-#endif
-
 inline void generate_R_plot_commons() {
     // R libraries
     std::cout << "library(ggplot2)" << std::endl

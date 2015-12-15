@@ -2,7 +2,7 @@ ROOT=			../../../..
 BELIEF_TRACKING_HOME=	$(ROOT)/belief-tracking
 MDP_ENGINE_HOME=	$(ROOT)/mdp-engine
 
-INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
+INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine #-I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
 
 CXX=			c++
 MPICXX=			/usr/lib64/openmpi/bin/mpic++

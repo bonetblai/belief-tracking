@@ -39,7 +39,7 @@
 
 
 // Repositoy of marginals for each time step
-struct repository_t : public std::vector<float*> {
+struct repository_t : public std::vector<const float*> {
     void clear_marginals() {
         while( !empty() ) {
             delete[] back();

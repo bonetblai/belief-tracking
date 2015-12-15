@@ -27,13 +27,13 @@
 
 #include "sir.h"
 
-
 template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BASE> {
     using tracking_t<BASE>::base_;
     using PF_t<PTYPE, BASE>::nparticles_;
     using PF_t<PTYPE, BASE>::particles_;
     using PF_t<PTYPE, BASE>::multiplicity_;
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
+    using SIR_t<PTYPE, BASE>::force_resampling_;;
     using SIR_t<PTYPE, BASE>::do_stochastic_universal_sampling_;
 
     RBPF_t(const std::string &name, const BASE &base, int nparticles, bool do_resampling, bool do_stochastic_universal_sampling)
@@ -79,10 +79,12 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
 
     virtual std::string id() const {
         std::string id_str;
-        id_str = std::string("PF(type=rbpf,ptype=") + PTYPE::type()
-          + ",nparticles=" + std::to_string((long long)nparticles_)
-          //+ ",sus=" + std::to_string(do_stochastic_universal_sampling_)
-          + ")";
+        id_str = std::string("PF(type=rbpf") +
+          std::string(",ptype=") + PTYPE::type() +
+          std::string(",nparticles=") + std::to_string((long long)nparticles_) +
+          std::string(",force-resampling=") + (force_resampling_ ? "true" : "false") +
+          std::string(",sus=") + std::to_string(do_stochastic_universal_sampling_) +
+          ")";
         return id_str;
     }
 };
