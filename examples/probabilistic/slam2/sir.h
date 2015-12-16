@@ -34,6 +34,8 @@
 
 #include "particle_filter.h"
 
+//#define DEBUG
+
 // Histories are used to detect duplicate particles and correctly
 // compute particle multiplicities. History is the value history
 // for the tracked variables
@@ -377,13 +379,16 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     virtual std::string id() const {
         std::string id_str;
         id_str = std::string("PF(type=SIR") +
+          std::string(",ptype=") + PTYPE::type() +
           std::string(",nparticles=") + std::to_string((long long)nparticles_) +
           std::string(",force-resampling=") + (force_resampling_ ? "true" : "false") +
-          std::string(",sus=") + std::to_string(do_stochastic_universal_sampling_) +
+          std::string(",sus=") + (do_stochastic_universal_sampling_ ? "true" : "false") +
           ")";
         return id_str;
     }
 };
+
+#undef DEBUG
 
 #endif
 

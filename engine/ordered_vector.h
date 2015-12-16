@@ -214,10 +214,7 @@ class ordered_vector_t {
     }
 
     bool operator==(const ordered_vector_t &vec) const {
-        if( size_ != vec.size_ )
-            return false;
-        else
-            return memcmp(vector_, vec.vector_, size_ * sizeof(int)) == 0;
+        return (size_ == vec.size_) && (memcmp(vector_, vec.vector_, size_ * sizeof(int)) == 0);
     }
     bool operator!=(const ordered_vector_t &vec) const {
         return *this == vec ? false : true;

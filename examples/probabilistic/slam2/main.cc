@@ -178,7 +178,7 @@ int main(int argc, const char **argv) {
     float pa = 0.9; // default value in K. P. Murphy's paper
     float po = 0.8; // default value in K. P. Murphy's paper
 
-    bool oreslam = false;
+    bool ore_slam = false;
     int gtype = -1;
     int ptype = 0;
     int num_covering_loops = 10;
@@ -188,8 +188,6 @@ int main(int argc, const char **argv) {
     float epsilon = .001;
     float discount = .95;
 
-    bool force_resampling = false;
-    bool do_stochastic_universal_sampling = false;
     bool R_plot = false;
 
     // inference algorithm
@@ -234,57 +232,55 @@ int main(int argc, const char **argv) {
 #endif
 
     // parse arguments
-    --argc;
-    ++argv;
-    while( (argc > 0) && (**argv == '-') ) {
+    for( --argc, ++argv; (argc > 0) && (**argv == '-'); --argc, ++argv ) {
         if( !strcmp(argv[0], "-i") || !strcmp(argv[0], "--inference") ) {
             inference_algorithm = argv[1];
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "--tmp-path") ) {
             tmp_path = argv[1];
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "-g") || !strcmp(argv[0], "--gtype") ) {
             gtype = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "-c") || !strcmp(argv[0], "--ncols") ) {
             ncols = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "-l") || !strcmp(argv[0], "--nlabels") ) {
             nlabels = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "-r") || !strcmp(argv[0], "--nrows") ) {
             nrows = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "-n") || !strcmp(argv[0], "--nsteps") ) {
             nsteps = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
             ntrials = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "--pa") ) {
             pa = strtod(argv[1], 0);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "--po") ) {
             po = strtod(argv[1], 0);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "--map-epsilon") ) {
             map_epsilon = strtod(argv[1], 0);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "--map-threshold") ) {
             map_threshold = strtod(argv[1], 0);
-            argc -= 2;
-            argv += 2;
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "-p") || !strcmp(argv[0], "--policy") ) {
             ptype = atoi(argv[1]);
             int n = atoi(argv[2]);
@@ -295,44 +291,26 @@ int main(int argc, const char **argv) {
             } else if( ptype == 3 ) {
                 nsteps = n;
             }
-            argc -= 3;
-            argv += 3;
-        } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
-            seed = atoi(argv[1]);
             argc -= 2;
             argv += 2;
-        } else if( !strcmp(argv[0], "--fr") || !strcmp(argv[0], "--force-resampling") ) {
-            force_resampling = true;
-            --argc;
-            ++argv;
-        } else if( !strcmp(argv[0], "--sus") || !strcmp(argv[0], "--stochastic-universal-sampling") ) {
-            do_stochastic_universal_sampling = true;
+        } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
+            seed = atoi(argv[1]);
             --argc;
             ++argv;
         } else if( !strcmp(argv[0], "--ore-slam") ) {
-            oreslam = true;
-            --argc;
-            ++argv;
+            ore_slam = true;
         } else if( !strncmp(argv[0], "--tracker=", 10) ) {
             string tracker(&argv[0][10]);
             Utils::tokenize(tracker, tracker_strings);
-            --argc;
-            ++argv;
         } else if( !strcmp(argv[0], "--plot") || !strcmp(argv[0], "--generate-plot-R") ) {
             R_plot = true;
-            --argc;
-            ++argv;
         } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
             verbose = true;
-            --argc;
-            ++argv;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
             usage(cerr);
             exit(-1);
         } else {
             cerr << "error: unexpected argument: " << argv[0] << endl;
-            --argc;
-            ++argv;
         }
     }
 
@@ -357,7 +335,7 @@ int main(int argc, const char **argv) {
         pa = 0.8; // CHECK
         po = 0.9; // CHECK
     }
-    cellmap_t cellmap(nrows, ncols, nlabels, oreslam, pa, po);
+    cellmap_t cellmap(nrows, ncols, nlabels, ore_slam, pa, po);
 
     // set static members
     coord_t::ncols_ = ncols;
@@ -374,10 +352,11 @@ int main(int argc, const char **argv) {
     for( size_t i = 0; i < tracker_strings.size(); ++i ) {
         tracking_t<cellmap_t> *tracker = 0;
 
-        string name;
+        const string &name = tracker_strings[i];
+        string short_name;
         string parameter_str;
         multimap<string, string> parameters;
-        Utils::split_request(tracker_strings[i], name, parameter_str);
+        Utils::split_request(name, short_name, parameter_str);
         Utils::tokenize(parameter_str, parameters);
 
         multimap<string, string>::const_iterator it = parameters.find("nparticles");
@@ -397,21 +376,21 @@ int main(int argc, const char **argv) {
         }
 #endif
 
-        if( name == "sis" ) {
+        if( short_name == "sis" ) {
             tracker = new SIS_t<sis_slam_particle_t, cellmap_t>(name, cellmap, parameters);
-        } else if( name == "mm-sir" ) {
+        } else if( short_name == "mm-sir" ) {
             tracker = new motion_model_SIR_t<motion_model_sir_slam_particle_t, cellmap_t>(name, cellmap, parameters);
-        } else if( name == "opt-sir" ) {
+        } else if( short_name == "opt-sir" ) {
             cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> *cdf =
               new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
             tracker = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(name, cellmap, parameters, *cdf);
-        } else if( name == "mm-rbpf" ) {
-            if( !oreslam )
+        } else if( short_name == "mm-rbpf" ) {
+            if( !ore_slam )
                 tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             else
                 tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(name, cellmap, parameters);
-        } else if( name == "opt-rbpf" ) {
-            if( !oreslam )
+        } else if( short_name == "opt-rbpf" ) {
+            if( !ore_slam )
                 tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             else
                 tracker = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(name, cellmap, parameters);

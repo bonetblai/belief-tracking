@@ -76,17 +76,6 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
     virtual float importance_weight(const PTYPE &np, const PTYPE &p, int last_action, int obs) const {
         return p.importance_weight(np, last_action, obs);
     }
-
-    virtual std::string id() const {
-        std::string id_str;
-        id_str = std::string("PF(type=rbpf") +
-          std::string(",ptype=") + PTYPE::type() +
-          std::string(",nparticles=") + std::to_string((long long)nparticles_) +
-          std::string(",force-resampling=") + (force_resampling_ ? "true" : "false") +
-          std::string(",sus=") + std::to_string(do_stochastic_universal_sampling_) +
-          ")";
-        return id_str;
-    }
 };
 
 #endif

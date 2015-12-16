@@ -167,9 +167,7 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
         return true;
     }
 
-    float importance_weight(const motion_model_sir_slam_particle_t &np,
-                            int last_action,
-                            int obs) const {
+    float importance_weight(const motion_model_sir_slam_particle_t &np, int last_action, int obs) const {
         return base_->probability_obs_standard(obs, np.current_loc_, np.labels_, last_action);
     }
 
@@ -244,17 +242,7 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
         }
     }
 
-    float importance_weight(const optimal_sir_slam_particle_t &/*np*/,
-                            int last_action,
-                            int obs) const {
-        // weight = P(obs|np,last_action) * P(np|p,last_action) / pi(np|p,last_action,obs)
-        //        = P(obs|np,last_action) * P(np|p,last_action) / P(np|p,last_action,obs)
-        //        = P(obs|p,last_action) [see above derivation in pi(..)]
-        //        = SUM_{np} P(np,obs|p,last_action)
-        //        = SUM_{np} P(obs|np,p,last_action) * P(np|p,last_action)
-        //        = SUM_{np} P(obs|np,last_action) * P(np|p,last_action)
-        // since P(np|p,last_action) = 0 if p and np have different labels,
-        // we can simplify the sum over locations instead of maps
+    float importance_weight(const optimal_sir_slam_particle_t &, int last_action, int obs) const {
         float weight = 0;
         int loc = current_loc_;
         for( int nloc = 0; nloc < base_->nloc_; ++nloc )
@@ -398,16 +386,11 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         return true;
     }
 
-    virtual float importance_weight(const rbpf_slam_particle_t &np,
-                                    int last_action,
-                                    int obs) const {
-        int current_loc = loc_history_.back();
+    virtual float importance_weight(const rbpf_slam_particle_t &np, int last_action, int obs) const {
         int np_current_loc = np.loc_history_.back();
-
         float weight = 0;
         for( int label = 0; label < base_->nlabels_; ++label )
             weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * probability(np_current_loc, label);
-
         return weight;
     }
 

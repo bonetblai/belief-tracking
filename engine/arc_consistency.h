@@ -101,6 +101,13 @@ template<typename T> class arc_consistency_t {
 
     int nvars() const { return nvars_; }
     const constraint_digraph_t& digraph() const { return digraph_; }
+    bool is_consistent(int var) const { return !domain_[var]->empty(); }
+    bool is_consistent() const {
+        for( int var = 0; var < nvars_; ++var ) {
+            if( !is_consistent(var) ) return false;
+        }
+        return true;
+    }
 
     T* domain(int var) { return domain_[var]; }
     const T* domain(int var) const { return domain_[var]; }
@@ -129,6 +136,7 @@ template<typename T> class arc_consistency_t {
     void add_to_worklist(int seed_var) {
         worklist_.reserve(digraph_.nedges());
         if( seed_var > -1 ) {
+            // add all edges pointing to seed var
             worklist_.insert(worklist_.end(),
                              digraph_.edges_pointing_to(seed_var).begin(),
                              digraph_.edges_pointing_to(seed_var).end());
@@ -148,8 +156,11 @@ template<typename T> class arc_consistency_t {
     // check whether the partial assignment [ var_x = val_x, var_y = val_y ] is
     // consistent with the constraints. The preprocessing and postprocessing 
     // methods are called before and after making the consistency checks
-    // associated with arc var_x -> var_y. By using them, one can safe time in
+    // associated with arc var_x -> var_y. By using them, one can save time in
     // some cases; but they are not strictly needed.
+    //
+    // Pre/post-processing is typically used to set auxiliary variables that
+    // help in calculation of consistent(...).
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const = 0;
     virtual void arc_reduce_preprocessing_0(int var_x, int var_y) = 0;
     virtual void arc_reduce_preprocessing_1(int var_x, int val_x) = 0;

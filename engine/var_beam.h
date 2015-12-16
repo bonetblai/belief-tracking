@@ -16,15 +16,6 @@
  *
  */
 
-
-/*
- * This type of beam contains a number of different variables, each
- * with its own domain size.  This type of beam is used in Battleship
- * and Diagonal Wumpus.
- *
- */
-
-
 #ifndef VAR_BEAM_H
 #define VAR_BEAM_H
 
@@ -33,6 +24,10 @@
 #include <iostream>
 #include <vector>
 
+//#define DEBUG
+
+// This beam type contains a number of different variables, each with
+// its own domain size. 
 class var_beam_t {
     int nvars_;
     int *domsz_;
@@ -47,18 +42,27 @@ class var_beam_t {
             domsz_[var] = domsz;
         calculate_max_particle();
         initial_size_ = 0;
+#ifdef DEBUG
+        std::cout << "var_beam_t: nvars=" << nvars_ << ", max-particle=" << max_particle_ << std::endl;
+#endif
     }
     explicit var_beam_t(const var_beam_t &beam)
       : nvars_(beam.nvars_), domsz_(new int[nvars_]), max_particle_(beam.max_particle_) {
         memcpy(domsz_, beam.domsz_, nvars_ * sizeof(int));
         beam_ = beam.beam_;
         initial_size_ = beam.initial_size_;
+#ifdef DEBUG
+        std::cout << "var_beam_t: copy-constructor: nvars=" << nvars_ << ", max-particle=" << max_particle_ << std::endl;
+#endif
     }
     var_beam_t(var_beam_t &&beam)
       : nvars_(beam.nvars_), domsz_(beam.domsz_),
         max_particle_(beam.max_particle_), initial_size_(beam.initial_size_),
         beam_(std::move(beam.beam_)) {
         beam.domsz_ = 0;
+#ifdef DEBUG
+        std::cout << "var_beam_t: move-constructor: nvars=" << nvars_ << ", max-particle=" << max_particle_ << std::endl;
+#endif
     }
     ~var_beam_t() { delete[] domsz_; }
 
@@ -66,7 +70,9 @@ class var_beam_t {
     int nvars() const { return nvars_; }
     int domsz(int var) const { return domsz_[var]; }
     int max_particle() const { return max_particle_; }
-    void set_domsz(int var, int domsz) { domsz_[var] = domsz; }
+    void set_domsz(int var, int domsz) {
+        domsz_[var] = domsz;
+    }
 
     void set_initial_size(int initial_size) { initial_size_ = initial_size; }
     int initial_size() const { return initial_size_; }
@@ -75,7 +81,6 @@ class var_beam_t {
         max_particle_ = 1;
         for( int var = 0; var < nvars_; ++var )
             max_particle_ *= domsz_[var];
-        //std::cout << "var_beam_t: max-particle=" << max_particle_ << std::endl;
     }
 
     int value(int var, int particle) const {
@@ -130,6 +135,9 @@ class var_beam_t {
         } else {
             beam_.insert(value);
         }
+#ifdef DEBUG
+        std::cout << "var_beam_t: initial_configuration: sz=" << beam_.size() << std::endl;
+#endif
     }
 
     bool operator==(const var_beam_t &beam) const {
@@ -140,8 +148,15 @@ class var_beam_t {
     }
 
     const var_beam_t& operator=(const var_beam_t &beam) {
-        beam_ = beam.beam_;
+        if( nvars_ != beam.nvars_ ) {
+            delete[] domsz_;
+            domsz_ = new int[beam.nvars_];
+            nvars_ = beam.nvars_;
+        }
+        memcpy(domsz_, beam.domsz_, nvars_ * sizeof(int));
+        max_particle_ = beam.max_particle_;
         initial_size_ = beam.initial_size_;
+        beam_ = beam.beam_;
         return *this;
     }
 
@@ -183,6 +198,8 @@ inline std::ostream& operator<<(std::ostream &os, const var_beam_t &beam) {
     beam.print(os);
     return os;
 }
+
+#undef DEBUG
 
 #endif
 

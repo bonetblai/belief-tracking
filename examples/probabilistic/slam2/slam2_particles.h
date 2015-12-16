@@ -285,7 +285,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         dai::Factor &factor = factors_[current_loc];
         for( int value = 0; value < int(factor.nrStates()); ++value ) {
             int slabels = get_slabels(current_loc, factor.vars(), value);
-            factor.set(value, factor[value] * base_->probability_obs_oreslam(obs, current_loc, slabels, last_action));
+            factor.set(value, factor[value] * base_->probability_obs_ore_slam(obs, current_loc, slabels, last_action));
         }
         factor.normalize();
         indices_for_updated_factors_.push_back(current_loc);
@@ -381,19 +381,17 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             np.update_factors(last_action, obs);
             np.calculate_marginals(mpi, wid, false);
         }
-        return true;
+        return true; // CHECK: what happens with incompatible obs?
     }
 
-    virtual float importance_weight(const rbpf_slam2_particle_t &np,
-                                    int last_action,
-                                    int obs) const {
+    virtual float importance_weight(const rbpf_slam2_particle_t &np, int last_action, int obs) const {
         assert(indices_for_updated_factors_.empty());
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
         const dai::Factor &marginal = marginals_[np_current_loc];
         for( int value = 0; value < int(marginal.nrStates()); ++value ) {
             int slabels = get_slabels(np_current_loc, marginal.vars(), value);
-            weight += marginal[value] * base_->probability_obs_oreslam(obs, np_current_loc, slabels, last_action);
+            weight += marginal[value] * base_->probability_obs_ore_slam(obs, np_current_loc, slabels, last_action);
         }
         return weight;
     }
@@ -452,7 +450,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
             float prob = 0;
             for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
                 int slabels = get_slabels(nloc, p_marginal.vars(), value);
-                prob += p_marginal[value] * base_->probability_obs_oreslam(obs, nloc, slabels, last_action);
+                prob += p_marginal[value] * base_->probability_obs_ore_slam(obs, nloc, slabels, last_action);
             }
             cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, nloc) * prob);
             previous = cdf.back();
@@ -485,8 +483,19 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return true; // CHECK: what happens with incompatible obs?
     }
 
-    virtual float importance_weight(const rbpf_slam2_particle_t &, int, int) const {
-        return 1;
+    virtual float importance_weight(const rbpf_slam2_particle_t &, int last_action, int obs) const {
+        float weight = 0;
+        int current_loc = loc_history_.back();
+        for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
+            float p = 0;
+            const dai::Factor &marginal = marginals_[current_loc];
+            for( int value = 0; value < int(marginal.nrStates()); ++value ) {
+                int slabels = get_slabels(current_loc, marginal.vars(), value);
+                p += marginal[value] * base_->probability_obs_ore_slam(obs, nloc, slabels, last_action);
+            }
+            weight += base_->probability_tr_loc(last_action, current_loc, nloc) * p;
+        }
+        return weight;
     }
 
     optimal_rbpf_slam2_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
