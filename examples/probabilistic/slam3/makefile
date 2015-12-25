@@ -9,7 +9,7 @@ MPICXX=			mpic++
 
 CXXEXT=			-std=c++11 -DMACOSX -I ~/software/libdai/include -I /usr/local/include -Wno-deprecated -Wall -W -Wextra -DDAI_DEBUG -L ~/software/libdai/lib -L /usr/local/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter
 
-CFLAGS=			-Wall -g -O0 $(CXXEXT) $(INCLUDES) #-DNDEBUG
+CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) -DNDEBUG
 
 slam:
 			$(CXX) $(CFLAGS) -o slam main.cc -ldai #-lgmpxx -lgmp

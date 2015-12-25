@@ -331,7 +331,9 @@ struct inference_t {
                 assert(nvariables == int(variables.size()));
                 assert(nvariables == int(marginals.size()));
                 for( int vid = 0; vid < nvariables; ++vid ) {
+#ifndef NDEBUG
                     const dai::Var &variable = variables[vid];
+#endif
                     int nstates = 0;
                     ifs >> nstates;
                     assert(nstates == int(variable.states()));

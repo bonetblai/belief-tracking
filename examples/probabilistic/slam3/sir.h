@@ -246,7 +246,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         bool do_resampling = force_resampling_ || (Neff < resampling_threshold);
 
 #ifdef DEBUG
-        std::cout << "# N_eff=" << Neff << ", threshold=" << resampling_threshold << std::endl;
+        std::cout << "# N_eff=" << Neff << ", threshold=" << resampling_threshold << ", do-resampling=" << do_resampling << std::endl;
 #endif
 
         // do resampling
