@@ -116,15 +116,33 @@ class varset_beam_t : public var_beam_t {
         return p;
     }
 
+    using var_beam_t::contains;
+    bool contains(const dai::VarSet &vars, const std::map<dai::Var, size_t> &state) const {
+        for( const_iterator it = begin(); it != end(); ++it ) {
+            std::map<dai::Var, size_t> s = dai::calcState(varset_, *it);
+            bool match = true;
+            for( dai::VarSet::const_iterator jt = vars.begin(); match && (jt != vars.end()); ++jt ) {
+                std::map<dai::Var, size_t>::const_iterator xt = state.find(*jt);
+                std::map<dai::Var, size_t>::const_iterator yt = s.find(*jt);
+                assert(xt != state.end());
+                assert(yt != s.end());
+                match = xt->second == yt->second;
+            }
+            if( match ) return true;
+        }
+        return false;
+    }
+
+#if 0
     int label(const dai::Var &var, int valuation) const {
         std::map<dai::Var, size_t> state;
         state = dai::calcState(varset_, valuation);
         return state[var];
     }
+#endif
 
     void set_alpha() {
         alpha_ = 1.0 / float(size() + (varset_.nrStates() - size()) * kappa_);
-        //std::cout << "set-alpha: #I=" << size() << ", #E=" << varset_.nrStates() - size() << ", kappa=" << kappa_ << ", alpha=" << alpha_ << std::endl;
     }
     void set_initial_configuration() {
         var_beam_t::set_initial_configuration();
@@ -168,9 +186,9 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
         for( int loc = 0; loc < nrows * ncols; ++loc ) {
             cg_.reserve_edge_list(loc, 8);
             int r = loc / ncols, c = loc % ncols;
-            for( int dr = -1; dr < 2; ++dr ) {
+            for( int dr = -2; dr < 3; ++dr ) {
                 if( (r + dr < 0) || (r + dr >= nrows) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
+                for( int dc = -2; dc < 3; ++dc ) {
                     if( (c + dc < 0) || (c + dc >= ncols) ) continue;
                     if( (dr == 0) && (dc == 0) ) continue;
                     int nloc = (r + dr) * ncols + (c + dc);
@@ -200,18 +218,35 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
         }
     }
 
-    void ac3(std::vector<int> &revised_vars, bool propagate = true) {
-        CSP::arc_consistency_t<varset_beam_t>::ac3(revised_vars, propagate);
-        set_alpha();
+    bool ac3(bool propagate = true) {
+        std::vector<int> revised_vars;
+        bool something_removed = CSP::arc_consistency_t<varset_beam_t>::ac3(revised_vars, propagate);
+        set_alpha(revised_vars);
+        return something_removed;
     }
 
-    void set_alpha() {
-        for( int loc = 0; loc < nvars_; ++loc )
-            domain_[loc]->set_alpha();
+    void set_alpha(int loc) { domain_[loc]->set_alpha(); }
+    void set_alpha(const std::vector<int> &revised_vars) {
+        for( int i = 0; i < int(revised_vars.size()); ++i ) {
+            int loc = revised_vars[i];
+            set_alpha(loc);
+        }
     }
 
-    void print_factor(std::ostream &os, int loc) const { }
-    void print(std::ostream &os) const { }
+    void print_factor(std::ostream &os, int loc) const {
+        const varset_beam_t &beam = *domain_[loc];
+        os << "loc=" << loc << ",sz=" << beam.size() << ",domain={";
+        for( varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it )
+            os << it.index() << ":" << *it << ",";
+        os << "}";
+    }
+    void print(std::ostream &os) const {
+        for( int loc = 0; loc < int(domain_.size()); ++loc ) {
+            os << "[";
+            print_factor(os, loc);
+            os << "]" << std::endl;
+        }
+    }
 };
 
 // Abstract Particle for the 2nd Rao-Blackwellised filter
@@ -224,7 +259,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
 
     // arc consistency
     arc_consistency_t csp_;
-    mutable std::vector<int> revised_variables_;
+    std::set<int> affected_beams_;
 
     // cache for conversion  from factor values into slabels (it is dynamically filled by get_slabels())
     static std::vector<std::vector<int> > slabels_;
@@ -348,6 +383,188 @@ struct rbpf_slam3_particle_t : public base_particle_t {
         return slabels;
     }
 
+    void calculate_pairs(varset_beam_t &beam, std::set<std::pair<int, int> > &pairs) const {
+        pairs.clear();
+        for( varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+            std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), *it);
+            for( std::map<dai::Var, size_t>::const_iterator jt = state.begin(); jt != state.end(); ++jt )
+                pairs.insert(std::make_pair(jt->first.label(), jt->second));
+        }
+#if 0
+        std::cout << "pairs={";
+        for( std::set<std::pair<int, int> >::const_iterator it = pairs.begin(); it != pairs.end(); ++it ) {
+            const std::pair<int, int> &p = *it;
+            std::cout << "x" << p.first << "=" << p.second << "," << std::flush;
+        }
+        std::cout << "}" << std::endl;
+#endif
+    }
+
+    int calculate_cost(int valuation, const varset_beam_t &beam, const std::set<std::pair<int, int> > &pairs) const {
+        int cost = 0;
+        std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), valuation);
+        for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
+            cost += pairs.find(std::make_pair(it->first.label(), it->second)) == pairs.end() ? 1 : 0;
+        return cost;
+    }
+
+    void common_variables(const varset_beam_t &beam1, const varset_beam_t &beam2, dai::VarSet &vars) const {
+       vars = dai::VarSet();
+       for( dai::VarSet::const_iterator it = beam1.varset().begin(); it != beam1.varset().end(); ++it ) {
+           if( beam2.varset().contains(*it) )
+               vars.insert(*it);
+       }
+#ifdef DEBUG
+       std::cout << "common-vars: loc1=" << beam1.loc() << ", loc2=" << beam2.loc() << ", vars:";
+       for( dai::VarSet::const_iterator it = vars.begin(); it != vars.end(); ++it )
+           std::cout << " " << *it;
+       std::cout << std::endl;
+#endif
+    }
+
+    void recover_states_in_adjacent_beam(varset_beam_t &beam, const dai::VarSet &vars, const std::vector<std::map<dai::Var, size_t> > &states) {
+        int i = 0;
+        std::vector<std::map<dai::Var, size_t> > beam_states(beam.size());
+        for( varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+            //beam_states[i++] = std::move(dai::calcState(beam.varset(), *it));
+            beam_states[i++] = dai::calcState(beam.varset(), *it);
+        }
+
+        std::set<int> valuations_to_insert;
+        for( int i = 0; i < int(states.size()); ++i ) {
+            const std::map<dai::Var, size_t> &state = states[i];
+            if( !beam.contains(vars, state) ) {
+                for( int j = 0; j < int(beam_states.size()); ++j ) {
+                    std::map<dai::Var, size_t> new_s = beam_states[j];
+                    for( dai::VarSet::const_iterator it = vars.begin(); it != vars.end(); ++it ) {
+                        std::map<dai::Var, size_t>::const_iterator xt = state.find(*it);
+                        std::map<dai::Var, size_t>::iterator yt = new_s.find(*it);
+                        assert(xt != state.end());
+                        assert(yt != new_s.end());
+                        yt->second = xt->second;
+                    }
+                    int valuation = dai::calcLinearState(beam.varset(), new_s);
+                    assert(valuation < beam.max_value());
+                    assert(!beam.contains(valuation));
+#if 0
+                    if( valuations_to_insert.find(valuation) == valuations_to_insert.end() ) {
+                        std::cout << "recover: loc=" << beam.loc() << ", valuation={";
+                        for( std::map<dai::Var, size_t>::const_iterator it = new_s.begin(); it != new_s.end(); ++it )
+                            std::cout << it->first << "=" << it->second << ",";
+                        std::cout << "}, index=" << valuation << std::endl;
+                    }
+#endif
+                    valuations_to_insert.insert(valuation);
+                }
+            }
+        }
+
+        if( !valuations_to_insert.empty() ) {
+            for( std::set<int>::const_iterator it = valuations_to_insert.begin(); it != valuations_to_insert.end(); ++it )
+                beam.insert(*it);
+            affected_beams_.insert(beam.loc());
+        }
+    }
+
+    void recover_valuations(varset_beam_t &beam, const std::vector<std::pair<int, int> > &valuations) {
+        std::cout << "recover: loc=" << beam.loc() << ", #valuations=" << valuations.size() << std::flush;
+
+        // compute states for valuations
+        std::vector<std::map<dai::Var, size_t> > states(valuations.size());
+        for( int i = 0; i < int(valuations.size()); ++i ) {
+            int valuation = valuations[i].first;
+            //states[i] = std::move(dai::calcState(beam.varset(), valuation));
+            states[i] = dai::calcState(beam.varset(), valuation);
+        }
+
+        // recover states in adjacent beams
+        std::cout << ", edges:";
+        dai::VarSet vars;
+        const CSP::constraint_digraph_t::edge_list_t &edge_list = csp_.digraph().edges_pointing_to(beam.loc());
+        for( int i = 0; i < int(edge_list.size()); ++i ) {
+            const CSP::constraint_digraph_t::edge_t &edge = edge_list[i];
+            std::cout << " (" << edge.first << "," << edge.second << ")" << std::flush;
+            varset_beam_t &adj_beam = *csp_.domain(edge.first);
+            common_variables(beam, adj_beam, vars);
+            if( !vars.empty() )
+                //std::cout << "adj-beam: sz-before=" << adj_beam.size() << std::endl;
+                recover_states_in_adjacent_beam(adj_beam, vars, states);
+#if 0
+                std::cout << "adj-beam: sz-after=" << adj_beam.size() << std::endl;
+                for( varset_beam_t::const_iterator it = adj_beam.begin(); it != adj_beam.end(); ++it ) {
+                    std::map<dai::Var, size_t> state = dai::calcState(adj_beam.varset(), *it);
+                    std::cout << "adj-beam: ";
+                    for( std::map<dai::Var, size_t>::const_iterator jt = state.begin(); jt != state.end(); ++jt )
+                        std::cout << jt->first << "=" << jt->second << ",";
+                    std::cout << " index=" << *it << std::endl;
+                }
+#endif
+        }
+        std::cout << std::endl;
+
+        // recover valuations in beam
+        for( int i = 0; i < int(valuations.size()); ++i ) {
+            int valuation = valuations[i].first;
+            beam.insert(valuation);
+        }
+        affected_beams_.insert(beam.loc());
+    }
+
+    void recover_valuations(varset_beam_t &beam, int last_action, int obs) {
+        // calculate pairs of variable/values in beam (used to compute scores)
+        std::set<std::pair<int, int> > pairs;
+        calculate_pairs(beam, pairs);
+
+        // calculate valuations to recover (using scores)
+        assert(beam.size() <= beam.max_value());
+        assert(beam.size() < beam.max_value());
+        const dai::VarSet &varset = beam.varset();
+        std::vector<std::pair<int, int> > best_valuations;
+        float best_expected_cost = std::numeric_limits<float>::max();
+        for( int valuation = 0; valuation < beam.max_value(); ++valuation ) {
+            int slabels = get_slabels(beam.loc(), varset, valuation);
+            float p = base_->probability_obs_ore_slam(obs, beam.loc(), slabels, last_action);
+            if( beam.contains(valuation) ) continue;
+            int cost = calculate_cost(valuation, beam, pairs);
+            float expected_cost = (1.0 - p) * cost;
+            if( expected_cost <= best_expected_cost ) { // CHECK
+                if( expected_cost < best_expected_cost ) { // CHECK
+                    best_valuations.clear();
+                    best_expected_cost = expected_cost;
+                }
+                best_valuations.push_back(std::make_pair(valuation, cost));
+            }
+        }
+        assert(!best_valuations.empty());
+
+#if 0
+        for( int i = 0; i < int(best_valuations.size()); ++i ) {
+            int valuation = best_valuations[i].first;
+            std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), valuation);
+            std::cout << "best: ";
+            for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
+                std::cout << it->first << "=" << it->second << ",";
+            std::cout << std::endl;
+        }
+#endif
+
+        // recover marked valuations
+        affected_beams_.clear();
+#ifndef NDEBUG
+        int old_beam_size = beam.size();
+#endif
+        //std::cout << "max-value=" << beam.max_value() << std::endl;
+        std::cout << "#valuations-to-recover=" << best_valuations.size() << std::endl;
+        //std::cout << "size-before-recover=" << beam.size() << std::endl;
+        recover_valuations(beam, best_valuations);
+        //std::cout << "size-after--recover=" << beam.size() << std::endl;
+        assert(old_beam_size + int(best_valuations.size()) == beam.size());
+
+        // revise constant alpha for affected beams
+        for( std::set<int>::const_iterator it = affected_beams_.begin(); it != affected_beams_.end(); ++it )
+            csp_.set_alpha(*it);
+    }
+
     void update_factors(int last_action, int obs) {
         int current_loc = loc_history_.back();
 #ifdef DEBUG
@@ -365,15 +582,40 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             float p = base_->probability_obs_ore_slam(obs, current_loc, slabels, last_action);
             if( p < varset_beam_t::kappa() ) indices_to_be_removed.push_back(index);
         }
+        //std::cout << "#indices-to-be-removed=" << indices_to_be_removed.size() << std::endl;
 
-        if( !indices_to_be_removed.empty() ) {
+        assert(!beam.empty());
+        if( beam.size() == int(indices_to_be_removed.size()) ) {
+            // Observation is inconsistent with current beam.
+            // Repopulate beam with least-costly consistent valuation
+
+#ifndef NDEBUG
+            {
+                std::cout << "********** INCONSISTENT OBS! *************" << std::endl;
+                assert(csp_.is_consistent(0));
+                csp_.add_all_edges_to_worklist();
+                bool something_removed = csp_.ac3();
+                assert(!something_removed);
+            }
+#endif
+
+            recover_valuations(beam, last_action, obs);
+            for( std::set<int>::const_iterator it = affected_beams_.begin(); it != affected_beams_.end(); ++it )
+                csp_.add_to_worklist(*it);
+            bool something_removed = csp_.ac3();
+
+#ifndef NDEBUG
+            std::cout << "ac3: something-removed=" << something_removed << ", sizes:";
+            for( int i = 0; i < int(csp_.nvars()); ++i ) std::cout << " " << csp_.domain(i)->size();
+            std::cout << std::endl;
+#endif
+        } else {
             beam.erase_ordered_indices(indices_to_be_removed);
             csp_.add_to_worklist(current_loc);
-            std::cout << "[ac3..." << std::flush;
-            csp_.ac3(revised_variables_);
-            std::cout << "done]" << std::flush;
-            assert(csp_.is_consistent(0));
+            csp_.add_all_edges_to_worklist();
+            csp_.ac3();
         }
+        assert(csp_.is_consistent(0));
 #ifdef DEBUG
         std::cout << "factor after  update: loc=" << current_loc << ", obs=" << obs << std::endl;
         csp_.print_factor(std::cout, current_loc);
