@@ -227,7 +227,9 @@ template<typename T> class arc_consistency_t {
     // domain of x (D_x), and each such revision takes time d^2 because for each
     // element of D_x, a consistent element of D_y must be found. Space is O(e)
     // since this is the maximum size of the worklist.
-    void ac3(std::vector<int> &revised_vars, bool propagate = true) {
+    //
+    // Returns true iff some value is removed from some domain
+    bool ac3(std::vector<int> &revised_vars, bool propagate = true) {
 
         // allocate space for revised vars
         std::vector<bool> inserted(nvars_, false);
@@ -235,6 +237,7 @@ template<typename T> class arc_consistency_t {
         revised_vars.clear();
 
         // revise arcs until worklist becomes empty
+        bool something_removed = false;
         while( !worklist_.empty() ) {
             edge_t edge = worklist_.back();
             worklist_.pop_back();
@@ -253,12 +256,13 @@ template<typename T> class arc_consistency_t {
 
             // try to reduce arc var_x -> var_y
             if( arc_reduce(var_x, var_y) ) {
+                something_removed = true;
                 if( domain_[var_x]->empty() ) {
                     // domain of var_x became empty. This means that the
                     // CSP is inconsistent. Clear all other domains.
                     clear_domains();
                     worklist_.clear();
-                    return;
+                    return true;
                 } else {
                     // some element was removed from domain of var_x,
                     // schedule revision of all arcs pointing to var_x
@@ -271,6 +275,7 @@ template<typename T> class arc_consistency_t {
                 }
             }
         }
+        return something_removed;
     }
 };
 

@@ -31,37 +31,37 @@
 class var_beam_t {
     int nvars_;
     int *domsz_;
-    int max_particle_;
+    int max_value_;
     int initial_size_;
     ordered_vector_t beam_;
 
   public:
     var_beam_t(int nvars = 1, int domsz = 0)
-      : nvars_(nvars), domsz_(new int[nvars_]), max_particle_(0) {
+      : nvars_(nvars), domsz_(new int[nvars_]), max_value_(0) {
         for( int var = 0; var < nvars_; ++var )
             domsz_[var] = domsz;
-        calculate_max_particle();
+        calculate_max_value();
         initial_size_ = 0;
 #ifdef DEBUG
-        std::cout << "var_beam_t: nvars=" << nvars_ << ", max-particle=" << max_particle_ << std::endl;
+        std::cout << "var_beam_t: nvars=" << nvars_ << ", max-value=" << max_value_ << std::endl;
 #endif
     }
     explicit var_beam_t(const var_beam_t &beam)
-      : nvars_(beam.nvars_), domsz_(new int[nvars_]), max_particle_(beam.max_particle_) {
+      : nvars_(beam.nvars_), domsz_(new int[nvars_]), max_value_(beam.max_value_) {
         memcpy(domsz_, beam.domsz_, nvars_ * sizeof(int));
         beam_ = beam.beam_;
         initial_size_ = beam.initial_size_;
 #ifdef DEBUG
-        std::cout << "var_beam_t: copy-constructor: nvars=" << nvars_ << ", max-particle=" << max_particle_ << std::endl;
+        std::cout << "var_beam_t: copy-constructor: nvars=" << nvars_ << ", max-value=" << max_value_ << std::endl;
 #endif
     }
     var_beam_t(var_beam_t &&beam)
       : nvars_(beam.nvars_), domsz_(beam.domsz_),
-        max_particle_(beam.max_particle_), initial_size_(beam.initial_size_),
+        max_value_(beam.max_value_), initial_size_(beam.initial_size_),
         beam_(std::move(beam.beam_)) {
         beam.domsz_ = 0;
 #ifdef DEBUG
-        std::cout << "var_beam_t: move-constructor: nvars=" << nvars_ << ", max-particle=" << max_particle_ << std::endl;
+        std::cout << "var_beam_t: move-constructor: nvars=" << nvars_ << ", max-value=" << max_value_ << std::endl;
 #endif
     }
     ~var_beam_t() { delete[] domsz_; }
@@ -69,7 +69,7 @@ class var_beam_t {
     uint32_t hash() const { return beam_.hash(); }
     int nvars() const { return nvars_; }
     int domsz(int var) const { return domsz_[var]; }
-    int max_particle() const { return max_particle_; }
+    int max_value() const { return max_value_; }
     void set_domsz(int var, int domsz) {
         domsz_[var] = domsz;
     }
@@ -77,22 +77,22 @@ class var_beam_t {
     void set_initial_size(int initial_size) { initial_size_ = initial_size; }
     int initial_size() const { return initial_size_; }
 
-    void calculate_max_particle() {
-        max_particle_ = 1;
+    void calculate_max_value() {
+        max_value_ = 1;
         for( int var = 0; var < nvars_; ++var )
-            max_particle_ *= domsz_[var];
+            max_value_ *= domsz_[var];
     }
 
-    int value(int var, int particle) const {
+    int value(int var, int valuation) const {
         int i = 0;
-        for( ; var > 0; --var, particle /= domsz_[i++]);
-        return particle % domsz_[i];
+        for( ; var > 0; --var, valuation /= domsz_[i++]);
+        return valuation % domsz_[i];
     }
 
-    bool consistent(int particle) {
+    bool consistent(int valuation) {
         int last_val = -1;
         for( int var = 0; var < nvars_; ++var ) {
-            int val = value(var, particle);
+            int val = value(var, valuation);
             if( val <= last_val ) return false;
             last_val = val;
         }
@@ -126,10 +126,10 @@ class var_beam_t {
     void set_initial_configuration(int value = -1) {
         beam_.clear();
         if( value == -1 ) {
-            beam_.reserve(max_particle_);
-            for( int particle = 0; particle < max_particle_; ++particle ) {
-                if( consistent(particle) ) {
-                    beam_.insert(particle);
+            beam_.reserve(max_value_);
+            for( int value = 0; value < max_value_; ++value ) {
+                if( consistent(value) ) {
+                    beam_.insert(value);
                 }
             }
         } else {
@@ -154,7 +154,7 @@ class var_beam_t {
             nvars_ = beam.nvars_;
         }
         memcpy(domsz_, beam.domsz_, nvars_ * sizeof(int));
-        max_particle_ = beam.max_particle_;
+        max_value_ = beam.max_value_;
         initial_size_ = beam.initial_size_;
         beam_ = beam.beam_;
         return *this;
@@ -163,16 +163,16 @@ class var_beam_t {
     void print(std::ostream &os) const {
         os << "{";
         for( const_iterator it = begin(); it != end(); ++it ) {
-            int particle = *it;
+            int valuation = *it;
 #if 1
-            os << "[p=" << particle << ":";
+            os << "[p=" << valuation << ":";
             for( int var = 0; var < nvars_; ++var ) {
-                int val = value(var, particle);
+                int val = value(var, valuation);
                 os << "v" << var << "=" << val << ",";
             }
             os << "],";
 #else
-            os << particle << ",";
+            os << valuation << ",";
 #endif
         }
         os << "},sz=" << size() << ",cap=" << beam_.capacity();
