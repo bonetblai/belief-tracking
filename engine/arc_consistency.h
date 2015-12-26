@@ -162,14 +162,21 @@ template<typename T> class arc_consistency_t {
     //
     // Pre/post-processing is typically used to set auxiliary variables that
     // help in calculation of consistent(...).
-    virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const = 0;
-    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) const = 0;
-    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const = 0;
-    virtual void arc_reduce_postprocessing(int var_x, int var_y) const = 0;
-    virtual void arc_reduce_compatible_values(int var_x, int var_y, int val_y, std::set<int> &compatible_values) const {
+    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) const { }
+    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
+        std::cout << "error: must implement 'arc_reduce_preprocessing()' for arc consistency" << std::endl;
+        assert(0);
+    }
+    virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const { return false; }
+    virtual void arc_reduce_postprocessing(int var_x, int var_y) const { }
+
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y) const { }
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y) const {
         std::cout << "error: must implement 'arc_reduce_compatible_values()' for inverse-check in arc consistency" << std::endl;
         assert(0);
     }
+    virtual bool arc_reduce_inverse_check(int val_x) const { return false; }
+    virtual void arc_reduce_inverse_check_postprocessing(int var_x, int var_y) const { }
 
     // reduce arc var_x -> var_y. That is, for each value of var_x, find a
     // compatible value for var_y. If such value is not found, the value of
@@ -203,13 +210,12 @@ template<typename T> class arc_consistency_t {
                 }
             }
         } else {
-            std::set<int> compatible_values;
-            for( typename T::const_iterator it = domain_[var_y]->begin(); it != domain_[var_y]->end(); ++it ) {
-                arc_reduce_compatible_values(var_x, var_y, *it, compatible_values);
-            }
+            arc_reduce_inverse_check_preprocessing(var_x, var_y);
+            for( typename T::const_iterator it = domain_[var_y]->begin(); it != domain_[var_y]->end(); ++it )
+                arc_reduce_inverse_check_preprocessing(var_x, var_y, *it);
 
             for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
-                if( compatible_values.find(*it) == compatible_values.end() ) {
+                if( !arc_reduce_inverse_check(*it) ) {
                     indices_to_erase.push_back(it.index());
 #ifdef DEBUG
                     std::cout << "ac3: removing " << *it
@@ -222,7 +228,10 @@ template<typename T> class arc_consistency_t {
         }
 
         domain_[var_x]->erase_ordered_indices(indices_to_erase);
-        if( !inverse_check ) arc_reduce_postprocessing(var_x, var_y);
+        if( !inverse_check )
+            arc_reduce_postprocessing(var_x, var_y);
+        else
+            arc_reduce_inverse_check_postprocessing(var_x, var_y);
         return !indices_to_erase.empty();
     }
 
