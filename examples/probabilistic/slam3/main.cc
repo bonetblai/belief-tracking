@@ -128,7 +128,7 @@ void set_labels_and_execution(cellmap_t &cellmap, int ptype, int num_covering_lo
 #endif
     if( ptype == 1 )
         cellmap.compute_covering_execution(0, execution, num_covering_loops);
-    cout << "# fixed-execution: sz=" << execution.size() << endl;
+    cout << "# fixed-execution: size=" << execution.size() << endl;
     //cout << "# fixed-execution[sz=" << execution.size() << "]=" << execution << endl;
 }
 
