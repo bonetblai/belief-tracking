@@ -151,7 +151,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         best_action_ = new int[base_.nloc_];
 
         // calculate tr model
-        tr_model_ = std::vector<std::vector<std::pair<int, float> >*>(5 * base_.nloc_, 0);
+        tr_model_ = std::vector<std::vector<std::pair<int, float> >*>(5 * base_.nloc_, static_cast<std::vector<std::pair<int, float> >*>(0));
         for( int action = 0; action < 5; ++action ) {
             for( int loc = 0; loc < base_.nloc_; ++loc ) {
                 std::vector<std::pair<int, float> > *model = new std::vector<std::pair<int, float> >;

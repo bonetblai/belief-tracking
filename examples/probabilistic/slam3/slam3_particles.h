@@ -117,6 +117,7 @@ class varset_beam_t : public var_beam_t {
     }
 
     using var_beam_t::contains;
+#if 0
     bool contains(const dai::VarSet &vars, const std::map<dai::Var, size_t> &state) const {
         for( const_iterator it = begin(); it != end(); ++it ) {
             std::map<dai::Var, size_t> s = dai::calcState(varset_, *it);
@@ -133,7 +134,6 @@ class varset_beam_t : public var_beam_t {
         return false;
     }
 
-#if 0
     int label(const dai::Var &var, int valuation) const {
         std::map<dai::Var, size_t> state;
         state = dai::calcState(varset_, valuation);
@@ -158,13 +158,19 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
 
     mutable std::map<dai::Var, size_t> state_x_;
 
+    static std::map<dai::Var, size_t> calc_state(const dai::VarSet &varset, size_t value) {
+        return dai::calcState(varset, value);
+    }
+
     virtual void arc_reduce_preprocessing_0(int var_x, int var_y) { }
     virtual void arc_reduce_preprocessing_1(int var_x, int val_x) {
-        state_x_ = dai::calcState(domain_[var_x]->varset(), val_x);
+        //state_x_ = dai::calcState(domain_[var_x]->varset(), val_x);
+        state_x_ = calc_state(domain_[var_x]->varset(), val_x);
     }
     virtual void arc_reduce_postprocessing(int var_x, int var_y) { }
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const {
-        std::map<dai::Var, size_t> state_y = dai::calcState(domain_[var_y]->varset(), val_y);
+        //std::map<dai::Var, size_t> state_y = dai::calcState(domain_[var_y]->varset(), val_y);
+        std::map<dai::Var, size_t> state_y = calc_state(domain_[var_y]->varset(), val_y);
         for( std::map<dai::Var, size_t>::const_iterator it = state_x_.begin(); it != state_x_.end(); ++it ) {
             std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
             if( (jt != state_y.end()) && (it->second != jt->second) ) return false;
