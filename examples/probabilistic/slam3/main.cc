@@ -61,7 +61,7 @@ int inference_t::edbp_max_iter_;
 
 float varset_beam_t::kappa_ = 0;
 CSP::constraint_digraph_t arc_consistency_t::cg_;
-std::vector<std::vector<int> > arc_consistency_t::compatible_values_;
+std::vector<const char*> arc_consistency_t::compatible_values_;
 vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 
 mpi_slam_t *mpi_base_t::mpi_ = 0;
