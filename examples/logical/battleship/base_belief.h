@@ -104,7 +104,7 @@ class arc_consistency_t : public CSP::arc_consistency_t<var_beam_t> {
     arc_consistency_t(int ncols, bool allow_adjacent_ships);
     virtual ~arc_consistency_t() { }
 
-    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) {
+    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) const {
         x_col_ = var_x % ncols_;
         x_row_ = var_x / ncols_;
         y_col_ = var_y % ncols_;
@@ -124,11 +124,11 @@ class arc_consistency_t : public CSP::arc_consistency_t<var_beam_t> {
                   << std::endl;
 #endif
     }
-    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) {
+    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
         x_plc_ = placement_t(val_x);
         x_plus_ = x_plc_.size_ == 0 ? 0 : x_plc_.size_ - x_plc_.anchor_ - 1;
     }
-    virtual void arc_reduce_postprocessing(int var_x, int var_y) {
+    virtual void arc_reduce_postprocessing(int var_x, int var_y) const {
     }
 
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const;

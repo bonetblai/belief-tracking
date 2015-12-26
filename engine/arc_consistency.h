@@ -22,6 +22,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <set>
 #include <vector>
 
 //#define DEBUG
@@ -162,47 +163,66 @@ template<typename T> class arc_consistency_t {
     // Pre/post-processing is typically used to set auxiliary variables that
     // help in calculation of consistent(...).
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const = 0;
-    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) = 0;
-    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) = 0;
-    virtual void arc_reduce_postprocessing(int var_x, int var_y) = 0;
+    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) const = 0;
+    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const = 0;
+    virtual void arc_reduce_postprocessing(int var_x, int var_y) const = 0;
+    virtual void arc_reduce_compatible_values(int var_x, int var_y, int val_y, std::set<int> &compatible_values) const {
+        std::cout << "error: must implement 'arc_reduce_compatible_values()' for inverse-check in arc consistency" << std::endl;
+        assert(0);
+    }
 
     // reduce arc var_x -> var_y. That is, for each value of var_x, find a
     // compatible value for var_y. If such value is not found, the value of
     // var_x is removed from the domain of var_x. The method returns whether
     // some element of var_x is removed or not.
-    bool arc_reduce(int var_x, int var_y) {
+    bool arc_reduce(int var_x, int var_y, bool inverse_check = false) {
         assert(var_x != var_y);
         static std::vector<int> indices_to_erase;
         indices_to_erase.reserve(domain_[var_x]->size());
         indices_to_erase.clear();
 
-        arc_reduce_preprocessing_0(var_x, var_y);
-#ifndef NDEBUG
-        int old_domainsz = domain_[var_x]->size();
+        if( !inverse_check ) {
+            arc_reduce_preprocessing_0(var_x, var_y);
+            for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
+                arc_reduce_preprocessing_1(var_x, *it);
+                bool found_compatible_value = false;
+                for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
+                    if( consistent(var_x, var_y, *it, *jt) ) {
+                        found_compatible_value = true;
+                        break;
+                    }
+                }
+                if( !found_compatible_value ) {
+                    indices_to_erase.push_back(it.index());
+#ifdef DEBUG
+                    std::cout << "ac3: removing " << *it
+                              << " from domain of var_x=" << var_x
+                              << " [var_y=" << var_y << "]"
+                              << std::endl;
 #endif
-        for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
-            arc_reduce_preprocessing_1(var_x, *it);
-            bool found_compatible_value = false;
-            for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
-                if( consistent(var_x, var_y, *it, *jt) ) {
-                    found_compatible_value = true;
-                    break;
                 }
             }
-            if( !found_compatible_value ) {
-                indices_to_erase.push_back(it.index());
+        } else {
+            std::set<int> compatible_values;
+            for( typename T::const_iterator it = domain_[var_y]->begin(); it != domain_[var_y]->end(); ++it ) {
+                arc_reduce_compatible_values(var_x, var_y, *it, compatible_values);
+            }
+
+            for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
+                if( compatible_values.find(*it) == compatible_values.end() ) {
+                    indices_to_erase.push_back(it.index());
 #ifdef DEBUG
-                std::cout << "ac3: removing " << *it
-                          << " from domain of var_x=" << var_x
-                          << " [var_y=" << var_y << "]"
-                          << std::endl;
+                    std::cout << "ac3: removing " << *it
+                              << " from domain of var_x=" << var_x
+                              << " [var_y=" << var_y << "]"
+                              << std::endl;
 #endif
+                }
             }
         }
-        domain_[var_x]->erase_ordered_indices(indices_to_erase);
-        arc_reduce_postprocessing(var_x, var_y);
 
-        assert(indices_to_erase.empty() || (domain_[var_x]->size() < old_domainsz));
+        domain_[var_x]->erase_ordered_indices(indices_to_erase);
+        if( !inverse_check ) arc_reduce_postprocessing(var_x, var_y);
         return !indices_to_erase.empty();
     }
 
@@ -229,7 +249,7 @@ template<typename T> class arc_consistency_t {
     // since this is the maximum size of the worklist.
     //
     // Returns true iff some value is removed from some domain
-    bool ac3(std::vector<int> &revised_vars, bool propagate = true) {
+    bool ac3(std::vector<int> &revised_vars, bool propagate = true, bool inverse_check = false) {
 
         // allocate space for revised vars
         std::vector<bool> inserted(nvars_, false);
@@ -255,7 +275,7 @@ template<typename T> class arc_consistency_t {
 #endif
 
             // try to reduce arc var_x -> var_y
-            if( arc_reduce(var_x, var_y) ) {
+            if( arc_reduce(var_x, var_y, inverse_check) ) {
                 something_removed = true;
                 if( domain_[var_x]->empty() ) {
                     // domain of var_x became empty. This means that the

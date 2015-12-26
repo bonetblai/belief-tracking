@@ -43,9 +43,9 @@ class arc_consistency_t : public CSP::arc_consistency_t<cell_beam_t> {
     virtual ~arc_consistency_t() { }
     static void initialize(int neighbourhood);
 
-    virtual void arc_reduce_preprocessing_0(int var_x, int var_y);
-    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) { }
-    virtual void arc_reduce_postprocessing(int var_x, int var_y) { }
+    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) const;
+    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const { }
+    virtual void arc_reduce_postprocessing(int var_x, int var_y) const { }
 
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const {
         int index = (row_diff_ + 2) * 5 + (col_diff_ + 2);
@@ -221,7 +221,7 @@ void arc_consistency_t::initialize(int neighbourhood) {
     }
 }
 
-void arc_consistency_t::arc_reduce_preprocessing_0(int var_x, int var_y) {
+void arc_consistency_t::arc_reduce_preprocessing_0(int var_x, int var_y) const {
     row_x_ = var_x / base_belief_t::cols();
     col_x_ = var_x % base_belief_t::cols();
     row_y_ = var_y / base_belief_t::cols();
