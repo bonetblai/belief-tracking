@@ -210,7 +210,7 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
 
         // for each location (var_y) and value for it, for each adjacent loc in constraint graph,
         // determine compatible values
-        compatible_values_ = std::vector<const char*>(num_locs * num_locs * 512, 0);
+        compatible_values_ = std::vector<const char*>(num_locs * num_locs * 512, static_cast<const char*>(0));
         for( int var_y = 0; var_y < num_locs; ++var_y ) {
             int row = var_y / ncols, col = var_y % ncols;
             for( int val_y = 0; val_y < int(varsets[var_y].nrStates()); ++val_y ) {
