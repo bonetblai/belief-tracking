@@ -116,8 +116,8 @@ class varset_beam_t : public var_beam_t {
         return p;
     }
 
-    using var_beam_t::contains;
 #if 0
+    using var_beam_t::contains;
     bool contains(const dai::VarSet &vars, const std::map<dai::Var, size_t> &state) const {
         for( const_iterator it = begin(); it != end(); ++it ) {
             std::map<dai::Var, size_t> s = dai::calcState(varset_, *it);
@@ -155,41 +155,14 @@ class varset_beam_t : public var_beam_t {
 
 class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
     static CSP::constraint_digraph_t cg_;
+    static std::vector<std::vector<int> > compatible_values_;
 
     mutable std::map<dai::Var, size_t> state_x_;
 
-    static std::map<dai::Var, size_t> calc_state(const dai::VarSet &varset, size_t value) {
-        return dai::calcState(varset, value);
-    }
-
-    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) { }
-    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) {
-        //state_x_ = dai::calcState(domain_[var_x]->varset(), val_x);
-        state_x_ = calc_state(domain_[var_x]->varset(), val_x);
-    }
-    virtual void arc_reduce_postprocessing(int var_x, int var_y) { }
-    virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const {
-        //std::map<dai::Var, size_t> state_y = dai::calcState(domain_[var_y]->varset(), val_y);
-        std::map<dai::Var, size_t> state_y = calc_state(domain_[var_y]->varset(), val_y);
-        for( std::map<dai::Var, size_t>::const_iterator it = state_x_.begin(); it != state_x_.end(); ++it ) {
-            std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
-            if( (jt != state_y.end()) && (it->second != jt->second) ) return false;
-        }
-        return true;
-    }
-
-  public:
-    arc_consistency_t() : CSP::arc_consistency_t<varset_beam_t>(cg_) { }
-    arc_consistency_t(const arc_consistency_t &ac) = delete;
-    virtual ~arc_consistency_t() { }
-
-    static void initialize_constraint_graph(int nrows, int ncols) {
-        construct_constraint_graph(nrows, ncols);
-    }
-
     static void construct_constraint_graph(int nrows, int ncols) {
-        cg_.create_empty_graph(nrows * ncols);
-        for( int loc = 0; loc < nrows * ncols; ++loc ) {
+        int num_locs = nrows * ncols;
+        cg_.create_empty_graph(num_locs);
+        for( int loc = 0; loc < num_locs; ++loc ) {
             cg_.reserve_edge_list(loc, 8);
             int r = loc / ncols, c = loc % ncols;
             for( int dr = -2; dr < 3; ++dr ) {
@@ -203,6 +176,113 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
             }
         }
         std::cout << "# cg: #vars=" << cg_.nvars() << ", #edges=" << cg_.nedges() << std::endl;
+    }
+
+    static void compute_compatible_values(int nrows, int ncols) {
+        int num_locs = nrows * ncols;
+
+        // variables for each location
+        std::vector<dai::Var> variables(num_locs);
+        for( int loc = 0; loc < num_locs; ++loc )
+            variables[loc] = dai::Var(loc, 2);
+
+        // variable sets for each location
+        std::vector<dai::VarSet> varsets(num_locs);
+        for( int loc = 0; loc < num_locs; ++loc ) {
+            int row = loc / ncols, col = loc % ncols;
+            std::vector<dai::Var> vars;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nr = row + dr;
+                if( (nr < 0) || (nr >= nrows) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int nc = col + dc;
+                    if( (nc < 0) || (nc >= ncols) ) continue;
+                    vars.push_back(variables[nr * ncols + nc]);
+                }
+            }
+            std::sort(vars.begin(), vars.end());
+            varsets[loc] = dai::VarSet(vars.begin(), vars.end());
+#if 1
+            std::cout << "# compute_compatible_values: loc=" << loc << ", vars=" << varsets[loc] << std::endl;
+#endif
+        }
+
+        // for each location (var_y) and value for it, for each adjacent loc in constraint graph,
+        // determine compatible values
+        compatible_values_ = std::vector<std::vector<int> >(num_locs * num_locs * 512);
+        for( int var_y = 0; var_y < num_locs; ++var_y ) {
+            int row = var_y / ncols, col = var_y % ncols;
+            for( int val_y = 0; val_y < int(varsets[var_y].nrStates()); ++val_y ) {
+                std::map<dai::Var, size_t> state_y = dai::calcState(varsets[var_y], val_y);
+                for( int dr = -2; dr < 3; ++dr ) {
+                    int nr = row + dr;
+                    if( (nr < 0) || (nr >= nrows) ) continue;
+                    for( int dc = -2; dc < 3; ++dc ) {
+                        int nc = col + dc;
+                        if( (nc < 0) || (nc >= ncols) ) continue;
+                        int var_x = nr * ncols + nc;
+                        std::vector<int> values;
+                        for( int val_x = 0; val_x < int(varsets[var_x].nrStates()); ++val_x ) {
+                            bool compatible = true;
+                            std::map<dai::Var, size_t> state_x = dai::calcState(varsets[var_x], val_x);
+                            for( std::map<dai::Var, size_t>::const_iterator it = state_x.begin(); it != state_x.end(); ++it ) {
+                                if( (state_y.find(it->first) != state_y.end()) && (state_y[it->first] != it->second) ) {
+                                    compatible = false;
+                                    break;
+                                }
+                            }
+                            if( compatible ) values.push_back(val_x);
+                        }
+                        assert(!values.empty());
+                        assert(values.size() < size_t(varsets[var_x].nrStates()));
+                        assert(val_y * num_locs * num_locs + var_y * num_locs + var_x < int(compatible_values_.size()));
+                        compatible_values_[val_y * num_locs * num_locs + var_y * num_locs + var_x] = values;
+#if 0
+                        std::cout << "compute_compatible_values:"
+                                  << " var-x=" << variables[var_x]
+                                  << ", var-y=" << variables[var_y]
+                                  << ", val-y=" << val_y
+                                  << ", size=" << values.size()
+                                  << std::endl;
+#endif
+                    }
+                }
+            }
+        }
+    }
+
+    const std::vector<int>& compatible_values(int var_x, int var_y, int val_y) const {
+        assert(val_y * nvars() * nvars() + var_y * nvars() + var_x < int(compatible_values_.size()));
+        return compatible_values_[val_y * nvars() * nvars() + var_y * nvars() + var_x];
+    }
+
+    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) const { }
+    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
+        state_x_ = dai::calcState(domain_[var_x]->varset(), val_x);
+    }
+    virtual void arc_reduce_postprocessing(int var_x, int var_y) const { }
+    virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const {
+        std::map<dai::Var, size_t> state_y = dai::calcState(domain_[var_y]->varset(), val_y);
+        for( std::map<dai::Var, size_t>::const_iterator it = state_x_.begin(); it != state_x_.end(); ++it ) {
+            std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
+            if( (jt != state_y.end()) && (it->second != jt->second) ) return false;
+        }
+        return true;
+    }
+
+    virtual void arc_reduce_compatible_values(int var_x, int var_y, int val_y, std::set<int> &values) const {
+        const std::vector<int> &cvalues = compatible_values(var_x, var_y, val_y);
+        values.insert(cvalues.begin(), cvalues.end());
+    }
+
+  public:
+    arc_consistency_t() : CSP::arc_consistency_t<varset_beam_t>(cg_) { }
+    arc_consistency_t(const arc_consistency_t &ac) = delete;
+    virtual ~arc_consistency_t() { }
+
+    static void initialize_arc_consistency(int nrows, int ncols) {
+        construct_constraint_graph(nrows, ncols);
+        compute_compatible_values(nrows, ncols);
     }
 
     const arc_consistency_t& operator=(const arc_consistency_t &ac) {
@@ -224,9 +304,9 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
         }
     }
 
-    bool ac3(bool propagate = true) {
+    bool ac3(bool inverse_check = false) {
         std::vector<int> revised_vars;
-        bool something_removed = CSP::arc_consistency_t<varset_beam_t>::ac3(revised_vars, propagate);
+        bool something_removed = CSP::arc_consistency_t<varset_beam_t>::ac3(revised_vars, true, inverse_check);
         set_alpha(revised_vars);
         return something_removed;
     }
@@ -421,10 +501,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
                vars.insert(*it);
        }
 #ifdef DEBUG
-       std::cout << "common-vars: loc1=" << beam1.loc() << ", loc2=" << beam2.loc() << ", vars:";
-       for( dai::VarSet::const_iterator it = vars.begin(); it != vars.end(); ++it )
-           std::cout << " " << *it;
-       std::cout << std::endl;
+       std::cout << "common-vars: loc1=" << beam1.loc() << ", loc2=" << beam2.loc() << ", vars=" << vars << std::endl;
 #endif
     }
 
@@ -502,10 +579,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             common_variables(beam, adj_beam, vars);
             if( !vars.empty() )
 #if 1
-                std::cout << "adj-beam: loc=" << adj_beam.loc() << ", vars={";
-                for( dai::VarSet::const_iterator it = vars.begin(); it != vars.end(); ++it )
-                    std::cout << *it << ",";
-                std::cout << "}, sz-before=" << adj_beam.size() << std::endl;
+                std::cout << "adj-beam: loc=" << adj_beam.loc() << ", vars=" << vars << ", sz-before=" << adj_beam.size() << std::endl;
 #endif
                 recover_states_in_adjacent_beam(adj_beam, vars, states);
 #if 1
@@ -613,7 +687,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
                 std::cout << "********** INCONSISTENT OBS! *************" << std::endl;
                 assert(csp_.is_consistent(0));
                 csp_.add_all_edges_to_worklist();
-                bool something_removed = csp_.ac3();
+                bool something_removed = csp_.ac3(true);
                 assert(!something_removed);
             }
 #endif
@@ -624,7 +698,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
                 recover_valuations(beam, last_action, obs);
                 for( std::set<int>::const_iterator it = affected_beams_.begin(); it != affected_beams_.end(); ++it )
                     csp_.add_to_worklist(*it);
-                bool something_removed = csp_.ac3();
+                bool something_removed = csp_.ac3(true);
 
 #ifndef NDEBUG
                 std::cout << "ac3: something-removed=" << something_removed << ", sizes:";
@@ -637,7 +711,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             beam.erase_ordered_indices(indices_to_be_removed);
             csp_.add_to_worklist(current_loc);
             csp_.add_all_edges_to_worklist();
-            csp_.ac3();
+            csp_.ac3(true);
         }
         assert(csp_.is_consistent(0));
 #ifdef DEBUG
