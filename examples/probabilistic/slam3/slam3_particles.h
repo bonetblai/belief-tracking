@@ -42,6 +42,160 @@
 
 //#define DEBUG
 
+class cache_t {
+    static int num_locs_;
+    static std::vector<dai::Var> variables_;
+    static std::vector<dai::VarSet> varsets_;
+    static std::vector<const char*> compatible_values_;
+    static std::map<std::vector<int>, const char*> cache_;
+    static std::vector<std::vector<std::map<dai::Var, size_t>*> > state_cache_;
+
+    static void compute_basic_elements(int nrows, int ncols) {
+        // variables for each location
+        variables_ = std::vector<dai::Var>(num_locs_);
+        for( int loc = 0; loc < num_locs_; ++loc )
+            variables_[loc] = dai::Var(loc, 2);
+
+        // variable sets for each location
+        varsets_ = std::vector<dai::VarSet>(num_locs_);
+        for( int loc = 0; loc < num_locs_; ++loc ) {
+            int row = loc / ncols, col = loc % ncols;
+            std::vector<dai::Var> vars;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nr = row + dr;
+                if( (nr < 0) || (nr >= nrows) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int nc = col + dc;
+                    if( (nc < 0) || (nc >= ncols) ) continue;
+                    vars.push_back(variables_[nr * ncols + nc]);
+                }
+            }
+            std::sort(vars.begin(), vars.end());
+            varsets_[loc] = dai::VarSet(vars.begin(), vars.end());
+#if 1//def DEBUG
+            std::cout << "# compute_basic_elements: loc=" << loc << ", vars=" << varsets_[loc] << std::endl;
+#endif
+        }
+    }
+
+    static void compute_cache_for_states(int nrows, int ncols) {
+        float start_time = Utils::read_time_in_seconds();
+        int size = 0;
+        state_cache_ = std::vector<std::vector<std::map<dai::Var, size_t>*> >(num_locs_);
+        for( int loc = 0; loc < num_locs_; ++loc ) {
+            const dai::VarSet &varset = varsets_[loc];
+            state_cache_[loc] = std::vector<std::map<dai::Var, size_t>*>(varset.nrStates(), static_cast<std::map<dai::Var, size_t>*>(0));
+            for( int value = 0; value < int(varset.nrStates()); ++value ) {
+                std::map<dai::Var, size_t> *state = new std::map<dai::Var, size_t>(dai::calcState(varset, value));
+                state_cache_[loc][value] = state;
+                ++size;
+            }
+        }
+        std::cout << "# cache-for-states:"
+                  << " size=" << size
+                  //<< ", hits=" << cache_hits
+                  << ", time=" << Utils::read_time_in_seconds() - start_time
+                  << std::endl;
+    }
+
+    static void compute_cache_for_compatible_values(int nrows, int ncols) {
+        float start_time = Utils::read_time_in_seconds();
+
+        // for each location (var_y) and value for it, for each adjacent loc in constraint graph,
+        // determine compatible values
+        unsigned cache_hits = 0;
+        compatible_values_ = std::vector<const char*>(num_locs_ * num_locs_ * 512, static_cast<const char*>(0));
+        for( int var_y = 0; var_y < num_locs_; ++var_y ) {
+            int row = var_y / ncols, col = var_y % ncols;
+            for( int val_y = 0; val_y < int(varsets_[var_y].nrStates()); ++val_y ) {
+                const std::map<dai::Var, size_t> &state_y = *state_cache_[var_y][val_y];
+                for( int dr = -2; dr < 3; ++dr ) {
+                    int nr = row + dr;
+                    if( (nr < 0) || (nr >= nrows) ) continue;
+                    for( int dc = -2; dc < 3; ++dc ) {
+                        int nc = col + dc;
+                        if( (nc < 0) || (nc >= ncols) ) continue;
+                        int var_x = nr * ncols + nc;
+
+                        // check whether we have already calculated this
+                        std::vector<int> cache_key;
+                        for( int dr2 = -2; dr2 < 3; ++dr2 ) {
+                            int nr2 = row + dr2;
+                            for( int dc2 = -2; dc2 < 3; ++dc2 ) {
+                                int nc2 = col + dc2;
+                                if( (nr2 < 0) || (nr2 >= nrows) || (nc2 < 0) || (nc2 >= ncols) )
+                                    cache_key.push_back(-1);
+                                else
+                                    cache_key.push_back(varsets_[nr2 * ncols + nc2].size());
+                            }
+                        }
+                        cache_key.push_back(val_y);
+                        cache_key.push_back(dr);
+                        cache_key.push_back(dc);
+                        std::map<std::vector<int>, const char *>::const_iterator cache_it = cache_.find(cache_key);
+                        if( cache_it != cache_.end() ) {
+                            ++cache_hits;
+                            assert(val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x < int(compatible_values_.size()));
+                            compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x] = cache_it->second;
+                        } else {
+                            char *values = new char[64](); // initializes all elements to zero
+                            int ncompatible = 0;
+                            for( int val_x = 0; val_x < int(varsets_[var_x].nrStates()); ++val_x ) {
+                                bool compatible = true;
+                                const std::map<dai::Var, size_t> &state_x = *state_cache_[var_x][val_x];
+                                for( std::map<dai::Var, size_t>::const_iterator it = state_x.begin(); it != state_x.end(); ++it ) {
+                                    std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
+                                    if( (jt != state_y.end()) && (jt->second != it->second) ) {
+                                        compatible = false;
+                                        break;
+                                    }
+                                }
+                                if( compatible ) {
+                                    assert(val_x < 512);
+                                    int index = val_x / 8, offset = val_x % 8;
+                                    values[index] |= 1 << offset;
+                                    ++ncompatible;
+                                }
+                            }
+                            assert((ncompatible > 0) && (ncompatible < int(varsets_[var_x].nrStates())));
+                            assert(val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x < int(compatible_values_.size()));
+                            compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x] = values;
+                            cache_.insert(std::make_pair(cache_key, values));
+                        }
+                    }
+                }
+            }
+        }
+        std::cout << "# cache-for-compatible-values:"
+                  << " size=" << cache_.size()
+                  << ", hits=" << cache_hits
+                  << ", time=" << Utils::read_time_in_seconds() - start_time
+                  << std::endl;
+    }
+
+  public:
+    cache_t() { }
+    ~cache_t() { }
+
+    static void initialize(int nrows, int ncols) {
+        num_locs_ = nrows * ncols;
+        compute_basic_elements(nrows, ncols);
+        compute_cache_for_states(nrows, ncols);
+        compute_cache_for_compatible_values(nrows, ncols);
+    }
+
+    static std::vector<const char*>& compatible_values() {
+        return compatible_values_;
+    }
+    static const char * compatible_values(int val_y, int var_y, int var_x) {
+        return compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x];
+    }
+
+    static std::map<dai::Var, size_t>& state(int var, int value) {
+        return *state_cache_[var][value];
+    }
+};
+
 class varset_beam_t : public var_beam_t {
   protected:
     const int loc_;
@@ -116,31 +270,6 @@ class varset_beam_t : public var_beam_t {
         return p;
     }
 
-#if 0
-    using var_beam_t::contains;
-    bool contains(const dai::VarSet &vars, const std::map<dai::Var, size_t> &state) const {
-        for( const_iterator it = begin(); it != end(); ++it ) {
-            std::map<dai::Var, size_t> s = dai::calcState(varset_, *it);
-            bool match = true;
-            for( dai::VarSet::const_iterator jt = vars.begin(); match && (jt != vars.end()); ++jt ) {
-                std::map<dai::Var, size_t>::const_iterator xt = state.find(*jt);
-                std::map<dai::Var, size_t>::const_iterator yt = s.find(*jt);
-                assert(xt != state.end());
-                assert(yt != s.end());
-                match = xt->second == yt->second;
-            }
-            if( match ) return true;
-        }
-        return false;
-    }
-
-    int label(const dai::Var &var, int valuation) const {
-        std::map<dai::Var, size_t> state;
-        state = dai::calcState(varset_, valuation);
-        return state[var];
-    }
-#endif
-
     void set_alpha() {
         alpha_ = 1.0 / float(size() + (varset_.nrStates() - size()) * kappa_);
     }
@@ -155,9 +284,7 @@ class varset_beam_t : public var_beam_t {
 
 class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
     static CSP::constraint_digraph_t cg_;
-    static std::vector<const char*> compatible_values_;
-
-    mutable std::map<dai::Var, size_t> state_x_;
+    mutable std::map<dai::Var, size_t> *state_x_;
     mutable char bitmask_[64];
 
     static void construct_constraint_graph(int nrows, int ncols) {
@@ -179,90 +306,18 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
         std::cout << "# cg: #vars=" << cg_.nvars() << ", #edges=" << cg_.nedges() << std::endl;
     }
 
-    static void compute_compatible_values(int nrows, int ncols) {
-        int num_locs = nrows * ncols;
-
-        // variables for each location
-        std::vector<dai::Var> variables(num_locs);
-        for( int loc = 0; loc < num_locs; ++loc )
-            variables[loc] = dai::Var(loc, 2);
-
-        // variable sets for each location
-        std::vector<dai::VarSet> varsets(num_locs);
-        for( int loc = 0; loc < num_locs; ++loc ) {
-            int row = loc / ncols, col = loc % ncols;
-            std::vector<dai::Var> vars;
-            for( int dr = -1; dr < 2; ++dr ) {
-                int nr = row + dr;
-                if( (nr < 0) || (nr >= nrows) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
-                    int nc = col + dc;
-                    if( (nc < 0) || (nc >= ncols) ) continue;
-                    vars.push_back(variables[nr * ncols + nc]);
-                }
-            }
-            std::sort(vars.begin(), vars.end());
-            varsets[loc] = dai::VarSet(vars.begin(), vars.end());
-#ifdef DEBUG
-            std::cout << "# compute_compatible_values: loc=" << loc << ", vars=" << varsets[loc] << std::endl;
-#endif
-        }
-
-        // for each location (var_y) and value for it, for each adjacent loc in constraint graph,
-        // determine compatible values
-        compatible_values_ = std::vector<const char*>(num_locs * num_locs * 512, static_cast<const char*>(0));
-        for( int var_y = 0; var_y < num_locs; ++var_y ) {
-            int row = var_y / ncols, col = var_y % ncols;
-            for( int val_y = 0; val_y < int(varsets[var_y].nrStates()); ++val_y ) {
-                std::map<dai::Var, size_t> state_y = dai::calcState(varsets[var_y], val_y);
-                for( int dr = -2; dr < 3; ++dr ) {
-                    int nr = row + dr;
-                    if( (nr < 0) || (nr >= nrows) ) continue;
-                    for( int dc = -2; dc < 3; ++dc ) {
-                        int nc = col + dc;
-                        if( (nc < 0) || (nc >= ncols) ) continue;
-                        int var_x = nr * ncols + nc;
-                        char *values = new char[64];
-                        bzero(values, 64);
-                        int ncompatible = 0;
-                        for( int val_x = 0; val_x < int(varsets[var_x].nrStates()); ++val_x ) {
-                            bool compatible = true;
-                            std::map<dai::Var, size_t> state_x = dai::calcState(varsets[var_x], val_x);
-                            for( std::map<dai::Var, size_t>::const_iterator it = state_x.begin(); it != state_x.end(); ++it ) {
-                                std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
-                                if( (jt != state_y.end()) && (jt->second != it->second) ) {
-                                    compatible = false;
-                                    break;
-                                }
-                            }
-                            if( compatible ) {
-                                assert(val_x < 512);
-                                int index = val_x / 8, offset = val_x % 8;
-                                values[index] |= 1 << offset;
-                                ++ncompatible;
-                            }
-                        }
-                        assert((ncompatible > 0) && (ncompatible < int(varsets[var_x].nrStates())));
-                        assert(val_y * num_locs * num_locs + var_y * num_locs + var_x < int(compatible_values_.size()));
-                        compatible_values_[val_y * num_locs * num_locs + var_y * num_locs + var_x] = values;
-                    }
-                }
-            }
-        }
-    }
-
     const char * compatible_values(int var_x, int var_y, int val_y) const {
-        assert(val_y * nvars() * nvars() + var_y * nvars() + var_x < int(compatible_values_.size()));
-        assert(compatible_values_[val_y * nvars() * nvars() + var_y * nvars() + var_x] != 0);
-        return compatible_values_[val_y * nvars() * nvars() + var_y * nvars() + var_x];
+        assert(val_y * nvars() * nvars() + var_y * nvars() + var_x < int(cache_t::compatible_values().size()));
+        assert(cache_t::compatible_values(val_y, var_y, var_y) != 0);
+        return cache_t::compatible_values(val_y, var_y, var_x);
     }
 
     virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
-        state_x_ = dai::calcState(domain_[var_x]->varset(), val_x);
+        state_x_ = &cache_t::state(var_x, val_x);
     }
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const {
-        std::map<dai::Var, size_t> state_y = dai::calcState(domain_[var_y]->varset(), val_y);
-        for( std::map<dai::Var, size_t>::const_iterator it = state_x_.begin(); it != state_x_.end(); ++it ) {
+        const std::map<dai::Var, size_t> &state_y = cache_t::state(var_y, val_y);
+        for( std::map<dai::Var, size_t>::const_iterator it = state_x_->begin(); it != state_x_->end(); ++it ) {
             std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
             if( (jt != state_y.end()) && (it->second != jt->second) ) return false;
         }
@@ -284,9 +339,8 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
     arc_consistency_t(const arc_consistency_t &ac) = delete;
     virtual ~arc_consistency_t() { }
 
-    static void initialize_arc_consistency(int nrows, int ncols) {
+    static void initialize(int nrows, int ncols) {
         construct_constraint_graph(nrows, ncols);
-        compute_compatible_values(nrows, ncols);
     }
 
     const arc_consistency_t& operator=(const arc_consistency_t &ac) {
@@ -421,20 +475,19 @@ struct rbpf_slam3_particle_t : public base_particle_t {
         assert(csp_.is_consistent(0));
     }
 
-    int get_slabels(int loc, const dai::VarSet &vars, int value) const {
-        assert((loc >= 0) && (loc < base_->nloc_));
-        assert((value >= 0) && (value < int(vars.nrStates())));
+    int get_slabels(const varset_beam_t &beam, int value) const {
+        assert((value >= 0) && (value < int(beam.varset().nrStates())));
 
         // allocate cache if this is first call
         if( slabels_.empty() )
             slabels_ = std::vector<std::vector<int> >(base_->nloc_, std::vector<int>(512, -1));
-        assert(loc < int(slabels_.size()));
-        if( slabels_[loc].empty() )
-            slabels_[loc] = std::vector<int>(vars.nrStates(), -1);
-        assert(value < int(slabels_[loc].size()));
+        assert(beam.loc() < int(slabels_.size()));
+        if( slabels_[beam.loc()].empty() )
+            slabels_[beam.loc()] = std::vector<int>(beam.varset().nrStates(), -1);
+        assert(value < int(slabels_[beam.loc()].size()));
 
         // check whether there is a valid entry in cache
-        const std::vector<int> &slabels_for_loc = slabels_[loc];
+        const std::vector<int> &slabels_for_loc = slabels_[beam.loc()];
         if( slabels_for_loc[value] != -1 )
             return slabels_for_loc[value];
 
@@ -442,17 +495,19 @@ struct rbpf_slam3_particle_t : public base_particle_t {
         std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
 #endif
 
-        // this is the first time that we access (loc,value)
+        // this is the first time that we access (beam,value)
         // compute the correct value and cache it for later use
         int slabels = 0;
-        std::map<dai::Var, size_t> state = dai::calcState(vars, value);
-        for( dai::VarSet::const_iterator it = vars.begin(); it != vars.end(); ++it ) {
+        const std::map<dai::Var, size_t> &state = cache_t::state(beam.loc(), value);
+        for( dai::VarSet::const_iterator it = beam.varset().begin(); it != beam.varset().end(); ++it ) {
             const dai::Var &var = *it;
-            size_t var_value = state[var];
+            std::map<dai::Var, size_t>::const_iterator jt = state.find(var);
+            assert(jt != state.end());
+            size_t var_value = jt->second;
             assert(var_value < 2); // because it is a binary variable
             if( var_value ) {
                 int var_id = it->label();
-                int var_off = base_->var_offset(loc, var_id);
+                int var_off = base_->var_offset(beam.loc(), var_id);
                 assert((var_off >= 0) && (var_off < 9));
 #ifdef DEBUG
                 std::cout << "    [var_id=" << var_id << ":" << coord_t(var_id)
@@ -469,14 +524,14 @@ struct rbpf_slam3_particle_t : public base_particle_t {
 #endif
 
         // cache it and return
-        slabels_[loc][value] = slabels;
+        slabels_[beam.loc()][value] = slabels;
         return slabels;
     }
 
     void calculate_pairs(varset_beam_t &beam, std::set<std::pair<int, int> > &pairs) const {
         pairs.clear();
         for( varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
-            std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), *it);
+            const std::map<dai::Var, size_t> &state = cache_t::state(beam.loc(), *it);
             for( std::map<dai::Var, size_t>::const_iterator jt = state.begin(); jt != state.end(); ++jt )
                 pairs.insert(std::make_pair(jt->first.label(), jt->second));
         }
@@ -484,7 +539,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
 
     int calculate_cost(int valuation, const varset_beam_t &beam, const std::set<std::pair<int, int> > &pairs) const {
         int cost = 0;
-        std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), valuation);
+        const std::map<dai::Var, size_t> &state = cache_t::state(beam.loc(), valuation);
         for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
             cost += pairs.find(std::make_pair(it->first.label(), it->second)) == pairs.end() ? 1 : 0;
         return cost;
@@ -501,25 +556,19 @@ struct rbpf_slam3_particle_t : public base_particle_t {
 #endif
     }
 
-    void recover_states_in_adjacent_beam(varset_beam_t &beam, const dai::VarSet &vars, const std::vector<std::pair<int, std::map<dai::Var, size_t> > > &states) {
-        int i = 0;
-        std::vector<std::map<dai::Var, size_t> > beam_states(beam.size());
-        for( varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
-            beam_states[i++] = std::move(dai::calcState(beam.varset(), *it));
-        }
-
+    void recover_states_in_adjacent_beam(varset_beam_t &beam, const dai::VarSet &vars, const std::vector<std::pair<int, const std::map<dai::Var, size_t>*> > &states) {
         std::set<int> valuations_to_insert;
         for( int i = 0; i < int(states.size()); ++i ) {
-            const std::map<dai::Var, size_t> &state = states[i].second;
-            for( int j = 0; j < int(beam_states.size()); ++j ) {
-                std::map<dai::Var, size_t> new_s = beam_states[j];
-                for( dai::VarSet::const_iterator it = vars.begin(); it != vars.end(); ++it ) {
-                    std::map<dai::Var, size_t>::const_iterator xt = state.find(*it);
-                    std::map<dai::Var, size_t>::iterator yt = new_s.find(*it);
+            const std::map<dai::Var, size_t> &state = *states[i].second;
+            for( varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+                std::map<dai::Var, size_t> new_s = cache_t::state(beam.loc(), *it);
+                for( dai::VarSet::const_iterator jt = vars.begin(); jt != vars.end(); ++jt ) {
+                    std::map<dai::Var, size_t>::const_iterator xt = state.find(*jt);
+                    std::map<dai::Var, size_t>::iterator yt = new_s.find(*jt);
                     assert(xt != state.end());
                     assert(yt != new_s.end());
                     yt->second = xt->second;
-                    assert(new_s[*it] == xt->second);
+                    assert(new_s[*jt] == xt->second);
                 }
                 int valuation = dai::calcLinearState(beam.varset(), new_s);
                 assert(valuation < beam.max_value());
@@ -528,7 +577,6 @@ struct rbpf_slam3_particle_t : public base_particle_t {
                 }
             }
         }
-
         if( !valuations_to_insert.empty() ) {
             for( std::set<int>::const_iterator it = valuations_to_insert.begin(); it != valuations_to_insert.end(); ++it )
                 beam.insert(*it);
@@ -537,40 +585,38 @@ struct rbpf_slam3_particle_t : public base_particle_t {
     }
 
     void recover_valuations(varset_beam_t &beam, const std::vector<std::pair<int, int> > &valuations) {
-#if 1
-        std::cout << "recover: loc=" << beam.loc() << ", #valuations=" << valuations.size() << std::flush;
-#endif
+        //std::cout << "recover: loc=" << beam.loc() << ", #valuations=" << valuations.size() << std::flush;
 
         // compute states for valuations
-        std::vector<std::pair<int, std::map<dai::Var, size_t> > > states(valuations.size());
+        std::vector<std::pair<int, const std::map<dai::Var, size_t>*> > states(valuations.size());
         for( int i = 0; i < int(valuations.size()); ++i ) {
             int valuation = valuations[i].first;
             states[i].first = valuation;
-            states[i].second = std::move(dai::calcState(beam.varset(), valuation));
+            states[i].second = &cache_t::state(beam.loc(), valuation);
         }
 
         // recover states in adjacent beams
-#if 1
+#ifdef DEBUG
         std::cout << ", edges:";
 #endif
         dai::VarSet vars;
         const CSP::constraint_digraph_t::edge_list_t &edge_list = csp_.digraph().edges_pointing_to(beam.loc());
         for( int i = 0; i < int(edge_list.size()); ++i ) {
             const CSP::constraint_digraph_t::edge_t &edge = edge_list[i];
-#if 1
+#ifdef DEBUG
             std::cout << " (" << edge.first << "," << edge.second << ")" << std::flush;
 #endif
             varset_beam_t &adj_beam = *csp_.domain(edge.first);
             common_variables(beam, adj_beam, vars);
             if( !vars.empty() )
-#if 1
+#if 0
                 std::cout << "adj-beam: loc=" << adj_beam.loc() << ", vars=" << vars << ", sz-before=" << adj_beam.size() << std::endl;
 #endif
                 recover_states_in_adjacent_beam(adj_beam, vars, states);
-#if 1
+#if 0
                 std::cout << "adj-beam: loc=" << adj_beam.loc() << ", sz-after=" << adj_beam.size() << std::endl;
                 for( varset_beam_t::const_iterator it = adj_beam.begin(); it != adj_beam.end(); ++it ) {
-                    std::map<dai::Var, size_t> state = dai::calcState(adj_beam.varset(), *it);
+                    const std::map<dai::Var, size_t> &state = cache_t::state(adj_beam.loc(), *it);
                     std::cout << "adj-beam: ";
                     for( std::map<dai::Var, size_t>::const_iterator jt = state.begin(); jt != state.end(); ++jt )
                         std::cout << jt->first << "=" << jt->second << ",";
@@ -578,7 +624,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
                 }
 #endif
         }
-#if 1
+#ifdef DEBUG
         std::cout << std::endl;
 #endif
 
@@ -598,11 +644,10 @@ struct rbpf_slam3_particle_t : public base_particle_t {
         // calculate valuations to recover (using scores)
         assert(beam.size() <= beam.max_value());
         assert(beam.size() < beam.max_value());
-        const dai::VarSet &varset = beam.varset();
         std::vector<std::pair<int, int> > best_valuations;
         float best_expected_cost = std::numeric_limits<float>::max();
         for( int valuation = 0; valuation < beam.max_value(); ++valuation ) {
-            int slabels = get_slabels(beam.loc(), varset, valuation);
+            int slabels = get_slabels(beam, valuation);
             float p = base_->probability_obs_ore_slam(obs, beam.loc(), slabels, last_action);
             if( beam.contains(valuation) ) continue;
             int cost = calculate_cost(valuation, beam, pairs);
@@ -617,10 +662,10 @@ struct rbpf_slam3_particle_t : public base_particle_t {
         }
         assert(!best_valuations.empty());
 
-#if 1
+#if 0
         for( int i = 0; i < int(best_valuations.size()); ++i ) {
             int valuation = best_valuations[i].first;
-            std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), valuation);
+            const std::map<dai::Var, size_t> &state = cache_t::state(beam.loc(), valuation);
             std::cout << "best: valuation={";
             for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
                 std::cout << it->first << "=" << it->second << ",";
@@ -633,8 +678,8 @@ struct rbpf_slam3_particle_t : public base_particle_t {
 #ifndef NDEBUG
         int old_beam_size = beam.size();
 #endif
+        std::cout << "best=" << best_valuations.size() << std::flush;
         //std::cout << "max-value=" << beam.max_value() << std::endl;
-        std::cout << "#valuations-to-recover=" << best_valuations.size() << std::endl;
         //std::cout << "size-before-recover=" << beam.size() << std::endl;
         recover_valuations(beam, best_valuations);
         //std::cout << "size-after--recover=" << beam.size() << std::endl;
@@ -654,11 +699,10 @@ struct rbpf_slam3_particle_t : public base_particle_t {
         assert(current_loc < int(csp_.nvars()));
         std::vector<int> indices_to_be_removed;
         varset_beam_t &beam = *csp_.domain(current_loc);
-        const dai::VarSet &varset = beam.varset();
         for( varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
             int value = *it;
             int index = it.index();
-            int slabels = get_slabels(current_loc, varset, value);
+            int slabels = get_slabels(beam, value);
             float p = base_->probability_obs_ore_slam(obs, current_loc, slabels, last_action);
             if( p < varset_beam_t::kappa() ) indices_to_be_removed.push_back(index);
         }
@@ -671,31 +715,34 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             // Observation is inconsistent with current beam.
             // Repopulate beam with least-costly consistent valuation
 
-#ifndef NDEBUG
+#ifdef DEBUG
+            std::cout << "********** INCONSISTENT OBS! *************" << std::endl;
+            assert(csp_.is_consistent(0));
             {
-                std::cout << "********** INCONSISTENT OBS! *************" << std::endl;
-                assert(csp_.is_consistent(0));
                 csp_.add_all_edges_to_worklist();
                 bool something_removed = csp_.ac3(true);
                 assert(!something_removed);
             }
+#else
+            std::cout << " OBS[" << std::flush;
 #endif
 
             if( beam.size() == beam.max_value() ) {
-                std::cout << "**** BEAM IS FULL ****" << std::endl;
+                //std::cout << "**** BEAM IS FULL ****" << std::endl;
+                std::cout << "full" << std::flush;
             } else {
                 recover_valuations(beam, last_action, obs);
                 for( std::set<int>::const_iterator it = affected_beams_.begin(); it != affected_beams_.end(); ++it )
                     csp_.add_to_worklist(*it);
                 bool something_removed = csp_.ac3(true);
-
-#ifndef NDEBUG
+#ifdef DEBUG
                 std::cout << "ac3: something-removed=" << something_removed << ", sizes:";
                 for( int i = 0; i < int(csp_.nvars()); ++i ) std::cout << " " << csp_.domain(i)->size();
                 std::cout << std::endl;
-                assert(!something_removed);
 #endif
+                assert(!something_removed);
             }
+            std::cout << "]" << std::flush;
         } else {
             beam.erase_ordered_indices(indices_to_be_removed);
             csp_.add_to_worklist(current_loc);
@@ -778,7 +825,7 @@ struct motion_model_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
         const varset_beam_t &beam = *csp_.domain(np_current_loc);
         const dai::VarSet &varset = beam.varset();
         for( int value = 0; value < int(varset.nrStates()); ++value ) {
-            int slabels = get_slabels(np_current_loc, varset, value);
+            int slabels = get_slabels(beam, value);
             weight += beam.probability(value) * base_->probability_obs_ore_slam(obs, np_current_loc, slabels, last_action);
         }
         return weight;
@@ -881,7 +928,7 @@ struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
             const dai::VarSet &varset = beam.varset();
             float p = 0;
             for( int value = 0; value < int(varset.nrStates()); ++value ) {
-                int slabels = get_slabels(current_loc, varset, value);
+                int slabels = get_slabels(beam, value);
                 p += beam.probability(value) * base_->probability_obs_ore_slam(obs, nloc, slabels, last_action);
             }
             weight += base_->probability_tr_loc(last_action, current_loc, nloc) * p;

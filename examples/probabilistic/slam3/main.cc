@@ -60,8 +60,14 @@ string inference_t::edbp_output_fn_;
 int inference_t::edbp_max_iter_;
 
 float varset_beam_t::kappa_ = 0;
+
+int cache_t::num_locs_ = 0;
+vector<dai::Var> cache_t::variables_;
+vector<dai::VarSet> cache_t::varsets_;
+vector<const char*> cache_t::compatible_values_;
+map<vector<int>, const char*> cache_t::cache_;
+vector<vector<map<dai::Var, size_t>*> > cache_t::state_cache_;
 CSP::constraint_digraph_t arc_consistency_t::cg_;
-std::vector<const char*> arc_consistency_t::compatible_values_;
 vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 
 mpi_slam_t *mpi_base_t::mpi_ = 0;
@@ -357,7 +363,8 @@ int main(int argc, const char **argv) {
     base_particle_t::base_ = &cellmap;
     rbpf_slam2_particle_t::compute_edbp_factor_indices();
     if( !use_csp ) inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
-    arc_consistency_t::initialize_arc_consistency(nrows, ncols);
+    cache_t::initialize(nrows, ncols);
+    arc_consistency_t::initialize(nrows, ncols);
     varset_beam_t::set_kappa(kappa);
 
     // tracking algorithms
