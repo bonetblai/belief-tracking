@@ -72,7 +72,7 @@ class cache_t {
             }
             std::sort(vars.begin(), vars.end());
             varsets_[loc] = dai::VarSet(vars.begin(), vars.end());
-#if 1//def DEBUG
+#ifdef DEBUG
             std::cout << "# compute_basic_elements: loc=" << loc << ", vars=" << varsets_[loc] << std::endl;
 #endif
         }
@@ -184,13 +184,12 @@ class cache_t {
         compute_cache_for_compatible_values(nrows, ncols);
     }
 
-    static std::vector<const char*>& compatible_values() {
-        return compatible_values_;
+    static const dai::VarSet& varset(int loc) {
+        return varsets_[loc];
     }
     static const char * compatible_values(int val_y, int var_y, int var_x) {
         return compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x];
     }
-
     static std::map<dai::Var, size_t>& state(int var, int value) {
         return *state_cache_[var][value];
     }
@@ -285,6 +284,7 @@ class varset_beam_t : public var_beam_t {
 class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
     static CSP::constraint_digraph_t cg_;
     mutable std::map<dai::Var, size_t> *state_x_;
+    mutable int bitmask_size_;
     mutable char bitmask_[64];
 
     static void construct_constraint_graph(int nrows, int ncols) {
@@ -306,12 +306,6 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
         std::cout << "# cg: #vars=" << cg_.nvars() << ", #edges=" << cg_.nedges() << std::endl;
     }
 
-    const char * compatible_values(int var_x, int var_y, int val_y) const {
-        assert(val_y * nvars() * nvars() + var_y * nvars() + var_x < int(cache_t::compatible_values().size()));
-        assert(cache_t::compatible_values(val_y, var_y, var_y) != 0);
-        return cache_t::compatible_values(val_y, var_y, var_x);
-    }
-
     virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
         state_x_ = &cache_t::state(var_x, val_x);
     }
@@ -324,13 +318,17 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
         return true;
     }
 
-    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y) const { bzero(bitmask_, 64); }
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y) const {
+        bitmask_size_ = cache_t::varset(var_x).nrStates() / 8;
+        bzero(bitmask_, 64);
+    }
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y) const {
-        const char *bitmask = compatible_values(var_x, var_y, val_y);
+        const char *bitmask = cache_t::compatible_values(val_y, var_y, var_x);
         for( int i = 0; i < 64; ++i ) bitmask_[i] |= bitmask[i];
     }
     virtual bool arc_reduce_inverse_check(int val_x) const {
         int index = val_x / 8, offset = val_x % 8;
+        assert(index < bitmask_size_);
         return ((bitmask_[index] >> offset) & 0x1) == 1;
     }
 
