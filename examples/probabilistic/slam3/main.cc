@@ -177,6 +177,11 @@ void usage(ostream &os) {
 }
 
 int main(int argc, const char **argv) {
+    cout << "args:";
+    for( int i = 0; i < argc; ++i )
+        cout << " " << argv[i];
+    cout << endl;
+
     int ntrials = 1;
     int nrows = 1;
     int ncols = 8;

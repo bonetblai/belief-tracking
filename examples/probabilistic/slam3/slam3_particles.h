@@ -490,7 +490,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             return slabels_for_loc[value];
 
 #ifdef DEBUG
-        std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
+        std::cout << "get_slabels(loc=" << beam.loc() << ":" << coord_t(beam.loc()) << ", value=" << value << "):" << std::endl;
 #endif
 
         // this is the first time that we access (beam,value)
