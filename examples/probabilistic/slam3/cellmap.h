@@ -164,7 +164,7 @@ struct cellmap_t {
     void sample_labels(std::vector<int> &labels) const {
         labels = std::vector<int>(cells_.size(), 0);
         for( size_t i = 0; i < labels.size(); ++i )
-            labels[i] = lrand48() % nlabels_;
+            labels[i] = Utils::random(nlabels_);
     }
     void sample_labels() {
         std::vector<int> labels(cells_.size(), 0);
@@ -300,7 +300,7 @@ struct cellmap_t {
         assert((q >= 0) && (q <= 1));
         assert(!ore_slam_);
         if( drand48() >= q ) {
-            int i = lrand48() % (nlabels_ - 1);
+            int i = Utils::random(nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {
                 if( (label != j) && (i == 0) ) {
                     label = j;
@@ -674,7 +674,7 @@ struct cellmap_t {
     };
 
     int random_action() const {
-        int index = lrand48();
+        int index = Utils::random();
         if( (ncols_ == 1) || (nrows_ == 1) ) {
             index = index % 2;
             return ncols_ == 1 ? index : 2 + index;

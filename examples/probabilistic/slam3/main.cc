@@ -341,10 +341,7 @@ int main(int argc, const char **argv) {
     }
 
     // set seed
-    unsigned short seeds[3];
-    seeds[0] = seeds[1] = seeds[2] = seed;
-    seed48(seeds);
-    srand48(seed);
+    Utils::set_seed(seed);
     cout << "# seed=" << seed << endl;
 
     // create cellmap

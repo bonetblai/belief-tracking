@@ -24,6 +24,7 @@
 #include <map>
 #include <math.h>
 
+#include <stdlib.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 
@@ -50,6 +51,21 @@ template<typename T> inline T max(const T a, const T b) {
 
 template<typename T> inline T abs(const T a) {
     return a < 0 ? -a : a;
+}
+
+inline void set_seed(int seed) {
+    unsigned short seeds[3];
+    seeds[0] = seeds[1] = seeds[2] = seed;
+    seed48(seeds);
+    srand48(seed);
+}
+
+inline int random() {
+    return lrand48();
+}
+
+inline int random(int n) {
+    return lrand48() % n;
 }
 
 void split_request(const std::string &request, std::string &name, std::string &parameter_str) {

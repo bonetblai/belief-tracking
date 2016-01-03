@@ -74,7 +74,7 @@ struct slam_particle_t : public base_particle_t {
     void initial_sampling_in_place() {
         labels_ = std::vector<int>(base_->nloc_);
         for( int i = 0; i < base_->nloc_; ++i )
-            labels_[i] = lrand48() % base_->nlabels_;
+            labels_[i] = Utils::random(base_->nlabels_);
         current_loc_ = base_->initial_loc_;
     }
 

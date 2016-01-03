@@ -105,7 +105,7 @@ struct exploration_slam_policy_t : public action_selection_t<cellmap_t> {
         if( candidates.empty() )
             return base_.random_action();
         else
-            return candidates[lrand48() % candidates.size()];
+            return candidates[Utils::random(candidates.size())];
     }
 
     void build_agenda(const tracking_t<cellmap_t> *tracker) const {
@@ -190,7 +190,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         // calculate best action and return
         int action = greedy_action(&marginals_[base_.variable_offset(base_.nloc_)]);
         std::cout << "(" << base_.action_label(action) << ")" << std::flush;
-        return action == cellmap_t::noop ? lrand48() % 4 : action;
+        return action == cellmap_t::noop ? Utils::random(4) : action;
     }
 
     const std::vector<std::pair<int, float> > &tr_model(int action, int loc) const {
@@ -362,7 +362,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         assert(!best_actions.empty());
 
         // return best action
-        return best_actions[lrand48() % best_actions.size()];
+        return best_actions[Utils::random(best_actions.size())];
     }
 
 
@@ -395,7 +395,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         assert(!best_actions.empty());
 
         // return best action
-        return best_actions[lrand48() % best_actions.size()];
+        return best_actions[Utils::random(best_actions.size())];
     }
 };
 
