@@ -466,7 +466,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             csp_.domain(loc)->set_initial_configuration();
     }
 
-    void initial_sampling_in_place(mpi_slam_t *mpi, int wid) {
+    void initial_sampling_in_place() {
         assert(base_->nlabels_ == 2);
         loc_history_.push_back(base_->initial_loc_);
         reset_csp();
@@ -688,7 +688,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             csp_.set_alpha(*it);
     }
 
-    void update_factors(int last_action, int obs) {
+    bool update_factors(int last_action, int obs) {
         int current_loc = loc_history_.back();
 #ifdef DEBUG
         std::cout << "factor before update: loc=" << current_loc << ", obs=" << obs << std::endl;
@@ -747,11 +747,11 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             csp_.add_all_edges_to_worklist();
             csp_.ac3(true);
         }
-        assert(csp_.is_consistent(0));
 #ifdef DEBUG
         std::cout << "factor after  update: loc=" << current_loc << ", obs=" << obs << std::endl;
         csp_.print_factor(std::cout, current_loc);
 #endif
+        return csp_.is_consistent(0);
     }
 
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
@@ -803,7 +803,7 @@ struct motion_model_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
-                                mpi_slam_t *mpi,
+                                mpi_slam_t * /*mpi*/,
                                 int wid) const {
 #ifdef DEBUG
         assert(np == *this);
@@ -812,9 +812,9 @@ struct motion_model_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
         np.loc_history_.push_back(next_loc);
         if( !history_container.contains(np.loc_history_) ) {
             // this is a new loc history, perform update
-            np.update_factors(last_action, obs);
+            return np.update_factors(last_action, obs);
         }
-        return true; // CHECK: what happens with incompatible obs?
+        return true;
     }
 
     virtual float importance_weight(const rbpf_slam3_particle_t &np, int last_action, int obs) const {
@@ -829,9 +829,9 @@ struct motion_model_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
         return weight;
     }
 
-    motion_model_rbpf_slam3_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
+    motion_model_rbpf_slam3_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int wid) {
         motion_model_rbpf_slam3_particle_t *p = new motion_model_rbpf_slam3_particle_t;
-        p->initial_sampling_in_place(mpi, wid);
+        p->initial_sampling_in_place();
         return p;
     }
 };
@@ -903,7 +903,7 @@ struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
-                                mpi_slam_t *mpi,
+                                mpi_slam_t * /*mpi*/,
                                 int wid) const {
 #ifdef DEBUG
         assert(*this == np);
@@ -913,9 +913,9 @@ struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
         np.loc_history_.push_back(next_loc);
         if( !history_container.contains(np.loc_history_) ) {
             // this is a new loc history, perform update
-            np.update_factors(last_action, obs);
+            return np.update_factors(last_action, obs);
         }
-        return true; // CHECK: what happens with incompatible obs?
+        return true;
     }
 
     virtual float importance_weight(const rbpf_slam3_particle_t &, int last_action, int obs) const {
@@ -934,9 +934,9 @@ struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
         return weight;
     }
 
-    optimal_rbpf_slam3_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
+    optimal_rbpf_slam3_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int wid) {
         optimal_rbpf_slam3_particle_t *p = new optimal_rbpf_slam3_particle_t;
-        p->initial_sampling_in_place(mpi, wid);
+        p->initial_sampling_in_place();
         return p;
     }
 };

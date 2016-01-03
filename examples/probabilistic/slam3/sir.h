@@ -96,6 +96,8 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 
     bool force_resampling_;
     bool do_stochastic_universal_sampling_;
+    int num_sampling_attempts_;
+
     std::vector<std::pair<int, int> > execution_;
 
 #ifdef USE_MPI
@@ -105,7 +107,10 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 #endif
 
     SIR_t(const std::string &name, const BASE &base, const std::multimap<std::string, std::string> &parameters)
-      : PF_t<PTYPE, BASE>(name, base), force_resampling_(false), do_stochastic_universal_sampling_(false) {
+      : PF_t<PTYPE, BASE>(name, base),
+        force_resampling_(false),
+        do_stochastic_universal_sampling_(false),
+        num_sampling_attempts_(1) {
         std::multimap<std::string, std::string>::const_iterator it = parameters.find("nparticles");
         if( it != parameters.end() )
             PF_t<PTYPE, BASE>::set_nparticles(strtol(it->second.c_str(), 0, 0));
@@ -115,6 +120,9 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         it = parameters.find("sus");
         if( it != parameters.end() )
             do_stochastic_universal_sampling_ = it->second == "true";
+        it = parameters.find("num-sampling-attempts");
+        if( it != parameters.end() )
+            num_sampling_attempts_ = strtol(it->second.c_str(), 0, 0);
     }
     virtual ~SIR_t() { /* who deletes particles? */ }
 
@@ -203,23 +211,32 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
 #endif
 #endif
 
-                // sample new particle using the proposal distribution \pi
-                PTYPE *np = sample_from_pi(p, last_action, obs, history_container, wid);
-                if( np != 0 ) {
-                    // update histories and multiplicities
-                    if( !history_container.contains(np->history()) ) {
-                        history_container.insert(np->history(), new_particles.size());
-                    } else {
-                        history_container.increase_multiplicity(np->history());
-                        delete np;
-                        continue;
-                    }
+                // attempt to sample from pi using particle p as base particle.
+                // If MPI is used, we assume that failed sampling implies wid is not
+                // used
+                bool successful_attempt = false;
+                for( int k = 0; (k < num_sampling_attempts_) && !successful_attempt; ++k ) {
+                    // sample new particle using the proposal distribution \pi
+                    PTYPE *np = sample_from_pi(p, last_action, obs, history_container, wid);
+                    if( np != 0 ) {
+                        // mark this attempts as successful
+                        successful_attempt = true;
 
-                    // compute new importance weight using recursive formula and add new particle
-                    float new_weight = weight * importance_weight(*np, p, last_action, obs);
-                    new_particles.push_back(particle_t(new_weight, np, wid));
-                } else {
-                    //std::cout << "Removing particle!" << std::endl;
+                        // update histories and multiplicities
+                        if( !history_container.contains(np->history()) ) {
+                            history_container.insert(np->history(), new_particles.size());
+                        } else {
+                            history_container.increase_multiplicity(np->history());
+                            delete np;
+                            continue;
+                        }
+
+                        // compute new importance weight using recursive formula and add new particle
+                        float new_weight = weight * importance_weight(*np, p, last_action, obs);
+                        new_particles.push_back(particle_t(new_weight, np, wid));
+                    } else {
+                        if( 1 + k == num_sampling_attempts_ ) std::cout << "(removing particle)" << std::flush;
+                    }
                 }
             }
         }
@@ -383,6 +400,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
           std::string(",nparticles=") + std::to_string((long long)nparticles_) +
           std::string(",force-resampling=") + (force_resampling_ ? "true" : "false") +
           std::string(",sus=") + (do_stochastic_universal_sampling_ ? "true" : "false") +
+          std::string(",num-sampling-attempts=") + std::to_string((long long)num_sampling_attempts_) +
           ")";
         return id_str;
     }
