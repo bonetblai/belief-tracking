@@ -196,7 +196,7 @@ int main(int argc, const char **argv) {
     float po = 0.8; // default value in K. P. Murphy's paper
     float kappa = 0.1;
 
-    bool ore_slam = false;
+    int slam_type = cellmap_t::COLOR_SLAM;
     bool use_csp = false;
 
     int gtype = -1;
@@ -325,8 +325,12 @@ int main(int argc, const char **argv) {
             seed = atoi(argv[1]);
             --argc;
             ++argv;
+        } else if( !strcmp(argv[0], "--color-slam") ) {
+            slam_type = cellmap_t::COLOR_SLAM;
         } else if( !strcmp(argv[0], "--ore-slam") ) {
-            ore_slam = true;
+            slam_type = cellmap_t::ORE_SLAM;
+        } else if( !strcmp(argv[0], "--aisle-slam") ) {
+            slam_type = cellmap_t::AISLE_SLAM;
         } else if( !strncmp(argv[0], "--tracker=", 10) ) {
             string tracker(&argv[0][10]);
             Utils::tokenize(tracker, tracker_strings);
@@ -362,16 +366,19 @@ int main(int argc, const char **argv) {
         pa = 0.8; // CHECK
         po = 0.9; // CHECK
     }
-    cellmap_t cellmap(nrows, ncols, nlabels, ore_slam, pa, po);
+    cellmap_t cellmap(nrows, ncols, nlabels, slam_type, pa, po);
 
     // set static members
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
     rbpf_slam2_particle_t::compute_edbp_factor_indices();
-    if( !use_csp ) inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
-    cache_t::initialize(nrows, ncols);
-    arc_consistency_t::initialize(nrows, ncols);
-    varset_beam_t::set_kappa(kappa);
+    if( !use_csp ) {
+        inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
+    } else {
+        cache_t::initialize(nrows, ncols);
+        arc_consistency_t::initialize(nrows, ncols);
+        varset_beam_t::set_kappa(kappa);
+    }
 
     // tracking algorithms
     vector<tracking_t<cellmap_t>*> trackers;
@@ -416,22 +423,28 @@ int main(int argc, const char **argv) {
               new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
             tracker = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(name, cellmap, parameters, *cdf);
         } else if( short_name == "mm-rbpf" ) {
-            if( !ore_slam ) {
+            if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
-            } else {
+            } else if( slam_type == cellmap_t::ORE_SLAM ) {
                 if( !use_csp )
                     tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(name, cellmap, parameters);
                 else
                     tracker = new RBPF_t<motion_model_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
+            } else {
+                assert(slam_type == cellmap_t::AISLE_SLAM);
+                tracker = new RBPF_t<motion_model_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else if( short_name == "opt-rbpf" ) {
-            if( !ore_slam ) {
+            if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
-            } else {
+            } else if( slam_type == cellmap_t::ORE_SLAM ) {
                 if( !use_csp )
                     tracker = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(name, cellmap, parameters);
                 else
                     tracker = new RBPF_t<optimal_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
+            } else {
+                assert(slam_type == cellmap_t::AISLE_SLAM);
+                tracker = new RBPF_t<motion_model_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else {
             cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;

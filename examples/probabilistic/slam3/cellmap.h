@@ -108,9 +108,8 @@ struct cellmap_t {
     int nlabels_;
     int marginals_size_;
 
-    // tells whether this problem is colortile-slam or ore-slam
-    bool ore_slam_;
-    int type_;
+    // type of slam problem
+    int slam_type_;
 
     float pa_;
     float po_;
@@ -126,16 +125,17 @@ struct cellmap_t {
 
     mutable int initial_loc_;
 
-    enum { COLOR, ORE, AISLE };
+    // slam type
+    enum { COLOR_SLAM, ORE_SLAM, AISLE_SLAM };
 
-    cellmap_t(int nrows, int ncols, int nlabels, bool ore_slam, float pa, float po, float base_obs_noise = 0.9)
+    cellmap_t(int nrows, int ncols, int nlabels, int slam_type, float pa, float po, float base_obs_noise = 0.9)
       : nrows_(nrows), ncols_(ncols), nloc_(nrows * ncols),
         nvars_(1 + nloc_), nlabels_(nlabels),
-        ore_slam_(ore_slam),
+        slam_type_(slam_type),
         pa_(pa), po_(po), base_obs_noise_(base_obs_noise) {
         cells_ = std::vector<cell_t>(nloc_);
         marginals_size_ = 2 * nloc_ + nloc_;
-        if( ore_slam_ )
+        if( slam_type_ == ORE_SLAM )
             precompute_stored_information_ore_slam(); // precompute stored information
     }
     ~cellmap_t() { }
@@ -244,8 +244,10 @@ struct cellmap_t {
   public:
     float probability_tr_loc(int action, int old_loc, int new_loc, float pa = -1) const {
         float q = pa == -1 ? pa_ : pa;
-        return !ore_slam_ ? probability_tr_loc_standard(action, old_loc, new_loc, q)
-                          : probability_tr_loc_ore_slam(action, old_loc, new_loc, q);
+        if( slam_type_ == COLOR_SLAM )
+            return probability_tr_loc_standard(action, old_loc, new_loc, q);
+        else
+            return probability_tr_loc_ore_slam(action, old_loc, new_loc, q);
     }
 
     bool is_noop_action(int action, int loc, float pa = -1) const {
@@ -280,8 +282,10 @@ struct cellmap_t {
   public:
     int sample_loc(int loc, int action, float pa = -1) const {
         float q = pa == -1 ? pa_ : pa;
-        return !ore_slam_ ? sample_loc_standard(loc, action, q)
-                          : sample_loc_ore_slam(loc, action, q);
+        if( slam_type_ == COLOR_SLAM )
+            return sample_loc_standard(loc, action, q);
+        else
+            return sample_loc_ore_slam(loc, action, q);
     }
 
 
@@ -311,12 +315,12 @@ struct cellmap_t {
     // to label[loc] with probability equal to po^dist(loc,cloc) where dist(loc,cloc)
     // is the Manhattan distance between loc and cloc.
     float probability_obs_ore_slam(int obs, int loc, int slabels, int /*last_action*/) const {
-        assert(ore_slam_);
+        assert(slam_type_ == ORE_SLAM);
         return probability_obs_ore_slam_[calculate_index(slabels, obs, loc_type_[loc])];
     }
 
     float probability_obs_ore_slam(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        assert(ore_slam_);
+        assert(slam_type_ == ORE_SLAM);
         int slabels = 0;
         int row = loc / ncols_, col = loc % ncols_;
         for( int dr = -1; dr < 2; ++dr ) {
@@ -337,20 +341,24 @@ struct cellmap_t {
 
   public:
     float probability_obs(int obs, int loc, int label_or_slabels, int last_action) const {
-        return !ore_slam_ ? probability_obs_standard(obs, loc, label_or_slabels, last_action) :
-                            probability_obs_ore_slam(obs, loc, label_or_slabels, last_action);
+        if( slam_type_ == COLOR_SLAM )
+            return probability_obs_standard(obs, loc, label_or_slabels, last_action);
+        else
+            return probability_obs_ore_slam(obs, loc, label_or_slabels, last_action);
     }
 
     float probability_obs(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        return !ore_slam_ ? probability_obs_standard(obs, loc, labels, last_action) :
-                            probability_obs_ore_slam(obs, loc, labels, last_action);
+        if( slam_type_ == COLOR_SLAM )
+            return probability_obs_standard(obs, loc, labels, last_action);
+        else
+            return probability_obs_ore_slam(obs, loc, labels, last_action);
     }
 
 
   private:
     int sample_obs_standard(int /*loc*/, int label, int /*last_action*/, float q) const {
+        assert(slam_type_ == COLOR_SLAM);
         assert((q >= 0) && (q <= 1));
-        assert(!ore_slam_);
         if( Utils::uniform() >= q ) {
             int i = Utils::random(nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {
@@ -371,8 +379,8 @@ struct cellmap_t {
     }
 
     int sample_obs_ore_slam(int loc, int /*last_action*/, float q) const {
+        assert(slam_type_ == ORE_SLAM);
         assert((q >= 0) && (q <= 1));
-        assert(ore_slam_);
         assert((loc >= 0) && (loc < nloc_));
         int obs = 0;
         int row = loc / ncols_, col = loc % ncols_;
@@ -396,8 +404,10 @@ struct cellmap_t {
   public:
     int sample_obs(int loc, int last_action, float po = -1) const {
         float q = po == -1 ? po_ : po;
-        return !ore_slam_ ? sample_obs_standard(loc, last_action, q)
-                          : sample_obs_ore_slam(loc, last_action, q);
+        if( slam_type_ == COLOR_SLAM )
+            return sample_obs_standard(loc, last_action, q);
+        else
+            return sample_obs_ore_slam(loc, last_action, q);
     }
 
   private:
@@ -424,7 +434,7 @@ struct cellmap_t {
     }
 
     void precompute_stored_information_ore_slam() {
-        assert(ore_slam_);
+        assert(slam_type_ == ORE_SLAM);
 
         // num bits equal to 1 for each integer in 0..511
         num_bits_ = std::vector<int>(512, 0);
