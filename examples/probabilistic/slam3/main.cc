@@ -196,7 +196,7 @@ int main(int argc, const char **argv) {
     float po = 0.8; // default value in K. P. Murphy's paper
     float kappa = 0.1;
 
-    int slam_type = cellmap_t::COLOR_SLAM;
+    cellmap_t::slam_type_t slam_type = cellmap_t::COLOR_SLAM;
     bool use_csp = false;
 
     int gtype = -1;

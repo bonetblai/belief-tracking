@@ -109,7 +109,8 @@ struct cellmap_t {
     int marginals_size_;
 
     // type of slam problem
-    int slam_type_;
+    typedef enum { COLOR_SLAM, ORE_SLAM, AISLE_SLAM } slam_type_t;
+    slam_type_t slam_type_;
 
     float pa_;
     float po_;
@@ -125,10 +126,7 @@ struct cellmap_t {
 
     mutable int initial_loc_;
 
-    // slam type
-    enum { COLOR_SLAM, ORE_SLAM, AISLE_SLAM };
-
-    cellmap_t(int nrows, int ncols, int nlabels, int slam_type, float pa, float po, float base_obs_noise = 0.9)
+    cellmap_t(int nrows, int ncols, int nlabels, slam_type_t slam_type, float pa, float po, float base_obs_noise = 0.9)
       : nrows_(nrows), ncols_(ncols), nloc_(nrows * ncols),
         nvars_(1 + nloc_), nlabels_(nlabels),
         slam_type_(slam_type),
