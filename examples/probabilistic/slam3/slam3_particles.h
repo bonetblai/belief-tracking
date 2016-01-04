@@ -319,12 +319,12 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
     }
 
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y) const {
-        bitmask_size_ = cache_t::varset(var_x).nrStates() / 8;
+        bitmask_size_ = cache_t::varset(var_x).nrStates() / 8; // assumes nrStates() is multiple of 8 (which is true)
         bzero(bitmask_, 64);
     }
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y) const {
         const char *bitmask = cache_t::compatible_values(val_y, var_y, var_x);
-        for( int i = 0; i < 64; ++i ) bitmask_[i] |= bitmask[i];
+        for( int i = 0; i < 64; ++i ) bitmask_[i] |= bitmask[i]; // if variable-size bitmask, copy is of variable size
     }
     virtual bool arc_reduce_inverse_check(int val_x) const {
         int index = val_x / 8, offset = val_x % 8;
