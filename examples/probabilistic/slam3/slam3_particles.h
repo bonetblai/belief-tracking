@@ -646,7 +646,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
         float best_expected_cost = std::numeric_limits<float>::max();
         for( int valuation = 0; valuation < beam.max_value(); ++valuation ) {
             int slabels = get_slabels(beam, valuation);
-            float p = base_->probability_obs_ore_slam(obs, beam.loc(), slabels, last_action);
+            float p = base_->probability_obs(obs, beam.loc(), slabels, last_action);
             if( beam.contains(valuation) ) continue;
             int cost = calculate_cost(valuation, beam, pairs);
             float expected_cost = (1.0 - p) * cost;
@@ -701,7 +701,7 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             int value = *it;
             int index = it.index();
             int slabels = get_slabels(beam, value);
-            float p = base_->probability_obs_ore_slam(obs, current_loc, slabels, last_action);
+            float p = base_->probability_obs(obs, current_loc, slabels, last_action);
             if( p < varset_beam_t::kappa() ) indices_to_be_removed.push_back(index);
         }
 #ifdef DEBUG
@@ -827,7 +827,7 @@ struct motion_model_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
         const dai::VarSet &varset = beam.varset();
         for( int value = 0; value < int(varset.nrStates()); ++value ) {
             int slabels = get_slabels(beam, value);
-            weight += beam.probability(value) * base_->probability_obs_ore_slam(obs, np_current_loc, slabels, last_action);
+            weight += beam.probability(value) * base_->probability_obs(obs, np_current_loc, slabels, last_action);
         }
         return weight;
     }
@@ -887,7 +887,7 @@ struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
             float prob = 0;
             for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
                 int slabels = get_slabels(nloc, p_marginal.vars(), value);
-                prob += p_marginal[value] * base_->probability_obs_ore_slam(obs, nloc, slabels, last_action);
+                prob += p_marginal[value] * base_->probability_obs(obs, nloc, slabels, last_action);
             }
             cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, nloc) * prob);
             previous = cdf.back();
@@ -930,7 +930,7 @@ struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
             float p = 0;
             for( int value = 0; value < int(varset.nrStates()); ++value ) {
                 int slabels = get_slabels(beam, value);
-                p += beam.probability(value) * base_->probability_obs_ore_slam(obs, nloc, slabels, last_action);
+                p += beam.probability(value) * base_->probability_obs(obs, nloc, slabels, last_action);
             }
             weight += base_->probability_tr_loc(last_action, current_loc, nloc) * p;
         }

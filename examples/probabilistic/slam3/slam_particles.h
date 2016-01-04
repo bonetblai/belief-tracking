@@ -119,7 +119,7 @@ struct sis_slam_particle_t : public slam_particle_t {
 
     void update(float &weight, int last_action, int obs) {
         int nloc = base_->sample_loc(current_loc_, last_action);
-        weight *= base_->probability_obs_standard(obs, nloc, labels_[nloc], last_action);
+        weight *= base_->probability_obs(obs, nloc, labels_[nloc], last_action);
         current_loc_ = nloc;
     }
 
@@ -168,7 +168,7 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
     }
 
     float importance_weight(const motion_model_sir_slam_particle_t &np, int last_action, int obs) const {
-        return base_->probability_obs_standard(obs, np.current_loc_, np.labels_, last_action);
+        return base_->probability_obs(obs, np.current_loc_, np.labels_, last_action);
     }
 
     motion_model_sir_slam_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int /*wid*/) {
@@ -234,7 +234,7 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
         //                          = P(obs|np,p,last_action) * P(np|p,last_action) / P(obs|p,last_action)
         //                          = P(obs|np,last_action) * P(np|p,last_action) / P(obs|p,last_action)
         if( np.labels_ == p.labels_ ) {
-            float prob = base_->probability_obs_standard(obs, np.current_loc_, np.labels_, last_action);
+            float prob = base_->probability_obs(obs, np.current_loc_, np.labels_, last_action);
             prob *= base_->probability_tr_loc(last_action, p.current_loc_, np.current_loc_);
             return prob / importance_weight(np, last_action, obs);
         } else {
@@ -246,7 +246,7 @@ struct optimal_sir_slam_particle_t : public slam_particle_t {
         float weight = 0;
         int loc = current_loc_;
         for( int nloc = 0; nloc < base_->nloc_; ++nloc )
-            weight += base_->probability_obs_standard(obs, nloc, labels_, last_action) * base_->probability_tr_loc(last_action, loc, nloc);
+            weight += base_->probability_obs(obs, nloc, labels_, last_action) * base_->probability_tr_loc(last_action, loc, nloc);
         return weight;
     }
 
@@ -298,7 +298,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
         dai::Factor &factor = factors_[current_loc];
         assert(base_->nlabels_ == int(factor.nrStates()));
         for( int label = 0; label < base_->nlabels_; ++label )
-            factor.set(label, factor[label] * base_->probability_obs_standard(obs, current_loc, label, last_action));
+            factor.set(label, factor[label] * base_->probability_obs(obs, current_loc, label, last_action));
         factor.normalize();
     }
 
@@ -390,7 +390,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
         for( int label = 0; label < base_->nlabels_; ++label )
-            weight += base_->probability_obs_standard(obs, np_current_loc, label, last_action) * probability(np_current_loc, label);
+            weight += base_->probability_obs(obs, np_current_loc, label, last_action) * probability(np_current_loc, label);
         return weight;
     }
 
@@ -445,7 +445,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
             float p = 0;
             for( int label = 0; label < base_->nlabels_; ++label )
-                p += base_->probability_obs_standard(obs, nloc, label, last_action) * probability(nloc, label);
+                p += base_->probability_obs(obs, nloc, label, last_action) * probability(nloc, label);
             cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, nloc) * p);
             previous = cdf.back();
         }
@@ -489,7 +489,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
             float p = 0;
             for( int label = 0; label < base_->nlabels_; ++label )
-                p += base_->probability_obs_standard(obs, nloc, label, last_action) * probability(nloc, label);
+                p += base_->probability_obs(obs, nloc, label, last_action) * probability(nloc, label);
             weight += base_->probability_tr_loc(last_action, current_loc, nloc) * p;
         }
         return weight;

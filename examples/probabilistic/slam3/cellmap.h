@@ -110,6 +110,7 @@ struct cellmap_t {
 
     // tells whether this problem is colortile-slam or ore-slam
     bool ore_slam_;
+    int type_;
 
     float pa_;
     float po_;
@@ -124,6 +125,8 @@ struct cellmap_t {
     std::vector<cell_t> cells_;
 
     mutable int initial_loc_;
+
+    enum { COLOR, ORE, AISLE };
 
     cellmap_t(int nrows, int ncols, int nlabels, bool ore_slam, float pa, float po, float base_obs_noise = 0.9)
       : nrows_(nrows), ncols_(ncols), nloc_(nrows * ncols),
@@ -249,6 +252,7 @@ struct cellmap_t {
         return probability_tr_loc(action, loc, loc, pa) >= 1 - 1e-5;
     }
 
+
   private:
     int sample_loc_standard(int loc, int action, float q) const {
         assert((q >= 0) && (q <= 1));
@@ -280,9 +284,10 @@ struct cellmap_t {
                           : sample_loc_ore_slam(loc, action, q);
     }
 
-    // model for observations.
-    //
-    // For the non-ore-slam case, P( obs | label at current loc is 'label' ) is equal to
+
+    // model for observations
+  private:
+    // For the standard case, P( obs | label at current loc is 'label' ) is equal to
     // parameter po if obs = label and (1 - po) / (nlabels - 1) otherwise.
 
     // computes P(obs | label at current loc is 'label')
@@ -294,6 +299,53 @@ struct cellmap_t {
     float probability_obs_standard(int obs, int loc, const std::vector<int> &labels, int last_action) const {
         return probability_obs_standard(obs, loc, labels[loc], last_action);
     }
+
+    // For the ore-slam case, observation is a number from 0 to 9 that is computed from
+    // the current location and the 8 surrounding locations (for a middle location).
+    // The model is the following:
+    //
+    //     obs = \sum_loc I(loc)
+    //
+    // where the sum is over all locations loc surrounding (and including) the current
+    // location cloc. The variable I(loc) is a indicator random variable that is equal
+    // to label[loc] with probability equal to po^dist(loc,cloc) where dist(loc,cloc)
+    // is the Manhattan distance between loc and cloc.
+    float probability_obs_ore_slam(int obs, int loc, int slabels, int /*last_action*/) const {
+        assert(ore_slam_);
+        return probability_obs_ore_slam_[calculate_index(slabels, obs, loc_type_[loc])];
+    }
+
+    float probability_obs_ore_slam(int obs, int loc, const std::vector<int> &labels, int last_action) const {
+        assert(ore_slam_);
+        int slabels = 0;
+        int row = loc / ncols_, col = loc % ncols_;
+        for( int dr = -1; dr < 2; ++dr ) {
+            int nrow = row + dr;
+            if( (nrow < 0) || (nrow >= nrows_) ) continue;
+            for( int dc = -1; dc < 2; ++dc ) {
+                int ncol = col + dc;
+                if( (ncol < 0) || (ncol >= ncols_) ) continue;
+                int bit = (dr + 1) * 3 + (dc + 1);
+                int off_loc = nrow * ncols_ + ncol;
+                int label = labels[off_loc];
+                slabels += (label << bit);
+            }
+        }
+        assert((slabels >= 0) && (slabels < 512));
+        return probability_obs_ore_slam(obs, loc, slabels, last_action);
+    }
+
+  public:
+    float probability_obs(int obs, int loc, int label_or_slabels, int last_action) const {
+        return !ore_slam_ ? probability_obs_standard(obs, loc, label_or_slabels, last_action) :
+                            probability_obs_ore_slam(obs, loc, label_or_slabels, last_action);
+    }
+
+    float probability_obs(int obs, int loc, const std::vector<int> &labels, int last_action) const {
+        return !ore_slam_ ? probability_obs_standard(obs, loc, labels, last_action) :
+                            probability_obs_ore_slam(obs, loc, labels, last_action);
+    }
+
 
   private:
     int sample_obs_standard(int /*loc*/, int label, int /*last_action*/, float q) const {
@@ -348,43 +400,7 @@ struct cellmap_t {
                           : sample_obs_ore_slam(loc, last_action, q);
     }
 
-    // For the ore-slam case, observation is a number from 0 to 9 that is computed from
-    // the current location and the 8 surrounding locations (for a middle location).
-    // The model is the following:
-    //
-    //     obs = \sum_loc I(loc)
-    //
-    // where the sum is over all locations loc surrounding (and including) the current
-    // location cloc. The variable I(loc) is a indicator random variable that is equal
-    // to label[loc] with probability equal to po^dist(loc,cloc) where dist(loc,cloc)
-    // is the Manhattan distance between loc and cloc.
-
-  public:
-    float probability_obs_ore_slam(int obs, int loc, int slabels, int /*last_action*/) const {
-        assert(ore_slam_);
-        return probability_obs_ore_slam_[calculate_index(slabels, obs, loc_type_[loc])];
-    }
-
-    float probability_obs_ore_slam(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        assert(ore_slam_);
-        int slabels = 0;
-        int row = loc / ncols_, col = loc % ncols_;
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue;
-            for( int dc = -1; dc < 2; ++dc ) {
-                int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue;
-                int bit = (dr + 1) * 3 + (dc + 1);
-                int off_loc = nrow * ncols_ + ncol;
-                int label = labels[off_loc];
-                slabels += (label << bit);
-            }
-        }
-        assert((slabels >= 0) && (slabels < 512));
-        return probability_obs_ore_slam(obs, loc, slabels, last_action);
-    }
-
+  private:
     // precompute information for efficient computation of observation
     // probabilities.
 
@@ -606,15 +622,14 @@ struct cellmap_t {
         return num_bits_[valuation];
     }
 
+  public:
     int var_offset(int loc, int var_id) const {
         assert((loc >= 0) && (loc < nloc_));
         assert((var_id >= 0) && (var_id < nloc_));
         return var_offset_[loc * nloc_ + var_id];
     }
 
-
     // tracking function
-
     void run_initialize(std::vector<tracking_t<cellmap_t>*> &trackers, std::vector<repository_t> &repos) const {
         repos.clear();
         repos.reserve(trackers.size());
