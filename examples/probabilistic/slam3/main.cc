@@ -345,7 +345,14 @@ int main(int argc, const char **argv) {
             exit(-1);
         } else {
             cerr << "error: unexpected argument: " << argv[0] << endl;
+            exit(-1);
         }
+    }
+
+    // check proper dimension for aisle-slam
+    if( (slam_type == cellmap_t::AISLE_SLAM) && (nrows != 1) ) {
+        cerr << "error: number of rows for aisle-slam must be equal to 1" << endl;
+        exit(-1);
     }
 
     // set seed
