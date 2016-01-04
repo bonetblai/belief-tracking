@@ -242,6 +242,8 @@ int main(int argc, const char **argv) {
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<motion_model_rbpf_slam2_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<optimal_rbpf_slam2_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<motion_model_rbpf_slam3_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<optimal_rbpf_slam3_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
 
     SIR_t<motion_model_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<optimal_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
@@ -249,6 +251,8 @@ int main(int argc, const char **argv) {
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<motion_model_rbpf_slam2_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<optimal_rbpf_slam2_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<motion_model_rbpf_slam3_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<optimal_rbpf_slam3_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
 #endif
 
     // parse arguments

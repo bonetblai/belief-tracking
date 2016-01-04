@@ -82,7 +82,7 @@ struct slam_particle_t : public base_particle_t {
         return var == base_->nvars_ - 1 ? current_loc_ : labels_[var];
     }
 
-    void initialize_mpi_worker(mpi_slam_t * /*mpi*/, int /*wid*/) { } 
+    void initialize_mpi_worker(mpi_slam_t * /*mpi*/, int /*wid*/) { }
     void mpi_update_marginals(mpi_slam_t * /*mpi*/, int /*wid*/) { }
 
     void print(std::ostream &os) const {

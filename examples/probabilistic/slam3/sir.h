@@ -187,6 +187,11 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
         // \pi is in general not equal to the target distribution of 
         // successors states.
 
+#ifdef USE_MPI
+        std::vector<std::vector<int> > mpi_budget = mpi_fixed_budget_;
+        std::vector<int> mpi_load(mpi_budget.size(), 0);
+#endif
+
         std::vector<particle_t> new_particles;
         standard_history_container_t history_container;
         for( int i = 0; i < int(particles_.size()); ++i ) {

@@ -766,6 +766,9 @@ struct rbpf_slam3_particle_t : public base_particle_t {
 
     int value_for(int /*var*/) const { return -1; }
 
+    void initialize_mpi_worker(mpi_slam_t * /*mpi*/, int /*wid*/) { }
+    void mpi_update_marginals(mpi_slam_t * /*mpi*/, int /*wid*/) { }
+
     void print(std::ostream &os) const {
         if( loc_history_.empty() )
             os << "loc=<empty history>";
