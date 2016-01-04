@@ -256,7 +256,7 @@ struct cellmap_t {
             return loc;
         } else {
             coord_t coord(loc), new_coord(loc);
-            if( drand48() < q ) {
+            if( Utils::uniform() < q ) {
                 if( action == up )
                     new_coord = coord_t(coord.col_, coord.row_ + 1 < nrows_ ? coord.row_ + 1 : coord.row_);
                 else if( action == right )
@@ -299,7 +299,7 @@ struct cellmap_t {
     int sample_obs_standard(int /*loc*/, int label, int /*last_action*/, float q) const {
         assert((q >= 0) && (q <= 1));
         assert(!ore_slam_);
-        if( drand48() >= q ) {
+        if( Utils::uniform() >= q ) {
             int i = Utils::random(nlabels_ - 1);
             for( int j = 0; j < nlabels_; ++j ) {
                 if( (label != j) && (i == 0) ) {
@@ -334,7 +334,7 @@ struct cellmap_t {
                 int label = cells_[new_loc].label_;
                 assert((label == 0) || (label == 1));
                 float p = base_obs_noise_ * (dr != 0 ? q : 1) * (dc != 0 ? q : 1);
-                obs += drand48() < p ? label : 1 - label;
+                obs += Utils::uniform() < p ? label : 1 - label;
             }
         }
         assert((obs >= 0) && (obs < 10));

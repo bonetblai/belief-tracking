@@ -68,6 +68,15 @@ inline int random(int n) {
     return lrand48() % n;
 }
 
+inline double uniform() {
+    return drand48();
+}
+
+inline double uniform(double a, double b) {
+    double x = drand48();
+    return a + b * x;
+}
+
 void split_request(const std::string &request, std::string &name, std::string &parameter_str) {
 #ifdef DEBUG
     std::cout << "request=|" << request << "|" << std::endl;

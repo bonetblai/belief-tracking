@@ -222,10 +222,7 @@ int main(int argc, const char **argv) {
 
     // set seed using supplied seed and MPI rank
     seed += mpi.worker_id_;
-    unsigned short seeds[3];
-    seeds[0] = seeds[1] = seeds[2] = seed;
-    seed48(seeds);
-    srand48(seed);
+    Utils::set_seed(seed);
 
     // initialize inference algorithm
     compute_edbp_factor_indices();
