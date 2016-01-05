@@ -140,6 +140,8 @@ class var_beam_t {
 #endif
     }
 
+    int operator[](int i) const { return beam_[i]; }
+
     bool operator==(const var_beam_t &beam) const {
         return beam_ == beam.beam_;
     }
