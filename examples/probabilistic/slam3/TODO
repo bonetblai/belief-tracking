@@ -1,1 +1,2 @@
 Implement variable-size bitmasks for slam/csp
+copy constructor varset_beam_t
