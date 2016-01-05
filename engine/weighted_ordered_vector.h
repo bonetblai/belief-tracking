@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2012 Universidad Simon Bolivar
+ *  Copyright (C) 2016 Universidad Simon Bolivar
  * 
  *  Permission is hereby granted to distribute this software for
  *  non-commercial research purposes, provided that this copyright
@@ -17,32 +17,22 @@
  */
 
 
-#ifndef ORDERED_VECTOR_H
-#define ORDERED_VECTOR_H
+#ifndef WEIGHTED_ORDERED_VECTOR_H
+#define WEIGHTED_ORDERED_VECTOR_H
 
 #include <cassert>
 #include <iostream>
 #include <vector>
 #include <string.h>
 
+#include "ordered_vector.h"
+
 //#define DEBUG
 
-inline uint32_t jenkins_one_at_a_time_hash(const int *array, uint32_t len) {
-    uint32_t hash, i;
-    for( hash = i = 0; i < len; ++i ) {
-        hash += array[i];
-        hash += (hash << 10);
-        hash ^= (hash >> 6);
-    }
-    hash += (hash << 3);
-    hash ^= (hash >> 11);
-    hash += (hash << 15);
-    return hash;
-}
-
-class ordered_vector_t {
+class weighted_ordered_vector_t {
   protected:
     int *vector_;
+    int *weight_;
     int capacity_;
     int size_;
 
@@ -79,23 +69,29 @@ class ordered_vector_t {
     }
 
   public:
-    ordered_vector_t() : vector_(0), capacity_(0), size_(0) { }
-    explicit ordered_vector_t(const ordered_vector_t &vec)
-      : vector_(0), capacity_(0), size_(0) {
+    weighted_ordered_vector_t()
+      : vector_(0), weight_(0), capacity_(0), size_(0) {
+    }
+    explicit weighted_ordered_vector_t(const weighted_ordered_vector_t &vec)
+      : vector_(0), weight_(0), capacity_(0), size_(0) {
         *this = vec;
     }
-    ordered_vector_t(ordered_vector_t &&vec)
-      : vector_(vec.vector_), capacity_(vec.capacity_), size_(vec.size_) {
+    weighted_ordered_vector_t(weighted_ordered_vector_t &&vec)
+      : vector_(vec.vector_), weight_(vec.weight_), capacity_(vec.capacity_), size_(vec.size_) {
         vec.vector_ = 0;
+        vec.weight_ = 0;
         vec.capacity_ = 0;
         vec.size_ = 0;
     }
-    ~ordered_vector_t() { delete[] vector_; }
+    ~weighted_ordered_vector_t() {
+        delete[] vector_;
+        delete[] weight_;
+    }
 
     void reserve(int new_capacity) {
         if( capacity_ < new_capacity ) {
 #ifdef DEBUG
-            std::cout << "ordered_vector_t: reserve:"
+            std::cout << "weighted_ordered_vector_t: reserve:"
                       << " old-capacity=" << capacity_
                       << ", new-capacity=" << new_capacity
                       << std::endl;
@@ -105,11 +101,17 @@ class ordered_vector_t {
             memcpy(nvector, vector_, size_ * sizeof(int));
             delete[] vector_;
             vector_ = nvector;
+            int *nweight = new int[capacity_];
+            memcpy(nweight, weight_, size_ * sizeof(int));
+            delete[] weight_;
+            weight_ = nweight;
         }
     }
 
     uint32_t hash() const {
-        return jenkins_one_at_a_time_hash(vector_, size_);
+        uint32_t value1 = jenkins_one_at_a_time_hash(vector_, size_);
+        uint32_t value2 = jenkins_one_at_a_time_hash(weight_, size_);
+        return value1 ^ value2;
     }
 
     void clear() { size_ = 0; }
@@ -122,10 +124,11 @@ class ordered_vector_t {
         return (m != -1) && (vector_[m] == e);
     }
 
-    void insert(int e) {
+    void insert(int e, int w = 1) {
         if( size_ == 0 ) {
             reserve(1);
             vector_[0] = e;
+            weight_[0] = w;
             ++size_;
         } else {
             int m = binary_search(e);
@@ -133,37 +136,42 @@ class ordered_vector_t {
                 double_reserve(1 + size_);
                 for( int i = size_ - 1; i > m; --i ) {
                     vector_[1+i] = vector_[i];
+                    weight_[1+i] = weight_[i];
                 }
                 vector_[m+1] = e;
+                weight_[m+1] = w;
                 ++size_;
             }
         }
     }
 
-    void push_back(int e) {
+    void push_back(int e, int w = 1) {
         if( size_ == 0 ) {
-            insert(e);
+            insert(e, w);
         } else if( e > vector_[size_-1] ) {
             double_reserve(1 + size_);
             vector_[size_] = e;
+            weight_[size_] = w;
             ++size_;
         } else {
-            insert(e);
+            insert(e, w);
         }
     }
 
     // TODO: make this more efficient
-    void insert(const ordered_vector_t &vec) {
+    void insert(const weighted_ordered_vector_t &vec) {
         for( const_iterator it = vec.begin(); it != vec.end(); ++it ) {
             if( (size_ == 0) || (*it > vector_[size_-1]) ) {
                 // copy the whole vector at the end
                 int copysz = vec.size() - it.index();
                 double_reserve(size_ + copysz);
                 memcpy(&vector_[size_], &vec.vector_[it.index()], copysz * sizeof(int));
+                memcpy(&weight_[size_], &vec.weight_[it.index()], copysz * sizeof(int));
                 size_ += copysz;
                 return;
             } else {
-                insert(*it);
+                int w = weight_[it.index()];
+                insert(*it, w);
             }
         }
     }
@@ -173,6 +181,7 @@ class ordered_vector_t {
         if( (m != -1) && (vector_[m] == e) ) {
             for( int i = m; i < size_ - 1; ++i ) {
                 vector_[i] = vector_[i+1];
+                weight_[i] = weight_[i+1];
             }
             --size_;
         }
@@ -186,6 +195,7 @@ class ordered_vector_t {
                 while( (i < indices_sz) && (j == indices[i]) ) { ++j; ++i; }
                 while( (j < size_) && ((i >= indices_sz) || (j < indices[i])) ) {
                     vector_[k++] = vector_[j++];
+                    weight_[k++] = weight_[j++];
                 }
                 assert((j == size_) || (i < indices_sz));
                 assert((j == size_) || (j == indices[i]));
@@ -195,29 +205,37 @@ class ordered_vector_t {
         }
     }
 
-    int operator[](int i) const { return vector_[i]; }
+    std::pair<int, int> operator[](int i) const {
+        return std::make_pair(vector_[i], weight_[i]);
+    }
 
-    const ordered_vector_t& operator=(const ordered_vector_t &vec) {
+    const weighted_ordered_vector_t& operator=(const weighted_ordered_vector_t &vec) {
         reserve(vec.size_);
         memcpy(vector_, vec.vector_, vec.size_ * sizeof(int));
+        memcpy(weight_, vec.weight_, vec.size_ * sizeof(int));
         size_ = vec.size_;
         return *this;
     }
-    const ordered_vector_t& operator=(ordered_vector_t &&vec) {
+    const weighted_ordered_vector_t& operator=(weighted_ordered_vector_t &&vec) {
         delete[] vector_;
+        delete[] weight_;
         vector_ = vec.vector_;
+        weight_ = vec.weight_;
         capacity_ = vec.capacity_;
         size_ = vec.size_;
         vec.vector_ = 0;
+        vec.weight_ = 0;
         vec.capacity_ = 0;
         vec.size_ = 0;
         return *this;
     }
 
-    bool operator==(const ordered_vector_t &vec) const {
-        return (size_ == vec.size_) && (memcmp(vector_, vec.vector_, size_ * sizeof(int)) == 0);
+    bool operator==(const weighted_ordered_vector_t &vec) const {
+        return (size_ == vec.size_) &&
+               (memcmp(vector_, vec.vector_, size_ * sizeof(int)) == 0) &&
+               (memcmp(weight_, vec.weight_, size_ * sizeof(int)) == 0);
     }
-    bool operator!=(const ordered_vector_t &vec) const {
+    bool operator!=(const weighted_ordered_vector_t &vec) const {
         return *this == vec ? false : true;
     }
 
@@ -249,13 +267,13 @@ class ordered_vector_t {
     void print(std::ostream &os) const {
         os << '{';
         for( int i = 0; i < size_; ++i ) {
-            os << vector_[i] << ',';
+            os << vector_[i] << '@' << weight_[i] << ',';
         }
         os << '}';
     }
 };
 
-inline std::ostream& operator<<(std::ostream &os, const ordered_vector_t &vec) {
+inline std::ostream& operator<<(std::ostream &os, const weighted_ordered_vector_t &vec) {
     vec.print(os);
     return os;
 }
