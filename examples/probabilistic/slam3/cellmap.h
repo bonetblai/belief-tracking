@@ -145,7 +145,6 @@ struct cellmap_t {
         marginals_size_ = 2 * nloc_ + nloc_;
         if( slam_type_ == ORE_SLAM ) precompute_stored_information_ore_slam();
         if( slam_type_ == AISLE_SLAM ) precompute_stored_information_aisle_slam();
-        precompute_var_offsets();
     }
     ~cellmap_t() { }
 
@@ -479,25 +478,6 @@ struct cellmap_t {
         return false;
     }
 
-    void precompute_var_offsets() {
-        // calculate var offsets
-        var_offset_ = std::vector<int>(nloc_ * nloc_, -1);
-        for( int loc = 0; loc < nloc_; ++loc ) {
-            int row = loc / ncols_, col = loc % ncols_;
-            for( int dr = -1; dr < 2; ++dr ) {
-                int nrow = row + dr;
-                if( (nrow < 0) || (nrow >= nrows_) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
-                    int ncol = col + dc;
-                    if( (ncol < 0) || (ncol >= ncols_) ) continue;
-                    int new_loc = nrow * ncols_ + ncol;
-                    int offset = (dr + 1) * 3 + (dc + 1);
-                    var_offset_[loc * nloc_ + new_loc] = offset;
-                }
-            }
-        }
-    }
-
     void precompute_stored_information_ore_slam() {
         assert(slam_type_ == ORE_SLAM);
 
@@ -673,11 +653,28 @@ struct cellmap_t {
             }
         }
 #endif
+
+        // calculate var offsets
+        var_offset_ = std::vector<int>(nloc_ * nloc_, -1);
+        for( int loc = 0; loc < nloc_; ++loc ) {
+            int row = loc / ncols_, col = loc % ncols_;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nrow = row + dr;
+                if( (nrow < 0) || (nrow >= nrows_) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int ncol = col + dc;
+                    if( (ncol < 0) || (ncol >= ncols_) ) continue;
+                    int new_loc = nrow * ncols_ + ncol;
+                    int offset = (dr + 1) * 3 + (dc + 1);
+                    var_offset_[loc * nloc_ + new_loc] = offset;
+                }
+            }
+        }
     }
 
     void precompute_stored_information_aisle_slam() {
         // dimension is product of 8 valuations, 2 obs and 4 loc-types
-        probability_obs_aisle_slam_ = std::vector<float>(8 * 2 * 3, 0);
+        probability_obs_aisle_slam_ = std::vector<float>(8 * 2 * 4, 0);
         for( int loc_type = 0; loc_type < 4; ++loc_type ) {
             for( int obs = 0; obs < 2; ++obs ) {
                 for( int slabels = 0; slabels < 8; ++slabels ) {
