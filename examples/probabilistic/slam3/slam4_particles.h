@@ -40,6 +40,9 @@
 #include "var_beam.h"
 #include "arc_consistency.h"
 
+#include "weighted_var_beam.h"
+#include "weighted_arc_consistency.h"
+
 //#define DEBUG
 
 namespace slam4 {
@@ -379,6 +382,199 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
         const varset_beam_t &beam = *domain_[loc];
         os << "loc=" << loc << ",sz=" << beam.size() << ",domain={";
         for( varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it )
+            os << it.index() << ":" << *it << ",";
+        os << "}";
+    }
+    void print(std::ostream &os) const {
+        for( int loc = 0; loc < int(domain_.size()); ++loc ) {
+            os << "[";
+            print_factor(os, loc);
+            os << "]" << std::endl;
+        }
+    }
+};
+
+
+class weighted_varset_beam_t : public weighted_var_beam_t {
+  protected:
+    const int loc_;
+    const dai::Var var_;
+    const dai::VarSet varset_;
+    unsigned mask_;
+
+    float alpha_;
+    static float kappa_;
+
+  public:
+    weighted_varset_beam_t(int loc, const dai::Var &var, const dai::VarSet &varset)
+      : weighted_var_beam_t(1, varset.nrStates()), loc_(loc), var_(var), varset_(varset), mask_(0), alpha_(-1) {
+        mask_ = unsigned(-1);
+        for( dai::State state(varset_); state.valid(); state++ ) {
+            if( state(var_) == 1 )
+                mask_ = mask_ & dai::calcLinearState(varset_, state);
+        }
+#ifdef DEBUG
+        std::cout << "varset_beam_t: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
+#endif
+    }
+    weighted_varset_beam_t(const weighted_varset_beam_t &beam)
+      : weighted_var_beam_t(beam),
+        loc_(beam.loc_),
+        var_(beam.var_),
+        varset_(beam.varset_),
+        mask_(beam.mask_),
+        alpha_(beam.alpha_) {
+#ifdef DEBUG
+        std::cout << "varset_beam_t: copy-constructor: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
+#endif
+    }
+    weighted_varset_beam_t(weighted_varset_beam_t &&beam)
+      : weighted_var_beam_t(std::move(beam)),
+        loc_(beam.loc_),
+        var_(beam.var_),
+        varset_(std::move(beam.varset_)),
+        mask_(beam.mask_),
+        alpha_(beam.alpha_) {
+#ifdef DEBUG
+        std::cout << "varset_beam_t: move-constructor: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
+#endif
+    }
+    ~weighted_varset_beam_t() { }
+
+    static float kappa() { return kappa_; }
+    static void set_kappa(float kappa) { kappa_ = kappa; }
+
+    bool operator==(const weighted_varset_beam_t &beam) const {
+        return (loc_ == beam.loc_) && (*static_cast<const weighted_var_beam_t*>(this) == *static_cast<const weighted_var_beam_t*>(&beam));
+    }
+
+    int loc() const { return loc_; }
+    const dai::VarSet& varset() const { return varset_; }
+
+    float probability(int valuation) const {
+        // need to consider case where valuation is inside/outside csp. In the former case,
+        // probability is alpha / number-valuations-inside. In the latter case, it is 
+        // alpha * kappa / number-valuations-outside.
+        float p = contains(valuation) ? 1.0 : kappa_;
+        //std::cout << "probability: p=" << p << ", mask=" << mask_ << ", alpha=" << alpha_ << std::endl;
+        return alpha_ * p;
+    }
+    float marginal(int label) const {
+        float p = 0;
+        for( unsigned valuation = 0; valuation < unsigned(varset_.nrStates()); ++valuation ) {
+            // if valuation is compatible with label, p += probability(valuation)
+            if( ((label == 1) && ((valuation & mask_) != 0)) || ((label == 0) && ((valuation & mask_) == 0)) )
+                p += probability(valuation);
+        }
+        return p;
+    }
+
+    void set_alpha() {
+        alpha_ = 1.0 / float(size() + (varset_.nrStates() - size()) * kappa_);
+    }
+    void set_initial_configuration() {
+        weighted_var_beam_t::set_initial_configuration();
+        set_alpha();
+    }
+    void erase_ordered_indices(const std::vector<int> &ordered_indices) {
+        weighted_var_beam_t::erase_ordered_indices(ordered_indices);
+    }
+};
+
+class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weighted_varset_beam_t> {
+    static CSP::constraint_digraph_t cg_;
+    mutable std::map<dai::Var, size_t> *state_x_;
+    mutable unsigned char bitmask_;
+
+    static void construct_constraint_graph(int nrows, int ncols) {
+        int num_locs = nrows * ncols;
+        cg_.create_empty_graph(num_locs);
+        for( int loc = 0; loc < num_locs; ++loc ) {
+            cg_.reserve_edge_list(loc, 8);
+            int r = loc / ncols, c = loc % ncols;
+            for( int dr = -2; dr < 3; ++dr ) {
+                if( (r + dr < 0) || (r + dr >= nrows) ) continue;
+                for( int dc = -2; dc < 3; ++dc ) {
+                    if( (c + dc < 0) || (c + dc >= ncols) ) continue;
+                    if( (dr == 0) && (dc == 0) ) continue;
+                    int nloc = (r + dr) * ncols + (c + dc);
+                    cg_.add_edge(loc, nloc);
+                }
+            }
+        }
+        std::cout << "# cg: #vars=" << cg_.nvars() << ", #edges=" << cg_.nedges() << std::endl;
+    }
+
+    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
+        state_x_ = &cache_t::state(var_x, val_x);
+    }
+    virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const {
+        const std::map<dai::Var, size_t> &state_y = cache_t::state(var_y, val_y);
+        for( std::map<dai::Var, size_t>::const_iterator it = state_x_->begin(); it != state_x_->end(); ++it ) {
+            std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
+            if( (jt != state_y.end()) && (it->second != jt->second) ) return false;
+        }
+        return true;
+    }
+
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y) const {
+        bitmask_ = 0;
+    }
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y) const {
+        bitmask_ |= cache_t::compatible_values(val_y, var_y, var_x);
+    }
+    virtual bool arc_reduce_inverse_check(int val_x) const {
+        int offset = val_x % 8;
+        return ((bitmask_ >> offset) & 0x1) == 1;
+    }
+
+  public:
+    weighted_arc_consistency_t() : CSP::weighted_arc_consistency_t<weighted_varset_beam_t>(cg_) { }
+    weighted_arc_consistency_t(const weighted_arc_consistency_t &ac) = delete;
+    virtual ~weighted_arc_consistency_t() { }
+
+    static void initialize(int nrows, int ncols) {
+        construct_constraint_graph(nrows, ncols);
+    }
+
+    const weighted_arc_consistency_t& operator=(const weighted_arc_consistency_t &ac) {
+        nvars_ = ac.nvars_;
+        assert(domain_.size() == ac.domain_.size());
+        for( int loc = 0; loc < int(ac.domain_.size()); ++loc )
+            set_domain(loc, new weighted_varset_beam_t(*ac.domain(loc)));
+        return *this;
+    }
+    bool operator==(const weighted_arc_consistency_t &ac) const {
+        if( (nvars_ == ac.nvars_) && (domain_.size() == ac.domain_.size()) ) {
+            for( int loc = 0; loc < int(domain_.size()); ++loc ) {
+                if( !(*domain_[loc] == *ac.domain_[loc]) )
+                    return false;
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    bool weighted_ac3() {
+        std::vector<int> revised_vars;
+        bool something_removed = CSP::weighted_arc_consistency_t<weighted_varset_beam_t>::weighted_ac3(revised_vars, true);
+        set_alpha(revised_vars);
+        return something_removed;
+    }
+
+    void set_alpha(int loc) { domain_[loc]->set_alpha(); }
+    void set_alpha(const std::vector<int> &revised_vars) {
+        for( int i = 0; i < int(revised_vars.size()); ++i ) {
+            int loc = revised_vars[i];
+            set_alpha(loc);
+        }
+    }
+
+    void print_factor(std::ostream &os, int loc) const {
+        const weighted_varset_beam_t &beam = *domain_[loc];
+        os << "loc=" << loc << ",sz=" << beam.size() << ",domain={";
+        for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it )
             os << it.index() << ":" << *it << ",";
         os << "}";
     }
