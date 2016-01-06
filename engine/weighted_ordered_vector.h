@@ -242,26 +242,30 @@ class weighted_ordered_vector_t {
     struct const_iterator {
         const int *base_;
         const int *ptr_;
-        const_iterator(const int *ptr) : base_(ptr), ptr_(ptr) { }
+        int *wptr_;
+        const_iterator(const int *ptr, int *wptr) : base_(ptr), ptr_(ptr), wptr_(wptr) { }
         ~const_iterator() { }
         const_iterator& operator++() {
             ++ptr_;
+            ++wptr_;
             return *this;
         }
         int operator*() const { return *ptr_; }
         bool operator==(const const_iterator &it) const {
-            return ptr_ == it.ptr_;
+            return (ptr_ == it.ptr_) && (wptr_ == it.wptr_);
         }
         bool operator!=(const const_iterator &it) const {
-            return ptr_ != it.ptr_;
+            return (ptr_ != it.ptr_) || (wptr_ != it.wptr_);
         }
+        int weight() const { return *wptr_; }
+        int& weight() { return *wptr_; }
         int index() const { return ptr_ - base_; }
     };
     const_iterator begin() const {
-        return const_iterator(vector_);
+        return const_iterator(vector_, weight_);
     }
     const_iterator end() const {
-        return const_iterator(&vector_[size_]);
+        return const_iterator(&vector_[size_], &weight_[size_]);
     }
 
     void print(std::ostream &os) const {
