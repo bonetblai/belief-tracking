@@ -22,6 +22,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <limits>
 #include <vector>
 #include <string.h>
 
@@ -119,6 +120,19 @@ class weighted_ordered_vector_t {
     int size() const { return size_; }
     int capacity() const { return capacity_; }
 
+    int min_weight() const {
+        int min = std::numeric_limits<int>::max();
+        for( int i = 0; i < size_; ++i )
+            min = std::min(min, weight_[i]);
+        return min;
+    }
+    int max_weight() const {
+        int max = std::numeric_limits<int>::min();
+        for( int i = 0; i < size_; ++i )
+            max = std::max(max, weight_[i]);
+        return max;
+    }
+
     bool contains(int e) const {
         int m = binary_search(e);
         return (m != -1) && (vector_[m] == e);
@@ -205,6 +219,19 @@ class weighted_ordered_vector_t {
         }
     }
 
+    void increase_weight(int index, int amount = 1) {
+        assert(index < size_);
+        if( weight_[index] != std::numeric_limits<int>::max() )
+            weight_[index] += amount;
+    }
+    void increase_weight(const std::pair<int, int> &p) {
+        increase_weight(p.first, p.second);
+    }
+    void set_weight(int index, int weight) {
+        assert(index < size_);
+        weight_[index] = weight;
+    }
+
     std::pair<int, int> operator[](int i) const {
         return std::make_pair(vector_[i], weight_[i]);
     }
@@ -258,7 +285,6 @@ class weighted_ordered_vector_t {
             return (ptr_ != it.ptr_) || (wptr_ != it.wptr_);
         }
         int weight() const { return *wptr_; }
-        int& weight() { return *wptr_; }
         int index() const { return ptr_ - base_; }
     };
     const_iterator begin() const {
