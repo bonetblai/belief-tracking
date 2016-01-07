@@ -83,6 +83,9 @@ class weighted_var_beam_t {
             max_value_ *= domsz_[var];
     }
 
+    int min_weight() const { return beam_.min_weight(); }
+    int max_weight() const { return beam_.max_weight(); }
+
     int value(int var, int valuation) const {
         int i = 0;
         for( ; var > 0; --var, valuation /= domsz_[i++]);
@@ -108,6 +111,14 @@ class weighted_var_beam_t {
     void reserve(int capacity) { beam_.reserve(capacity); }
     void clear() { beam_.clear(); }
 
+    void increase_weight(int index, int amount) {
+        beam_.increase_weight(index, amount);
+    }
+    void increase_weight(const std::pair<int, int> &p) {
+        beam_.increase_weight(p.first, p.second);
+    }
+    void set_weight(int index, int w) { beam_.set_weight(index, w); }
+
     void insert(int e, int w) { beam_.insert(e, w); }
     bool push_back(int e, int w) {
         if( beam_.empty() || (beam_[beam_.size() - 1].first < e) ) {
@@ -123,7 +134,7 @@ class weighted_var_beam_t {
         beam_.erase_ordered_indices(indices);
     }
 
-    void set_initial_configuration(int value = -1, int weight = 1) {
+    void set_initial_configuration(int value = -1, int weight = 0) {
         beam_.clear();
         if( value == -1 ) {
             beam_.reserve(max_value_);
@@ -167,12 +178,13 @@ class weighted_var_beam_t {
         for( const_iterator it = begin(); it != end(); ++it ) {
             int valuation = *it;
 #if 1
-            os << "[p=" << valuation << ":";
+            os << "[v=" << valuation << ":";
             for( int var = 0; var < nvars_; ++var ) {
                 int val = value(var, valuation);
-                os << "v" << var << "=" << val << ",";
+                os << "x" << var << "=" << val;
+                if( var + 1 < nvars_ ) os << ",";
             }
-            os << "],";
+            os << ":w=" << it.weight() << "],";
 #else
             os << valuation << ",";
 #endif
