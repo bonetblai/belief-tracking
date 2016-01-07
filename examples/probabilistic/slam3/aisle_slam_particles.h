@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef SLAM4_PARTICLES_H
-#define SLAM4_PARTICLES_H
+#ifndef AISLE_SLAM_PARTICLES_H
+#define AISLE_SLAM_PARTICLES_H
 
 #include <cassert>
 #include <cstdlib>
@@ -43,7 +43,7 @@
 
 //#define DEBUG
 
-namespace slam4 {
+namespace AisleSLAM {
 
 class cache_t {
     static int num_locs_;
@@ -398,10 +398,8 @@ class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weight
     }
 };
 
-}; // namespace slam4
-
 // Abstract Particle for the 2nd Rao-Blackwellised filter
-struct rbpf_slam4_particle_t : public base_particle_t {
+struct rbpf_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
 
     const std::vector<int>& history() const {
@@ -409,13 +407,13 @@ struct rbpf_slam4_particle_t : public base_particle_t {
     }
 
     // arc consistency
-    slam4::weighted_arc_consistency_t weighted_csp_;
+    weighted_arc_consistency_t weighted_csp_;
     std::set<int> affected_beams_;
 
     // cache for conversion from factor values into slabels (it is dynamically filled by get_slabels())
     static std::vector<std::vector<int> > slabels_;
 
-    rbpf_slam4_particle_t() {
+    rbpf_particle_t() {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
 
@@ -444,30 +442,30 @@ struct rbpf_slam4_particle_t : public base_particle_t {
             }
             std::sort(vars.begin(), vars.end());
             dai::VarSet varset(vars.begin(), vars.end());
-            weighted_csp_.set_domain(loc, new slam4::weighted_varset_beam_t(loc, variables[loc], varset));
+            weighted_csp_.set_domain(loc, new weighted_varset_beam_t(loc, variables[loc], varset));
         }
     }
-    rbpf_slam4_particle_t(const rbpf_slam4_particle_t &p)
+    rbpf_particle_t(const rbpf_particle_t &p)
       : loc_history_(p.loc_history_) {
         weighted_csp_ = p.weighted_csp_;
     }
 #if 0
-    rbpf_slam4_particle_t(rbpf_slam4_particle_t &&p)
+    rbpf_particle_t(rbpf_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)),
         weighted_csp_(std::move(p.weighted_csp_)) {
     }
 #endif
-    virtual ~rbpf_slam4_particle_t() {
+    virtual ~rbpf_particle_t() {
         weighted_csp_.delete_domains_and_clear();
     }
 
-    const rbpf_slam4_particle_t& operator=(const rbpf_slam4_particle_t &p) {
+    const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
         loc_history_ = p.loc_history_;
         weighted_csp_ = p.weighted_csp_;
         return *this;
     }
 
-    bool operator==(const rbpf_slam4_particle_t &p) const {
+    bool operator==(const rbpf_particle_t &p) const {
         return (loc_history_ == p.loc_history_) && (weighted_csp_ == p.weighted_csp_);
     }
 
@@ -507,7 +505,7 @@ struct rbpf_slam4_particle_t : public base_particle_t {
         // this is the first time that we access (beam,value)
         // compute the correct value and cache it for later use
         int slabels = 0;
-        const std::map<dai::Var, size_t> &state = slam4::cache_t::state(loc, value);
+        const std::map<dai::Var, size_t> &state = cache_t::state(loc, value);
         for( dai::VarSet::const_iterator it = varset.begin(); it != varset.end(); ++it ) {
             const dai::Var &var = *it;
             std::map<dai::Var, size_t>::const_iterator jt = state.find(var);
@@ -537,7 +535,7 @@ struct rbpf_slam4_particle_t : public base_particle_t {
         slabels_[loc][value] = slabels;
         return slabels;
     }
-    int get_slabels(const slam4::weighted_varset_beam_t &beam, int value) const {
+    int get_slabels(const weighted_varset_beam_t &beam, int value) const {
         return get_slabels(beam.loc(), beam.varset(), value);
     }
 
@@ -551,14 +549,14 @@ struct rbpf_slam4_particle_t : public base_particle_t {
 #endif
         assert(current_loc < int(weighted_csp_.nvars()));
         std::vector<std::pair<int, int> > weight_increases;
-        slam4::weighted_varset_beam_t &beam = *weighted_csp_.domain(current_loc);
-        for( slam4::weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+        weighted_varset_beam_t &beam = *weighted_csp_.domain(current_loc);
+        for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
             int value = *it;
             int index = it.index();
             int slabels = get_slabels(beam, value);
             float p = base_->probability_obs(obs, current_loc, slabels, last_action);
-            int kappa_obs = kappa_t::kappa(p);
-            weight_increases.push_back(std::make_pair(index, kappa_obs));
+            int k_obs = kappa_t::kappa(p);
+            weight_increases.push_back(std::make_pair(index, k_obs));
         }
 #ifdef DEBUG
         std::cout << "  increases:";
@@ -592,7 +590,7 @@ struct rbpf_slam4_particle_t : public base_particle_t {
 
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            const slam4::weighted_varset_beam_t &beam = *weighted_csp_.domain(loc);
+            const weighted_varset_beam_t &beam = *weighted_csp_.domain(loc);
             for( int label = 0; label < base_->nlabels_; ++label )
                 marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * beam.marginal(label));
         }
@@ -613,32 +611,32 @@ struct rbpf_slam4_particle_t : public base_particle_t {
     }
 };
 
-// Particle for the motion model RBPF filter (slam4)
-struct motion_model_rbpf_slam4_particle_t : public rbpf_slam4_particle_t {
+// Particle for the motion model RBPF filter
+struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 
-    motion_model_rbpf_slam4_particle_t() : rbpf_slam4_particle_t() { }
-    motion_model_rbpf_slam4_particle_t(const motion_model_rbpf_slam4_particle_t &p)
-      : rbpf_slam4_particle_t(p) {
+    motion_model_rbpf_particle_t() : rbpf_particle_t() { }
+    motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p)
+      : rbpf_particle_t(p) {
     }
-    motion_model_rbpf_slam4_particle_t(motion_model_rbpf_slam4_particle_t &&p)
-      : rbpf_slam4_particle_t(std::move(p)) {
+    motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p)
+      : rbpf_particle_t(std::move(p)) {
     }
-    ~motion_model_rbpf_slam4_particle_t() { }
+    ~motion_model_rbpf_particle_t() { }
 
-    const motion_model_rbpf_slam4_particle_t& operator=(const motion_model_rbpf_slam4_particle_t &p) {
-        *static_cast<rbpf_slam4_particle_t*>(this) = p;
+    const motion_model_rbpf_particle_t& operator=(const motion_model_rbpf_particle_t &p) {
+        *static_cast<rbpf_particle_t*>(this) = p;
         return *this;
     }
 
-    bool operator==(const motion_model_rbpf_slam4_particle_t &p) const {
-        return *static_cast<const rbpf_slam4_particle_t*>(this) == p;
+    bool operator==(const motion_model_rbpf_particle_t &p) const {
+        return *static_cast<const rbpf_particle_t*>(this) == p;
     }
 
     static std::string type() {
         return std::string("mm_rbpf4_sir");
     }
 
-    virtual bool sample_from_pi(rbpf_slam4_particle_t &np,
+    virtual bool sample_from_pi(rbpf_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
@@ -656,10 +654,10 @@ struct motion_model_rbpf_slam4_particle_t : public rbpf_slam4_particle_t {
         return true;
     }
 
-    virtual float importance_weight(const rbpf_slam4_particle_t &np, int last_action, int obs) const {
+    virtual float importance_weight(const rbpf_particle_t &np, int last_action, int obs) const {
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
-        const slam4::weighted_varset_beam_t &beam = *weighted_csp_.domain(np_current_loc);
+        const weighted_varset_beam_t &beam = *weighted_csp_.domain(np_current_loc);
         const dai::VarSet &varset = beam.varset();
         for( int value = 0; value < int(varset.nrStates()); ++value ) {
             int slabels = get_slabels(beam, value);
@@ -668,35 +666,35 @@ struct motion_model_rbpf_slam4_particle_t : public rbpf_slam4_particle_t {
         return weight;
     }
 
-    motion_model_rbpf_slam4_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int wid) {
-        motion_model_rbpf_slam4_particle_t *p = new motion_model_rbpf_slam4_particle_t;
+    motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int wid) {
+        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t;
         p->initial_sampling_in_place();
         return p;
     }
 };
 
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
-struct optimal_rbpf_slam4_particle_t : public rbpf_slam4_particle_t {
+struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
 #if 0 // for some reason, it runs faster without these...
-    optimal_rbpf_slam4_particle_t() : rbpf_slam4_particle_t() { }
-    ~optimal_rbpf_slam4_particle_t() { }
+    optimal_rbpf_particle_t() : rbpf_particle_t() { }
+    ~optimal_rbpf_particle_t() { }
 
-    optimal_rbpf_slam4_particle_t(const optimal_rbpf_slam4_particle_t &p) {
+    optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) {
         *this = p;
     }
 
-    optimal_rbpf_slam4_particle_t(optimal_rbpf_slam4_particle_t &&p) : rbpf_slam4_particle_t(std::move(p)) {
+    optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) {
     }
 
-    const optimal_rbpf_slam4_particle_t& operator=(const optimal_rbpf_slam4_particle_t &p) {
-        *static_cast<rbpf_slam4_particle_t*>(this) = p;
+    const optimal_rbpf_particle_t& operator=(const optimal_rbpf_particle_t &p) {
+        *static_cast<rbpf_particle_t*>(this) = p;
         return *this;
     }
 
-    bool operator==(const optimal_rbpf_slam4_particle_t &p) const {
-        return *static_cast<const rbpf_slam4_particle_t*>(this) == p;
+    bool operator==(const optimal_rbpf_particle_t &p) const {
+        return *static_cast<const rbpf_particle_t*>(this) == p;
     }
 #endif
 
@@ -738,7 +736,7 @@ struct optimal_rbpf_slam4_particle_t : public rbpf_slam4_particle_t {
         assert(0);
     }
 
-    virtual bool sample_from_pi(rbpf_slam4_particle_t &np,
+    virtual bool sample_from_pi(rbpf_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
@@ -757,11 +755,11 @@ struct optimal_rbpf_slam4_particle_t : public rbpf_slam4_particle_t {
         return true;
     }
 
-    virtual float importance_weight(const rbpf_slam4_particle_t &, int last_action, int obs) const {
+    virtual float importance_weight(const rbpf_particle_t &, int last_action, int obs) const {
         float weight = 0;
         int current_loc = loc_history_.back();
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
-            const slam4::weighted_varset_beam_t &beam = *weighted_csp_.domain(current_loc);
+            const weighted_varset_beam_t &beam = *weighted_csp_.domain(current_loc);
             const dai::VarSet &varset = beam.varset();
             float p = 0;
             for( int value = 0; value < int(varset.nrStates()); ++value ) {
@@ -773,12 +771,14 @@ struct optimal_rbpf_slam4_particle_t : public rbpf_slam4_particle_t {
         return weight;
     }
 
-    optimal_rbpf_slam4_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int wid) {
-        optimal_rbpf_slam4_particle_t *p = new optimal_rbpf_slam4_particle_t;
+    optimal_rbpf_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int wid) {
+        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t;
         p->initial_sampling_in_place();
         return p;
     }
 };
+
+}; // namespace AisleSLAM
 
 #undef DEBUG
 

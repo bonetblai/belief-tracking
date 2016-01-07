@@ -39,9 +39,9 @@
 #include "rbpf.h"
 
 #include "slam_particles.h"
-#include "slam2_particles.h"
+#include "ore_slam_particles.h"
 #include "slam3_particles.h"
-#include "slam4_particles.h"
+#include "aisle_slam_particles.h"
 
 using namespace std;
 
@@ -49,8 +49,8 @@ using namespace std;
 // static members
 int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
-vector<vector<int> > rbpf_slam2_particle_t::slabels_;
-vector<vector<int> > rbpf_slam2_particle_t::edbp_factor_indices_;
+vector<vector<int> > OreSLAM::rbpf_particle_t::slabels_;
+vector<vector<int> > OreSLAM::rbpf_particle_t::edbp_factor_indices_;
 string inference_t::algorithm_;
 string inference_t::options_;
 dai::PropertySet inference_t::libdai_options_;
@@ -73,13 +73,13 @@ vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 float kappa_t::kappa_ = 0;
 vector<float> kappa_t::powers_;
 
-int slam4::cache_t::num_locs_ = 0;
-vector<dai::Var> slam4::cache_t::variables_;
-vector<dai::VarSet> slam4::cache_t::varsets_;
-vector<unsigned char> slam4::cache_t::compatible_values_;
-vector<vector<map<dai::Var, size_t>*> > slam4::cache_t::state_cache_;
-CSP::constraint_digraph_t slam4::weighted_arc_consistency_t::cg_;
-vector<vector<int> > rbpf_slam4_particle_t::slabels_;
+int AisleSLAM::cache_t::num_locs_ = 0;
+vector<dai::Var> AisleSLAM::cache_t::variables_;
+vector<dai::VarSet> AisleSLAM::cache_t::varsets_;
+vector<unsigned char> AisleSLAM::cache_t::compatible_values_;
+vector<vector<map<dai::Var, size_t>*> > AisleSLAM::cache_t::state_cache_;
+CSP::constraint_digraph_t AisleSLAM::weighted_arc_consistency_t::cg_;
+vector<vector<int> > AisleSLAM::rbpf_particle_t::slabels_;
 
 mpi_slam_t *mpi_base_t::mpi_ = 0;
 
@@ -251,21 +251,21 @@ int main(int argc, const char **argv) {
     SIR_t<optimal_sir_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<motion_model_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<motion_model_rbpf_slam2_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<optimal_rbpf_slam2_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<motion_model_rbpf_slam3_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<optimal_rbpf_slam3_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<motion_model_rbpf_slam4_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<optimal_rbpf_slam4_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
 
     SIR_t<motion_model_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<optimal_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<motion_model_rbpf_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
-    SIR_t<motion_model_rbpf_slam2_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
-    SIR_t<optimal_rbpf_slam2_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
-    SIR_t<motion_model_rbpf_slam4_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
-    SIR_t<optimal_rbpf_slam4_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
 #endif
 
     // parse arguments
@@ -391,7 +391,7 @@ int main(int argc, const char **argv) {
     // set static members
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
-    rbpf_slam2_particle_t::compute_edbp_factor_indices();
+    OreSLAM::rbpf_particle_t::compute_edbp_factor_indices();
     if( !use_csp ) {
         inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
     }
@@ -402,8 +402,8 @@ int main(int argc, const char **argv) {
     }
     if( slam_type == cellmap_t::AISLE_SLAM ) {
         kappa_t::initialize(kappa, 10);
-        slam4::cache_t::initialize(nrows, ncols);
-        slam4::weighted_arc_consistency_t::initialize(nrows, ncols);
+        AisleSLAM::cache_t::initialize(nrows, ncols);
+        AisleSLAM::weighted_arc_consistency_t::initialize(nrows, ncols);
     }
 
     // tracking algorithms
@@ -453,24 +453,24 @@ int main(int argc, const char **argv) {
                 tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( slam_type == cellmap_t::ORE_SLAM ) {
                 if( !use_csp )
-                    tracker = new RBPF_t<motion_model_rbpf_slam2_particle_t, cellmap_t>(name, cellmap, parameters);
+                    tracker = new RBPF_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
                 else
                     tracker = new RBPF_t<motion_model_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
-                tracker = new RBPF_t<motion_model_rbpf_slam4_particle_t, cellmap_t>(name, cellmap, parameters);
+                tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else if( short_name == "opt-rbpf" ) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( slam_type == cellmap_t::ORE_SLAM ) {
                 if( !use_csp )
-                    tracker = new RBPF_t<optimal_rbpf_slam2_particle_t, cellmap_t>(name, cellmap, parameters);
+                    tracker = new RBPF_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
                 else
                     tracker = new RBPF_t<optimal_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
-                tracker = new RBPF_t<motion_model_rbpf_slam4_particle_t, cellmap_t>(name, cellmap, parameters);
+                tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else {
             cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
@@ -513,7 +513,7 @@ int main(int argc, const char **argv) {
     vector<Utils::stat_t> stats_unknown(trackers.size());
     vector<Utils::stat_t> stats_error(trackers.size());
     for( int trial = 0; trial < ntrials; ++trial ) {
-        cout << "# trial = " << trial << endl;
+        cout << "# trial = " << trial << " / " << ntrials << endl;
 
         // set labels and fixed execution (if appropriate)
         set_labels_and_execution(cellmap, ptype, num_covering_loops, fixed_execution);

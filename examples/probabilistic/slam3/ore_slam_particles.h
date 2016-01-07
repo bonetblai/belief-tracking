@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2015 Universidad Simon Bolivar
+ *  Copyright (C) 2016 Universidad Simon Bolivar
  *
  *  Permission is hereby granted to distribute this software for
  *  non-commercial research purposes, provided that this copyright
@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef SLAM2_PARTICLES_H
-#define SLAM2_PARTICLES_H
+#ifndef ORE_SLAM_PARTICLES_H
+#define ORE_SLAM_PARTICLES_H
 
 #include <cassert>
 #include <cstdlib>
@@ -39,8 +39,10 @@
 
 //#define DEBUG
 
+namespace OreSLAM {
+
 // Abstract Particle for the 2nd Rao-Blackwellised filter
-struct rbpf_slam2_particle_t : public base_particle_t {
+struct rbpf_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
 
     const std::vector<int>& history() const {
@@ -62,7 +64,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     // conversion between libdai and edbp factors
     static std::vector<std::vector<int> > edbp_factor_indices_;
 
-    rbpf_slam2_particle_t() {
+    rbpf_particle_t() {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
 
@@ -107,15 +109,15 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         // create inference algorithm
         inference_.create_and_initialize_algorithm(factors_);
     }
-    virtual ~rbpf_slam2_particle_t() {
+    virtual ~rbpf_particle_t() {
         inference_.destroy_inference_algorithm();
     }
 
-    rbpf_slam2_particle_t(const rbpf_slam2_particle_t &p) {
+    rbpf_particle_t(const rbpf_particle_t &p) {
         *this = p;
     }
 
-    rbpf_slam2_particle_t(rbpf_slam2_particle_t &&p)
+    rbpf_particle_t(rbpf_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)),
         variables_(std::move(p.variables_)),
         factors_(std::move(p.factors_)),
@@ -124,7 +126,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         inference_(std::move(p.inference_)) {
     }
 
-    const rbpf_slam2_particle_t& operator=(const rbpf_slam2_particle_t &p) {
+    const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
         loc_history_ = p.loc_history_;
         variables_ = p.variables_;
         factors_ = p.factors_;
@@ -134,7 +136,7 @@ struct rbpf_slam2_particle_t : public base_particle_t {
         return *this;
     }
 
-    bool operator==(const rbpf_slam2_particle_t &p) const {
+    bool operator==(const rbpf_particle_t &p) const {
         return (loc_history_ == p.loc_history_) &&
                (variables_ == p.variables_) &&
                (factors_ == p.factors_) &&
@@ -338,26 +340,26 @@ struct rbpf_slam2_particle_t : public base_particle_t {
     }
 };
 
-// Particle for the motion model RBPF filter (slam2)
-struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
+// Particle for the motion model RBPF filter
+struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 #if 0 // for some reason, it runs faster without these...
-    motion_model_rbpf_slam2_particle_t() : rbpf_slam2_particle_t() { }
-    ~motion_model_rbpf_slam2_particle_t() { }
+    motion_model_rbpf_particle_t() : rbpf_particle_t() { }
+    ~motion_model_rbpf_particle_t() { }
 
-    motion_model_rbpf_slam2_particle_t(const motion_model_rbpf_slam2_particle_t &p) {
+    motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p) {
         *this = p;
     }
 
-    motion_model_rbpf_slam2_particle_t(motion_model_rbpf_slam2_particle_t &&p) : rbpf_slam2_particle_t(std::move(p)) {
+    motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) {
     }
 
-    const motion_model_rbpf_slam2_particle_t& operator=(const motion_model_rbpf_slam2_particle_t &p) {
-        *static_cast<rbpf_slam2_particle_t*>(this) = p;
+    const motion_model_rbpf_particle_t& operator=(const motion_model_rbpf_particle_t &p) {
+        *static_cast<rbpf_particle_t*>(this) = p;
         return *this;
     }
 
-    bool operator==(const motion_model_rbpf_slam2_particle_t &p) const {
-        return *static_cast<const rbpf_slam2_particle_t*>(this) == p;
+    bool operator==(const motion_model_rbpf_particle_t &p) const {
+        return *static_cast<const rbpf_particle_t*>(this) == p;
     }
 #endif
 
@@ -365,7 +367,7 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return std::string("mm_rbpf2_sir");
     }
 
-    virtual bool sample_from_pi(rbpf_slam2_particle_t &np,
+    virtual bool sample_from_pi(rbpf_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
@@ -384,7 +386,7 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return true; // CHECK: what happens with incompatible obs?
     }
 
-    virtual float importance_weight(const rbpf_slam2_particle_t &np, int last_action, int obs) const {
+    virtual float importance_weight(const rbpf_particle_t &np, int last_action, int obs) const {
         assert(indices_for_updated_factors_.empty());
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
@@ -396,35 +398,35 @@ struct motion_model_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return weight;
     }
 
-    motion_model_rbpf_slam2_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        motion_model_rbpf_slam2_particle_t *p = new motion_model_rbpf_slam2_particle_t;
+    motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
+        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t;
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
 };
 
 // Particle for the optimal RBPF filter (verified: 09/12/2015)
-struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
+struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
 #if 0 // for some reason, it runs faster without these...
-    optimal_rbpf_slam2_particle_t() : rbpf_slam2_particle_t() { }
-    ~optimal_rbpf_slam2_particle_t() { }
+    optimal_rbpf_particle_t() : rbpf_particle_t() { }
+    ~optimal_rbpf_particle_t() { }
 
-    optimal_rbpf_slam2_particle_t(const optimal_rbpf_slam2_particle_t &p) {
+    optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) {
         *this = p;
     }
 
-    optimal_rbpf_slam2_particle_t(optimal_rbpf_slam2_particle_t &&p) : rbpf_slam2_particle_t(std::move(p)) {
+    optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) {
     }
 
-    const optimal_rbpf_slam2_particle_t& operator=(const optimal_rbpf_slam2_particle_t &p) {
-        *static_cast<rbpf_slam2_particle_t*>(this) = p;
+    const optimal_rbpf_particle_t& operator=(const optimal_rbpf_particle_t &p) {
+        *static_cast<rbpf_particle_t*>(this) = p;
         return *this;
     }
 
-    bool operator==(const optimal_rbpf_slam2_particle_t &p) const {
-        return *static_cast<const rbpf_slam2_particle_t*>(this) == p;
+    bool operator==(const optimal_rbpf_particle_t &p) const {
+        return *static_cast<const rbpf_particle_t*>(this) == p;
     }
 #endif
 
@@ -463,7 +465,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         }
     }
 
-    virtual bool sample_from_pi(rbpf_slam2_particle_t &np,
+    virtual bool sample_from_pi(rbpf_particle_t &np,
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
@@ -483,7 +485,7 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return true; // CHECK: what happens with incompatible obs?
     }
 
-    virtual float importance_weight(const rbpf_slam2_particle_t &, int last_action, int obs) const {
+    virtual float importance_weight(const rbpf_particle_t &, int last_action, int obs) const {
         float weight = 0;
         int current_loc = loc_history_.back();
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
@@ -498,12 +500,14 @@ struct optimal_rbpf_slam2_particle_t : public rbpf_slam2_particle_t {
         return weight;
     }
 
-    optimal_rbpf_slam2_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        optimal_rbpf_slam2_particle_t *p = new optimal_rbpf_slam2_particle_t;
+    optimal_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
+        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t;
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
 };
+
+}; // namespace OreSLAM
 
 #undef DEBUG
 

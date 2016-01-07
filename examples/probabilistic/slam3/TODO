@@ -1,2 +1,3 @@
-Implement variable-size bitmasks for slam/csp
-copy constructor varset_beam_t
+- implement variable-size bitmasks for slam/csp
+- optimal resampling for aisle-slam
+- probabilistic inference on aisle-slam
