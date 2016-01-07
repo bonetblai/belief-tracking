@@ -70,14 +70,14 @@ vector<vector<map<dai::Var, size_t>*> > slam3::cache_t::state_cache_;
 CSP::constraint_digraph_t slam3::arc_consistency_t::cg_;
 vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 
-float slam4::varset_beam_t::kappa_ = 0;
-float slam4::weighted_varset_beam_t::kappa_ = 0;
+float kappa_t::kappa_ = 0;
+vector<float> kappa_t::powers_;
+
 int slam4::cache_t::num_locs_ = 0;
 vector<dai::Var> slam4::cache_t::variables_;
 vector<dai::VarSet> slam4::cache_t::varsets_;
 vector<unsigned char> slam4::cache_t::compatible_values_;
 vector<vector<map<dai::Var, size_t>*> > slam4::cache_t::state_cache_;
-CSP::constraint_digraph_t slam4::arc_consistency_t::cg_;
 CSP::constraint_digraph_t slam4::weighted_arc_consistency_t::cg_;
 vector<vector<int> > rbpf_slam4_particle_t::slabels_;
 
@@ -401,10 +401,9 @@ int main(int argc, const char **argv) {
         slam3::varset_beam_t::set_kappa(kappa);
     }
     if( slam_type == cellmap_t::AISLE_SLAM ) {
+        kappa_t::initialize(kappa, 10);
         slam4::cache_t::initialize(nrows, ncols);
-        slam4::arc_consistency_t::initialize(nrows, ncols);
         slam4::weighted_arc_consistency_t::initialize(nrows, ncols);
-        slam4::varset_beam_t::set_kappa(kappa);
     }
 
     // tracking algorithms
