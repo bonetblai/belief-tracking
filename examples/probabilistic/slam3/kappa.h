@@ -61,6 +61,7 @@ class kappa_t {
                 int mid = (start + end) / 2;
                 assert(1 + mid < int(powers_.size()));
                 if( (powers_[mid] >= p) && (p > powers_[1 + mid]) ) {
+                    assert((p <= power(mid)) && (power(1 + mid) < p));
                     return mid;
                 } else if( p > powers_[mid] ) {
                     end = mid;
