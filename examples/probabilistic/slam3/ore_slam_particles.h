@@ -34,14 +34,18 @@
 
 #include "cellmap.h"
 #include "slam_particles.h"
+#include "slam_cache.h"
 #include "inference.h"
+#include "edbp.h"
 #include "utils.h"
 
 //#define DEBUG
 
 namespace OreSLAM {
 
-// Abstract Particle for the 2nd Rao-Blackwellised filter
+class cache_t : public SLAM::cache_t { };
+
+// Abstract Particle for the Rao-Blackwellised filter
 struct rbpf_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
 
@@ -49,60 +53,26 @@ struct rbpf_particle_t : public base_particle_t {
         return loc_history_;
     }
 
-    // variables and factors
-    std::vector<dai::Var> variables_;
+    // factors
     std::vector<dai::Factor> factors_;
 
     // computation of marginals in factor model
     mutable std::vector<int> indices_for_updated_factors_;
     mutable std::vector<dai::Factor> marginals_;
-    inference_t inference_;
-
-    // cache for conversion  from factor values into slabels (it is dynamically filled by get_slabels())
-    static std::vector<std::vector<int> > slabels_;
-
-    // conversion between libdai and edbp factors
-    static std::vector<std::vector<int> > edbp_factor_indices_;
+    Inference::inference_t inference_;
 
     rbpf_particle_t() {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
-
-        // create binary variables for each cell in the grid
-        int nloc = base_->nloc_;
-        variables_ = std::vector<dai::Var>(nloc);
-        for( int loc = 0; loc < nloc; ++loc ) {
-            variables_[loc] = dai::Var(loc, 2);
-            //std::cout << "loc=" << loc << ", coord=" << coord_t(loc) << std::endl;
-        }
-
-        // create one factor for each location. The variables
-        // in the factor are the variables for the location
-        // surrounding the factor, including the variable
-        // for the "center" location. Also set up the center
-        // for each factor.
-        factors_ = std::vector<dai::Factor>(nloc);
-        marginals_ = std::vector<dai::Factor>(nloc);
-        for( int loc = 0; loc < nloc; ++loc ) {
-            int row = loc / base_->ncols_, col = loc % base_->ncols_;
-            std::vector<dai::Var> vars;
-            for( int dr = -1; dr < 2; ++dr ) {
-                int nr = row + dr;
-                if( (nr < 0) || (nr >= base_->nrows_) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
-                    int nc = col + dc;
-                    if( (nc < 0) || (nc >= base_->ncols_) ) continue;
-                    vars.push_back(variables_[nr * base_->ncols_ + nc]);
-                }
-            }
-            std::sort(vars.begin(), vars.end());
-            dai::VarSet varset(vars.begin(), vars.end());
-            factors_[loc] = dai::Factor(varset);
-            marginals_[loc] = dai::Factor(varset);
+        factors_ = std::vector<dai::Factor>(base_->nloc_);
+        marginals_ = std::vector<dai::Factor>(base_->nloc_);
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            factors_[loc] = dai::Factor(cache_t::varset(loc));
+            marginals_[loc] = dai::Factor(cache_t::varset(loc));
         }
 
 #ifdef DEBUG
-        for( int loc = 0; loc < nloc; ++loc )
+        for( int loc = 0; loc < base_->nloc_; ++loc )
             inference_.print_factor(std::cout, loc, factors_, "factors");
 #endif
 
@@ -119,7 +89,6 @@ struct rbpf_particle_t : public base_particle_t {
 
     rbpf_particle_t(rbpf_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)),
-        variables_(std::move(p.variables_)),
         factors_(std::move(p.factors_)),
         indices_for_updated_factors_(std::move(p.indices_for_updated_factors_)),
         marginals_(std::move(p.marginals_)),
@@ -128,7 +97,6 @@ struct rbpf_particle_t : public base_particle_t {
 
     const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
         loc_history_ = p.loc_history_;
-        variables_ = p.variables_;
         factors_ = p.factors_;
         indices_for_updated_factors_ = p.indices_for_updated_factors_;
         marginals_ = p.marginals_;
@@ -138,60 +106,10 @@ struct rbpf_particle_t : public base_particle_t {
 
     bool operator==(const rbpf_particle_t &p) const {
         return (loc_history_ == p.loc_history_) &&
-               (variables_ == p.variables_) &&
                (factors_ == p.factors_) &&
                (indices_for_updated_factors_ == p.indices_for_updated_factors_) &&
                (marginals_ == p.marginals_) &&
                (inference_ == p.inference_);
-    }
-
-    static void compute_edbp_factor_indices() {
-        edbp_factor_indices_ = std::vector<std::vector<int> >(10);
-
-        // define indices to compute
-        std::vector<int> number_vars;
-        number_vars.push_back(2);
-        number_vars.push_back(3);
-        number_vars.push_back(4);
-        number_vars.push_back(5);
-        number_vars.push_back(6);
-        number_vars.push_back(9);
-
-        for( int i = 0; i < int(number_vars.size()); ++i ) {
-            int nvars = number_vars[i];
-            edbp_factor_indices_[nvars] = std::vector<int>(1 << nvars);
-
-            dai::VarSet vars, r_vars;
-            for( int var = 0; var < nvars; ++var ) {
-                vars |= dai::Var(var, 2);
-                r_vars |= dai::Var(nvars - var - 1, 2);
-            }
-            //std::cout << "vars=" << vars << ", r_vars=" << r_vars << std::endl;
-
-            for( int value = 0; value < (1 << nvars); ++value ) {
-                std::map<dai::Var, size_t> state = dai::calcState(vars, value);
-                std::map<dai::Var, size_t> r_state;
-                for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it ) {
-                    int label = nvars - 1 - it->first.label();
-                    r_state[dai::Var(label, 2)] = it->second;
-                }
-                int r_index = dai::calcLinearState(r_vars, r_state);
-                edbp_factor_indices_[nvars][r_index] = value;
-#if 0
-                std::cout << "State of vars(index=" << value << "): " //<< state
-                          << "; state of r_vars(index=" << r_index << "): " //<< dai::calcState(r_vars, r_index)
-                          << std::endl;
-#endif
-            }
-        }
-    }
-    static int edbp_factor_index(int nvars, int index) {
-        assert(nvars < int(edbp_factor_indices_.size()));
-        assert(index < int(edbp_factor_indices_[nvars].size()));
-        return edbp_factor_indices_[nvars][index];
-    }
-    static int edbp_factor_index(const dai::Factor &factor, int index) {
-        return edbp_factor_index(factor.vars().size(), index);
     }
 
     void initialize_mpi_worker(mpi_slam_t *mpi, int wid) {
@@ -203,7 +121,7 @@ struct rbpf_particle_t : public base_particle_t {
             mpi->initialize_buffers(factors_);
 
         // initialize worker 
-        mpi->initialize_worker(variables_, factors_, wid);
+        mpi->initialize_worker(cache_t::variables(), factors_, wid);
 #endif
     }
 
@@ -224,56 +142,9 @@ struct rbpf_particle_t : public base_particle_t {
         calculate_marginals(mpi, wid, false);
     }
 
-    int get_slabels(int loc, const dai::VarSet &vars, int value) const {
-        assert((loc >= 0) && (loc < base_->nloc_));
-        assert((value >= 0) && (value < int(vars.nrStates())));
-
-        // allocate cache if this is first call
-        if( slabels_.empty() )
-            slabels_ = std::vector<std::vector<int> >(base_->nloc_, std::vector<int>(512, -1));
-        assert(loc < int(slabels_.size()));
-        if( slabels_[loc].empty() )
-            slabels_[loc] = std::vector<int>(vars.nrStates(), -1);
-        assert(value < int(slabels_[loc].size()));
-
-        // check whether there is a valid entry in cache
-        const std::vector<int> &slabels_for_loc = slabels_[loc];
-        if( slabels_for_loc[value] != -1 )
-            return slabels_for_loc[value];
-
-#ifdef DEBUG
-        std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
-#endif
-
-        // this is the first time that we access (loc,value)
-        // compute the correct value and cache it for later use
-        int slabels = 0;
-        std::map<dai::Var, size_t> states = dai::calcState(vars, value);
-        for( dai::VarSet::const_iterator it = vars.begin(); it != vars.end(); ++it ) {
-            const dai::Var &var = *it;
-            size_t var_value = states[var];
-            assert(var_value < 2); // because it is a binary variable
-            if( var_value ) {
-                int var_id = it->label();
-                int var_off = base_->var_offset(loc, var_id);
-                assert((var_off >= 0) && (var_off < 9));
-#ifdef DEBUG
-                std::cout << "    [var_id=" << var_id << ":" << coord_t(var_id)
-                          << ", var_value=1, off=" << var_off << "]"
-                          << std::endl;
-#endif
-                slabels += (1 << var_off);
-            }
-        }
-#ifdef DEBUG
-        std::cout << "    bits=|";
-        print_bits(std::cout, slabels, 9);
-        std::cout << "| (" << slabels << ")" << std::endl;
-#endif
-
-        // cache it and return
-        slabels_[loc][value] = slabels;
-        return slabels;
+    static int var_offset(int loc, int var_id) { return base_->var_offset(loc, var_id); }
+    int get_slabels(int loc, const dai::VarSet &varset, int value) const {
+        return cache_t::get_slabels(loc, varset, value, var_offset);
     }
 
     void update_factors(int last_action, int obs) {
@@ -299,11 +170,11 @@ struct rbpf_particle_t : public base_particle_t {
 
     void calculate_marginals(mpi_slam_t *mpi, int wid, bool print_marginals = false) const {
 #ifndef USE_MPI
-        inference_.calculate_marginals(variables_,
+        inference_.calculate_marginals(cache_t::variables(),
                                        indices_for_updated_factors_,
                                        factors_,
                                        marginals_,
-                                       edbp_factor_index,
+                                       Inference::edbp_t::edbp_factor_index,
                                        print_marginals);
 #else
         assert(mpi != 0);
