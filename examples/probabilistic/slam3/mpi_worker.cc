@@ -42,10 +42,10 @@ string Inference::inference_t::type_;
 string Inference::inference_t::edbp_factors_fn_;
 string Inference::inference_t::edbp_evid_fn_;
 string Inference::inference_t::edbp_output_fn_;
-int Inference::Inference::inference_t::edbp_max_iter_;
+int Inference::inference_t::edbp_max_iter_;
 
 // global vars
-inference_t g_inference;
+Inference::inference_t g_inference;
 vector<dai::Var> g_variables;
 vector<dai::Factor> g_factors;
 vector<int> g_indices_for_updated_factors;
@@ -226,7 +226,7 @@ int main(int argc, const char **argv) {
 
     // initialize inference algorithm
     compute_edbp_factor_indices();
-    inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path, verbose);
+    Inference::inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path, verbose);
 
     // main execution loop
     bool continue_execution = true;
