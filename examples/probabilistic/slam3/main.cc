@@ -49,16 +49,24 @@ using namespace std;
 // static members
 int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
-vector<vector<int> > OreSLAM::rbpf_particle_t::slabels_;
-vector<vector<int> > OreSLAM::rbpf_particle_t::edbp_factor_indices_;
-string inference_t::algorithm_;
-string inference_t::options_;
-dai::PropertySet inference_t::libdai_options_;
-string inference_t::type_;
-string inference_t::edbp_factors_fn_;
-string inference_t::edbp_evid_fn_;
-string inference_t::edbp_output_fn_;
-int inference_t::edbp_max_iter_;
+
+// static members for inference algorithms
+string Inference::inference_t::algorithm_;
+string Inference::inference_t::options_;
+dai::PropertySet Inference::inference_t::libdai_options_;
+string Inference::inference_t::type_;
+string Inference::inference_t::edbp_factors_fn_;
+string Inference::inference_t::edbp_evid_fn_;
+string Inference::inference_t::edbp_output_fn_;
+int Inference::inference_t::edbp_max_iter_;
+vector<vector<int> > Inference::edbp_t::edbp_factor_indices_;
+
+// static member for SLAM cache
+int SLAM::cache_t::num_locs_ = 0;
+vector<dai::Var> SLAM::cache_t::variables_;
+vector<dai::VarSet> SLAM::cache_t::varsets_;
+vector<vector<map<dai::Var, size_t>*> > SLAM::cache_t::state_cache_;
+vector<vector<int> > SLAM::cache_t::slabels_;
 
 float slam3::varset_beam_t::kappa_ = 0;
 int slam3::cache_t::num_locs_ = 0;
@@ -70,17 +78,16 @@ vector<vector<map<dai::Var, size_t>*> > slam3::cache_t::state_cache_;
 CSP::constraint_digraph_t slam3::arc_consistency_t::cg_;
 vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 
+// static members for kappa handling
 float kappa_t::kappa_ = 0;
 vector<float> kappa_t::powers_;
 
-int AisleSLAM::cache_t::num_locs_ = 0;
-vector<dai::Var> AisleSLAM::cache_t::variables_;
-vector<dai::VarSet> AisleSLAM::cache_t::varsets_;
+// static members for aisle-slam particles
 vector<unsigned char> AisleSLAM::cache_t::compatible_values_;
-vector<vector<map<dai::Var, size_t>*> > AisleSLAM::cache_t::state_cache_;
 CSP::constraint_digraph_t AisleSLAM::weighted_arc_consistency_t::cg_;
-vector<vector<int> > AisleSLAM::rbpf_particle_t::slabels_;
+bool AisleSLAM::rbpf_particle_t::use_ac3_ = false;
 
+// static members for MPI
 mpi_slam_t *mpi_base_t::mpi_ = 0;
 
 #ifdef USE_MPI // static members for load balancing
@@ -208,7 +215,7 @@ int main(int argc, const char **argv) {
     float kappa = 0.1;
 
     cellmap_t::slam_type_t slam_type = cellmap_t::COLOR_SLAM;
-    bool use_csp = false;
+    bool use_ac3 = false;
 
     int gtype = -1;
     int ptype = 0;
@@ -349,8 +356,8 @@ int main(int argc, const char **argv) {
             Utils::tokenize(tracker, tracker_strings);
         } else if( !strcmp(argv[0], "--plot") || !strcmp(argv[0], "--generate-plot-R") ) {
             R_plot = true;
-        } else if( !strcmp(argv[0], "--use-csp") ) {
-            use_csp = true;
+        } else if( !strcmp(argv[0], "--use-ac3") ) {
+            use_ac3 = true;
         } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
             verbose = true;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
@@ -391,9 +398,9 @@ int main(int argc, const char **argv) {
     // set static members
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
-    OreSLAM::rbpf_particle_t::compute_edbp_factor_indices();
-    if( !use_csp ) {
-        inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
+    if( !use_ac3 ) {
+        Inference::edbp_t::initialize();
+        Inference::inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
     }
     if( slam_type == cellmap_t::ORE_SLAM ) {
         slam3::cache_t::initialize(nrows, ncols);
@@ -452,24 +459,26 @@ int main(int argc, const char **argv) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( slam_type == cellmap_t::ORE_SLAM ) {
-                if( !use_csp )
+                if( !use_ac3 )
                     tracker = new RBPF_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
                 else
                     tracker = new RBPF_t<motion_model_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
+                AisleSLAM::rbpf_particle_t::set_ac3(use_ac3);
                 tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else if( short_name == "opt-rbpf" ) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( slam_type == cellmap_t::ORE_SLAM ) {
-                if( !use_csp )
+                if( !use_ac3 )
                     tracker = new RBPF_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
                 else
                     tracker = new RBPF_t<optimal_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
+                AisleSLAM::rbpf_particle_t::set_ac3(use_ac3);
                 tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else {
