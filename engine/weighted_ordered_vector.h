@@ -137,6 +137,13 @@ class weighted_ordered_vector_t {
         int m = binary_search(e);
         return (m != -1) && (vector_[m] == e);
     }
+    int weight(int e) const {
+        int m = binary_search(e);
+        if( (m == -1) || (vector_[m] != e) )
+            return -1;
+        else
+            return weight_[m];
+    }
 
     void insert(int e, int w = 1) {
         if( size_ == 0 ) {
@@ -230,6 +237,10 @@ class weighted_ordered_vector_t {
     void set_weight(int index, int weight) {
         assert(index < size_);
         weight_[index] = weight;
+    }
+    void substract(int weight) {
+        for( int i = 0; i < size_; ++i )
+            weight_[i] -= weight;
     }
 
     std::pair<int, int> operator[](int i) const {

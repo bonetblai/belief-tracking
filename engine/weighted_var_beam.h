@@ -86,6 +86,14 @@ class weighted_var_beam_t {
     int min_weight() const { return beam_.min_weight(); }
     int max_weight() const { return beam_.max_weight(); }
 
+    void normalize() {
+        int alpha = min_weight();
+        if( alpha > 0 ) beam_.substract(alpha);
+    }
+    bool normalized() {
+        return min_weight() == 0;
+    }
+
     int value(int var, int valuation) const {
         int i = 0;
         for( ; var > 0; --var, valuation /= domsz_[i++]);
@@ -106,6 +114,7 @@ class weighted_var_beam_t {
     int size() const { return beam_.size(); }
     bool known() const { return beam_.size() == 1; }
     bool contains(int value) const { return beam_.contains(value); }
+    int weight(int value) const { return beam_.weight(value); }
     bool consistent() const { return !beam_.empty(); }
 
     void reserve(int capacity) { beam_.reserve(capacity); }

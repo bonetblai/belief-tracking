@@ -28,7 +28,7 @@
 
 #include "arc_consistency.h"
 
-#define DEBUG
+//#define DEBUG
 
 namespace CSP {
 
@@ -130,7 +130,6 @@ template<typename T> class weighted_arc_consistency_t {
     // var_x is removed from the domain of var_x. The method returns whether
     // some element of var_x is removed or not.
     bool weighted_arc_reduce(int var_x, int var_y) {
-        std::cout << "weighted_arc_reduce(var_x=" << var_x << ",var_y=" << var_y << ")" << std::endl;
         assert(var_x != var_y);
 
         bool weight_change = false;
@@ -146,10 +145,9 @@ template<typename T> class weighted_arc_consistency_t {
 
             // should we remove valuations with max() value?
             // set weight of val_x to max of current weight and min_weight
-            std::cout << "val_x=" << *it << ", weight=" << it.weight() << ", min-weight=" << min_weight << std::endl;
             if( min_weight > it.weight() ) {
 #ifdef DEBUG
-                std::cout << "weighted-ac3: increasing weight of " << *it
+                std::cout << "weighted-ac3: increasing weight of valuation " << *it
                           << " in domain of var_x=" << var_x
                           << " to " << min_weight
                           << " [old_weight=" << it.weight()
