@@ -22,6 +22,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <limits>
 #include <set>
 #include <vector>
 
@@ -54,7 +55,9 @@ template<typename T> class weighted_arc_consistency_t {
 
     int nvars() const { return nvars_; }
     const constraint_digraph_t& digraph() const { return digraph_; }
-    bool is_consistent(int var) const { return !domain_[var]->empty(); }
+    bool is_consistent(int var) const {
+        return domain_[var]->min_weight() != std::numeric_limits<int>::max();
+    }
     bool is_consistent() const {
         for( int var = 0; var < nvars_; ++var ) {
             if( !is_consistent(var) ) return false;
@@ -114,25 +117,26 @@ template<typename T> class weighted_arc_consistency_t {
     //
     // Pre/post-processing is typically used to set auxiliary variables that
     // help in calculation of consistent(...).
-    virtual void weighted_arc_reduce_preprocessing_0(int var_x, int var_y) const { }
-    virtual void weighted_arc_reduce_preprocessing_1(int var_x, int val_x) const {
-        std::cout << "error: must implement 'weighted_arc_reduce_preprocessing()' for arc consistency" << std::endl;
+    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) const { }
+    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
+        std::cout << "error: must implement 'arc_reduce_preprocessing()' for arc consistency" << std::endl;
         assert(0);
     }
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const { return false; }
-    virtual void weighted_arc_reduce_postprocessing(int var_x, int var_y) const { }
+    virtual void arc_reduce_postprocessing(int var_x, int var_y) const { }
 
     // reduce arc var_x -> var_y. That is, for each value of var_x, find a
     // compatible value for var_y. If such value is not found, the value of
     // var_x is removed from the domain of var_x. The method returns whether
     // some element of var_x is removed or not.
     bool weighted_arc_reduce(int var_x, int var_y) {
+        std::cout << "weighted_arc_reduce(var_x=" << var_x << ",var_y=" << var_y << ")" << std::endl;
         assert(var_x != var_y);
 
         bool weight_change = false;
-        weighted_arc_reduce_preprocessing_0(var_x, var_y);
+        arc_reduce_preprocessing_0(var_x, var_y);
         for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
-            weighted_arc_reduce_preprocessing_1(var_x, *it);
+            arc_reduce_preprocessing_1(var_x, *it);
             int min_weight = std::numeric_limits<int>::max();
             for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
                 if( consistent(var_x, var_y, *it, *jt) ) {
@@ -142,6 +146,7 @@ template<typename T> class weighted_arc_consistency_t {
 
             // should we remove valuations with max() value?
             // set weight of val_x to max of current weight and min_weight
+            std::cout << "val_x=" << *it << ", weight=" << it.weight() << ", min-weight=" << min_weight << std::endl;
             if( min_weight > it.weight() ) {
 #ifdef DEBUG
                 std::cout << "weighted-ac3: increasing weight of " << *it
@@ -151,10 +156,11 @@ template<typename T> class weighted_arc_consistency_t {
                           << ", var_y=" << var_y << "]"
                           << std::endl;
 #endif
-                it.weight() = min_weight;
+                domain_[var_x]->set_weight(it.index(), min_weight);
                 weight_change = true;
             }
         }
+        arc_reduce_postprocessing(var_x, var_y);
         return weight_change;
     }
 
