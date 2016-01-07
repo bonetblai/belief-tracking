@@ -35,14 +35,14 @@ using namespace std;
 
 
 // static members
-string inference_t::algorithm_;
-string inference_t::options_;
-dai::PropertySet inference_t::libdai_options_;
-string inference_t::type_;
-string inference_t::edbp_factors_fn_;
-string inference_t::edbp_evid_fn_;
-string inference_t::edbp_output_fn_;
-int inference_t::edbp_max_iter_;
+string Inference::inference_t::algorithm_;
+string Inference::inference_t::options_;
+dai::PropertySet Inference::inference_t::libdai_options_;
+string Inference::inference_t::type_;
+string Inference::inference_t::edbp_factors_fn_;
+string Inference::inference_t::edbp_evid_fn_;
+string Inference::inference_t::edbp_output_fn_;
+int Inference::Inference::inference_t::edbp_max_iter_;
 
 // global vars
 inference_t g_inference;

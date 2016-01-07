@@ -28,6 +28,8 @@
 
 #include <dai/alldai.h>
 
+namespace Inference {
+
 struct inference_t {
     static std::string algorithm_;
     static std::string options_;
@@ -403,6 +405,8 @@ struct inference_t {
         os << std::endl;
     }
 };
+
+}; // namespace Inference
 
 #endif // INFERENCE_H
 
