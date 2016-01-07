@@ -9,7 +9,7 @@ MPICXX=			mpic++
 
 CXXEXT=			-std=c++11 -DMACOSX -I ~/software/libdai/include -I /usr/local/include -Wno-deprecated -Wall -W -Wextra -DDAI_DEBUG -L ~/software/libdai/lib -L /usr/local/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter
 
-CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) -DNDEBUG
+CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
 
 slam:
 			$(CXX) $(CFLAGS) -o slam main.cc -ldai #-lgmpxx -lgmp
@@ -33,7 +33,7 @@ slam:		main.cc \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
-			slam_particles.h slam2_particles.h slam3_particles.h \
+			slam_particles.h slam2_particles.h slam3_particles.h slam4_particles.h\
 			generate_plot.h stats.h \
 			inference.h
 
@@ -42,7 +42,7 @@ mpi.master:	main.cc \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
-			slam_particles.h slam2_particles.h slam3_particles.h \
+			slam_particles.h slam2_particles.h slam3_particles.h slam4_particles.h\
 			generate_plot.h stats.h \
 			inference.h \
 			mpi_api.h mpi_slam.h
