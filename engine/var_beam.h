@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2012 Universidad Simon Bolivar
+ *  Copyright (C) 2016 Universidad Simon Bolivar
  * 
  *  Permission is hereby granted to distribute this software for
  *  non-commercial research purposes, provided that this copyright
@@ -167,10 +167,11 @@ class var_beam_t {
         for( const_iterator it = begin(); it != end(); ++it ) {
             int valuation = *it;
 #if 1
-            os << "[p=" << valuation << ":";
+            os << "[v=" << valuation << ":";
             for( int var = 0; var < nvars_; ++var ) {
                 int val = value(var, valuation);
-                os << "v" << var << "=" << val << ",";
+                os << "x" << var << "=" << val;
+                if( var + 1 < nvars_ ) os << ",";
             }
             os << "],";
 #else
