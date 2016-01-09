@@ -74,15 +74,13 @@ template<typename T> class weighted_arc_consistency_t {
             domain_[var] = 0;
     }
     void delete_domains_and_clear() {
-        for( int var = 0; var < nvars_; ++var ) {
+        for( int var = 0; var < nvars_; ++var )
             delete domain_[var];
-            domain_[var] = 0;
-        }
+        domain_.clear();
     }
     void clear_domains() {
-        for( int var = 0; var < nvars_; ++var ) {
+        for( int var = 0; var < nvars_; ++var )
             domain_[var]->clear();
-        }
     }
 
     // used to insert edges into worklist prior to calling weighted-ac3
