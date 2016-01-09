@@ -79,20 +79,19 @@ struct rbpf_particle_t : public base_particle_t {
         // create inference algorithm
         inference_.create_and_initialize_algorithm(factors_);
     }
-    virtual ~rbpf_particle_t() {
-        inference_.destroy_inference_algorithm();
-    }
-
+    rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t() { }
     rbpf_particle_t(const rbpf_particle_t &p) {
         *this = p;
     }
-
     rbpf_particle_t(rbpf_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)),
         factors_(std::move(p.factors_)),
         indices_for_updated_factors_(std::move(p.indices_for_updated_factors_)),
         marginals_(std::move(p.marginals_)),
         inference_(std::move(p.inference_)) {
+    }
+    virtual ~rbpf_particle_t() {
+        inference_.destroy_inference_algorithm();
     }
 
     const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
@@ -213,26 +212,22 @@ struct rbpf_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter
 struct motion_model_rbpf_particle_t : public rbpf_particle_t {
-#if 0 // for some reason, it runs faster without these...
     motion_model_rbpf_particle_t() : rbpf_particle_t() { }
-    ~motion_model_rbpf_particle_t() { }
-
+    motion_model_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p) {
         *this = p;
     }
-
     motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) {
     }
+    ~motion_model_rbpf_particle_t() { }
 
     const motion_model_rbpf_particle_t& operator=(const motion_model_rbpf_particle_t &p) {
         *static_cast<rbpf_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const motion_model_rbpf_particle_t &p) const {
         return *static_cast<const rbpf_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("mm_rbpf2_sir");
@@ -280,26 +275,22 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
-#if 0 // for some reason, it runs faster without these...
     optimal_rbpf_particle_t() : rbpf_particle_t() { }
-    ~optimal_rbpf_particle_t() { }
-
+    optimal_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) {
         *this = p;
     }
-
     optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) {
     }
+    ~optimal_rbpf_particle_t() { }
 
     const optimal_rbpf_particle_t& operator=(const optimal_rbpf_particle_t &p) {
         *static_cast<rbpf_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const optimal_rbpf_particle_t &p) const {
         return *static_cast<const rbpf_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("opt_rbpf2_sir");

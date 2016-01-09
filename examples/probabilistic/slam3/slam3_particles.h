@@ -336,7 +336,8 @@ class arc_consistency_t : public CSP::arc_consistency_t<varset_beam_t> {
 
   public:
     arc_consistency_t() : CSP::arc_consistency_t<varset_beam_t>(cg_) { }
-    arc_consistency_t(const arc_consistency_t &ac) = delete;
+    arc_consistency_t(const arc_consistency_t &ac) : CSP::arc_consistency_t<varset_beam_t>(ac.cg_) { }
+    arc_consistency_t(arc_consistency_t &&ac) = default;
     virtual ~arc_consistency_t() { }
 
     static void initialize(int nrows, int ncols) {
@@ -442,15 +443,14 @@ struct rbpf_slam3_particle_t : public base_particle_t {
             csp_.set_domain(loc, new slam3::varset_beam_t(loc, variables[loc], varset));
         }
     }
+    rbpf_slam3_particle_t(const std::multimap<std::string, std::string> &parameters) { }
     rbpf_slam3_particle_t(const rbpf_slam3_particle_t &p)
       : loc_history_(p.loc_history_) {
         csp_ = p.csp_;
     }
-#if 0
     rbpf_slam3_particle_t(rbpf_slam3_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)), csp_(std::move(p.csp_)) {
     }
-#endif
     virtual ~rbpf_slam3_particle_t() {
         csp_.delete_domains_and_clear();
     }
@@ -782,8 +782,8 @@ struct rbpf_slam3_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter (slam3)
 struct motion_model_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
-
     motion_model_rbpf_slam3_particle_t() : rbpf_slam3_particle_t() { }
+    motion_model_rbpf_slam3_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_slam3_particle_t(parameters) { }
     motion_model_rbpf_slam3_particle_t(const motion_model_rbpf_slam3_particle_t &p)
       : rbpf_slam3_particle_t(p) {
     }
@@ -796,7 +796,6 @@ struct motion_model_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
         *static_cast<rbpf_slam3_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const motion_model_rbpf_slam3_particle_t &p) const {
         return *static_cast<const rbpf_slam3_particle_t*>(this) == p;
     }
@@ -846,26 +845,22 @@ struct motion_model_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
 struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
     mutable std::vector<float> cdf_;
 
-#if 0 // for some reason, it runs faster without these...
     optimal_rbpf_slam3_particle_t() : rbpf_slam3_particle_t() { }
-    ~optimal_rbpf_slam3_particle_t() { }
-
+    optimal_rbpf_slam3_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_slam3_particle_t(parameters) { }
     optimal_rbpf_slam3_particle_t(const optimal_rbpf_slam3_particle_t &p) {
         *this = p;
     }
-
     optimal_rbpf_slam3_particle_t(optimal_rbpf_slam3_particle_t &&p) : rbpf_slam3_particle_t(std::move(p)) {
     }
+    ~optimal_rbpf_slam3_particle_t() { }
 
     const optimal_rbpf_slam3_particle_t& operator=(const optimal_rbpf_slam3_particle_t &p) {
         *static_cast<rbpf_slam3_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const optimal_rbpf_slam3_particle_t &p) const {
         return *static_cast<const rbpf_slam3_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("opt_rbpf3_sir");
@@ -912,7 +907,8 @@ struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
                                 mpi_slam_t * /*mpi*/,
                                 int wid) const {
 #ifdef DEBUG
-        assert(*this == np);
+        assert(dynamic_cast<optimal_rbpf_slam3_particle_t*>(&np) != 0);
+        assert(*this == *static_cast<optimal_rbpf_slam3_particle_t*>(&np));
 #endif
         calculate_cdf(last_action, obs, cdf_);
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);

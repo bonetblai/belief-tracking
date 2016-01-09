@@ -34,7 +34,7 @@ slam:		main.cc \
 			tracking.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
 			slam_particles.h ore_slam_particles.h slam3_particles.h aisle_slam_particles.h\
-			kappa.h \
+			slam_cache.h edbp.h kappa.h \
 			generate_plot.h stats.h \
 			inference.h
 
@@ -44,7 +44,7 @@ mpi.master:	main.cc \
 			tracking.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
 			slam_particles.h ore_slam_particles.h slam3_particles.h aisle_slam_particles.h\
-			kappa.h \
+			slam_cache.h edbp.h kappa.h \
 			generate_plot.h stats.h \
 			inference.h \
 			mpi_api.h mpi_slam.h

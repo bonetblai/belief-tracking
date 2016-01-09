@@ -85,7 +85,6 @@ vector<float> kappa_t::powers_;
 // static members for aisle-slam particles
 vector<unsigned char> AisleSLAM::cache_t::compatible_values_;
 CSP::constraint_digraph_t AisleSLAM::weighted_arc_consistency_t::cg_;
-bool AisleSLAM::rbpf_particle_t::use_ac3_ = false;
 
 // static members for MPI
 mpi_slam_t *mpi_base_t::mpi_ = 0;
@@ -356,8 +355,6 @@ int main(int argc, const char **argv) {
             Utils::tokenize(tracker, tracker_strings);
         } else if( !strcmp(argv[0], "--plot") || !strcmp(argv[0], "--generate-plot-R") ) {
             R_plot = true;
-        } else if( !strcmp(argv[0], "--use-ac3") ) {
-            use_ac3 = true;
         } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
             verbose = true;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
@@ -390,18 +387,18 @@ int main(int argc, const char **argv) {
         nrows = 10;
         ncols = 10;
         nlabels = 4;
-        pa = 0.8; // CHECK
-        po = 0.9; // CHECK
+        pa = 0.9;
+        po = 0.9;
     }
     cellmap_t cellmap(nrows, ncols, nlabels, slam_type, pa, po);
 
     // set static members
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
-    if( !use_ac3 ) {
-        Inference::edbp_t::initialize();
-        Inference::inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
-    }
+
+    Inference::edbp_t::initialize();
+    Inference::inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
+
     if( slam_type == cellmap_t::ORE_SLAM ) {
         slam3::cache_t::initialize(nrows, ncols);
         slam3::arc_consistency_t::initialize(nrows, ncols);
@@ -459,26 +456,26 @@ int main(int argc, const char **argv) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( slam_type == cellmap_t::ORE_SLAM ) {
+                // CHECK do something similar to aisle-slam below (i.e. implement set_ac3)
                 if( !use_ac3 )
                     tracker = new RBPF_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
                 else
                     tracker = new RBPF_t<motion_model_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
-                AisleSLAM::rbpf_particle_t::set_ac3(use_ac3);
                 tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else if( short_name == "opt-rbpf" ) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( slam_type == cellmap_t::ORE_SLAM ) {
+                // CHECK do something similar to aisle-slam below (i.e. implement set_ac3)
                 if( !use_ac3 )
                     tracker = new RBPF_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
                 else
                     tracker = new RBPF_t<optimal_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
-                AisleSLAM::rbpf_particle_t::set_ac3(use_ac3);
                 tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else {

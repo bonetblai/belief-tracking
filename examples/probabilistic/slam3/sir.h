@@ -98,6 +98,8 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     bool do_stochastic_universal_sampling_;
     int num_sampling_attempts_;
 
+    std::multimap<std::string, std::string> parameters_; // use when building sampler in initialize()
+
     std::vector<std::pair<int, int> > execution_;
 
 #ifdef USE_MPI
@@ -110,7 +112,8 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
       : PF_t<PTYPE, BASE>(name, base),
         force_resampling_(false),
         do_stochastic_universal_sampling_(false),
-        num_sampling_attempts_(1) {
+        num_sampling_attempts_(1),
+        parameters_(parameters) {
         std::multimap<std::string, std::string>::const_iterator it = parameters.find("nparticles");
         if( it != parameters.end() )
             PF_t<PTYPE, BASE>::set_nparticles(strtol(it->second.c_str(), 0, 0));
@@ -142,7 +145,7 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     }
 
     virtual void initialize() {
-        PTYPE sampler;
+        PTYPE sampler(parameters_);
 
 #ifdef USE_MPI
         // initialize MPI workers
@@ -167,9 +170,9 @@ template <typename PTYPE, typename BASE> struct SIR_t : public PF_t<PTYPE, BASE>
     virtual void update(int last_action, int obs) {
 #ifdef DEBUG
         std::cout << "# last-action=" << last_action << ", obs=" << obs << std::endl;
-        std::cout << "# ***weights:";
+        std::cout << "# multiplicities and weights:";
         for( int i = 0; i < int(particles_.size()); ++i )
-            std::cout << " " << particles_[i].weight_;
+            std::cout << " " << multiplicity_[i] << "x" << particles_[i].weight_;
         std::cout << std::endl;
 #endif
 

@@ -25,7 +25,9 @@
 #include <iomanip>
 #include <sstream>
 #include <string.h>
+#include <map>
 #include <set>
+#include <string>
 #include <vector>
 #include <stdlib.h>
 
@@ -51,22 +53,20 @@ struct slam_particle_t : public base_particle_t {
     std::vector<int> labels_;
 
     slam_particle_t() { }
-    ~slam_particle_t() { }
-
+    slam_particle_t(const std::multimap<std::string, std::string> &parameters) { }
     slam_particle_t(const slam_particle_t &p) {
         *this = p;
     }
-
     slam_particle_t(slam_particle_t &&p)
       : current_loc_(p.current_loc_), labels_(std::move(p.labels_)) {
     }
+    ~slam_particle_t() { }
 
     const slam_particle_t& operator=(const slam_particle_t &p) {
         current_loc_ = p.current_loc_;
         labels_ = p.labels_;
         return *this;
     }
-
     bool operator==(const slam_particle_t &p) const {
         return (current_loc_ == p.current_loc_) && (labels_ == p.labels_);
     }
@@ -92,16 +92,14 @@ struct slam_particle_t : public base_particle_t {
 
 // Particle for the SIS filter
 struct sis_slam_particle_t : public slam_particle_t {
-#if 0 // for some reason, it runs faster without these...
     sis_slam_particle_t() : slam_particle_t() { }
-    ~sis_slam_particle_t() { }
-
+    sis_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : slam_particle_t(parameters) { }
     sis_slam_particle_t(const sis_slam_particle_t &p) {
         *this = p;
     }
-
     sis_slam_particle_t(sis_slam_particle_t &&p) : slam_particle_t(std::move(p)) {
     }
+    ~sis_slam_particle_t() { }
 
     const sis_slam_particle_t& operator=(const sis_slam_particle_t &p) {
         *static_cast<slam_particle_t*>(this) = p;
@@ -111,7 +109,6 @@ struct sis_slam_particle_t : public slam_particle_t {
     bool operator==(const sis_slam_particle_t &p) const {
         return *static_cast<const slam_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("sis");
@@ -132,26 +129,22 @@ struct sis_slam_particle_t : public slam_particle_t {
 
 // Particle for the motion model SIR filter
 struct motion_model_sir_slam_particle_t : public slam_particle_t {
-#if 0 // for some reason, it runs faster without these...
     motion_model_sir_slam_particle_t() : slam_particle_t() { }
-    ~motion_model_sir_slam_particle_t() { }
-
+    motion_model_sir_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : slam_particle_t(parameters) { }
     motion_model_sir_slam_particle_t(const motion_model_sir_slam_particle_t &p) {
         *this = p;
     }
-
     motion_model_sir_slam_particle_t(motion_model_sir_slam_particle_t &&p) : slam_particle_t(std::move(p)) {
     }
+    ~motion_model_sir_slam_particle_t() { }
 
     const motion_model_sir_slam_particle_t& operator=(const motion_model_sir_slam_particle_t &p) {
         *static_cast<slam_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const motion_model_sir_slam_particle_t &p) const {
         return *static_cast<const slam_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("mm_sir");
@@ -180,26 +173,22 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
 
 // Particle for the optimal SIR filter
 struct optimal_sir_slam_particle_t : public slam_particle_t {
-#if 0 // for some reason, it runs faster without these...
     optimal_sir_slam_particle_t() : slam_particle_t() { }
-    ~optimal_sir_slam_particle_t() { }
-
+    optimal_sir_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : slam_particle_t(parameters) { }
     optimal_sir_slam_particle_t(const optimal_sir_slam_particle_t &p) {
         *this = p;
     }
-
     optimal_sir_slam_particle_t(optimal_sir_slam_particle_t &&p) : slam_particle_t(std::move(p)) {
     }
+    ~optimal_sir_slam_particle_t() { }
 
     const optimal_sir_slam_particle_t& operator=(const optimal_sir_slam_particle_t &p) {
         *static_cast<slam_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const optimal_sir_slam_particle_t &p) const {
         return *static_cast<const slam_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("opt_sir");
@@ -267,22 +256,20 @@ struct rbpf_slam_particle_t : public base_particle_t {
     }
 
     rbpf_slam_particle_t() { }
-    virtual ~rbpf_slam_particle_t() { }
-
+    rbpf_slam_particle_t(const std::multimap<std::string, std::string> &parameters) { }
     rbpf_slam_particle_t(const rbpf_slam_particle_t &p) {
         *this = p;
     }
-
     rbpf_slam_particle_t(rbpf_slam_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)), factors_(std::move(p.factors_)) {
     }
+    virtual ~rbpf_slam_particle_t() { }
 
     const rbpf_slam_particle_t& operator=(const rbpf_slam_particle_t &p) {
         loc_history_ = p.loc_history_;
         factors_ = p.factors_;
         return *this;
     }
-
     bool operator==(const rbpf_slam_particle_t &p) const {
         return (loc_history_ == p.loc_history_) && (factors_ == p.factors_);
     }
@@ -342,26 +329,22 @@ struct rbpf_slam_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter
 struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
-#if 0 // for some reason, it runs faster without these...
     motion_model_rbpf_slam_particle_t() : rbpf_slam_particle_t() { }
-    ~motion_model_rbpf_slam_particle_t() { }
-
+    motion_model_rbpf_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_slam_particle_t(parameters) { }
     motion_model_rbpf_slam_particle_t(const motion_model_rbpf_slam_particle_t &p) {
         *this = p;
     }
-
     motion_model_rbpf_slam_particle_t(motion_model_rbpf_slam_particle_t &&p) : rbpf_slam_particle_t(std::move(p)) {
     }
+    ~motion_model_rbpf_slam_particle_t() { }
 
     const motion_model_rbpf_slam_particle_t& operator=(const motion_model_rbpf_slam_particle_t &p) {
         *static_cast<rbpf_slam_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const motion_model_rbpf_slam_particle_t &p) const {
         return *static_cast<const rbpf_slam_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("mm_rbpf_sir");
@@ -374,7 +357,8 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
                                 mpi_slam_t * /*mpi*/,
                                 int /*wid*/) const {
 #ifdef DEBUG
-        assert(*this == np);
+        assert(dynamic_cast<motion_model_rbpf_slam_particle_t*>(&np) != 0);
+        assert(*this == *static_cast<motion_model_rbpf_slam_particle_t*>(&np));
 #endif
         int next_loc = base_->sample_loc(loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
@@ -405,26 +389,22 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     mutable std::vector<float> cdf_;
 
-#if 0 // for some reason, it runs faster without these...
     optimal_rbpf_slam_particle_t() : rbpf_slam_particle_t() { }
-    ~optimal_rbpf_slam_particle_t() { }
-
+    optimal_rbpf_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_slam_particle_t(parameters) { }
     optimal_rbpf_slam_particle_t(const optimal_rbpf_slam_particle_t &p) {
         *this = p;
     }
-
     optimal_rbpf_slam_particle_t(optimal_rbpf_slam_particle_t &&p) : rbpf_slam_particle_t(std::move(p)) {
     }
+    ~optimal_rbpf_slam_particle_t() { }
 
     const optimal_rbpf_slam_particle_t& operator=(const optimal_rbpf_slam_particle_t &p) {
         *static_cast<rbpf_slam_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const optimal_rbpf_slam_particle_t &p) const {
         return *static_cast<const rbpf_slam_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("opt_rbpf_sir");
@@ -470,7 +450,8 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
                                 mpi_slam_t * /*mpi*/,
                                 int /*wid*/) const {
 #ifdef DEBUG
-        assert(*this == np);
+        assert(dynamic_cast<optimal_rbpf_slam_particle_t*>(&np) != 0);
+        assert(*this == *static_cast<optimal_rbpf_slam_particle_t*>(&np));
 #endif
         try {
             calculate_cdf(last_action, obs, cdf_);
