@@ -515,6 +515,7 @@ int main(int argc, const char **argv) {
         generate_R_plot_commons();
 
     // run for the specified number of trials and collect statistics
+    cout << fixed;
     cellmap_t::execution_t fixed_execution;
     vector<Utils::stat_t> stats_unknown(trackers.size());
     vector<Utils::stat_t> stats_error(trackers.size());
@@ -599,11 +600,11 @@ int main(int argc, const char **argv) {
             if( map_values.size() == 1 ) {
                 cout << coord_t(map_values.back().second)
                      << ":" << map_values.back().second
-                     << ":" << setprecision(4) << map_values.back().first;
+                     << ":" << setprecision(3) << map_values.back().first;
             } else {
                 cout << "{";
                 for( size_t k = 0; k < map_values.size(); ++k ) {
-                    cout << coord_t(map_values[k].second) << ":" << map_values[k].second << ":" << setprecision(4) << map_values[k].first;
+                    cout << coord_t(map_values[k].second) << ":" << map_values[k].second << ":" << setprecision(3) << map_values[k].first;
                     if( k < map_values.size() - 1 ) cout << ",";
                 }
                 cout << "}";
@@ -611,7 +612,7 @@ int main(int argc, const char **argv) {
 
             cout << ", #unknowns=" << unknowns
                  << ", #errors=" << errors
-                 << ", elapsed-time=" << tracker.elapsed_time()
+                 << ", elapsed-time=" << setprecision(5) << tracker.elapsed_time()
                  << endl;
             stats_unknown[i].add(unknowns);
             stats_error[i].add(errors);
@@ -631,18 +632,18 @@ int main(int argc, const char **argv) {
     for( size_t i = 0; i < trackers.size(); ++i ) {
         const tracking_t<cellmap_t> &tracker = *trackers[i];
         cout << "# stats(" << setw(size_longest_name) << tracker.name_ << "):"
-             << " trials=" << stats_unknown[i].n()
-             << ", total-elapsed-time=" << tracker.total_elapsed_time()
-             << ", avg-unknowns-per-trial=" << stats_unknown[i].mean() << " (" << stats_unknown[i].confidence(.95) << ")"
-             << ", avg-errors-per-trial=" << stats_error[i].mean() << " (" << stats_error[i].confidence(.95) << ")"
-             << ", avg-elapsed-time-per-trial=" << tracker.total_elapsed_time() / ntrials
-             << ", avg-elapsed-time-per-step=" << tracker.total_elapsed_time() / tracker.total_num_steps()
+             << " trials=" << int(stats_unknown[i].n())
+             << ", total-elapsed-time=" << setprecision(5) << tracker.total_elapsed_time()
+             << ", avg-unknowns-per-trial=" << setprecision(3) << stats_unknown[i].mean() << " (" << stats_unknown[i].confidence(.95) << ")"
+             << ", avg-errors-per-trial=" << setprecision(3) << stats_error[i].mean() << " (" << stats_error[i].confidence(.95) << ")"
+             << ", avg-elapsed-time-per-trial=" << setprecision(5) << tracker.total_elapsed_time() / ntrials
+             << ", avg-elapsed-time-per-step=" << setprecision(5) << tracker.total_elapsed_time() / tracker.total_num_steps()
              << endl;
     }
 
     // stop timer
     float elapsed_time = Utils::read_time_in_seconds() - start_time;
-    cout << "# total time = " << elapsed_time << endl;
+    cout << "# total time = " << setprecision(5) << elapsed_time << endl;
 
     finalize();
     return 0;
