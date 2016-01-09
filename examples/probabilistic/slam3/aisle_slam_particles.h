@@ -34,7 +34,9 @@
 
 #include "cellmap.h"
 #include "slam_particles.h"
+#include "slam_cache.h"
 #include "inference.h"
+#include "edbp.h"
 #include "kappa.h"
 #include "utils.h"
 
@@ -45,60 +47,9 @@
 
 namespace AisleSLAM {
 
-class cache_t {
-    static int num_locs_;
-    static std::vector<dai::Var> variables_;
-    static std::vector<dai::VarSet> varsets_;
+class cache_t : public SLAM::cache_t {
+  protected:
     static std::vector<unsigned char> compatible_values_;
-    static std::vector<std::vector<std::map<dai::Var, size_t>*> > state_cache_;
-
-    static void compute_basic_elements(int nrows, int ncols) {
-        // variables for each location
-        variables_ = std::vector<dai::Var>(num_locs_);
-        for( int loc = 0; loc < num_locs_; ++loc )
-            variables_[loc] = dai::Var(loc, 2);
-
-        // variable sets for each location
-        varsets_ = std::vector<dai::VarSet>(num_locs_);
-        for( int loc = 0; loc < num_locs_; ++loc ) {
-            int row = loc / ncols, col = loc % ncols;
-            std::vector<dai::Var> vars;
-            for( int dr = -1; dr < 2; ++dr ) {
-                int nr = row + dr;
-                if( (nr < 0) || (nr >= nrows) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
-                    int nc = col + dc;
-                    if( (nc < 0) || (nc >= ncols) ) continue;
-                    vars.push_back(variables_[nr * ncols + nc]);
-                }
-            }
-            std::sort(vars.begin(), vars.end());
-            varsets_[loc] = dai::VarSet(vars.begin(), vars.end());
-#ifdef DEBUG
-            std::cout << "# compute_basic_elements: loc=" << loc << ", vars=" << varsets_[loc] << std::endl;
-#endif
-        }
-    }
-
-    static void compute_cache_for_states(int nrows, int ncols) {
-        float start_time = Utils::read_time_in_seconds();
-        int size = 0;
-        state_cache_ = std::vector<std::vector<std::map<dai::Var, size_t>*> >(num_locs_);
-        for( int loc = 0; loc < num_locs_; ++loc ) {
-            const dai::VarSet &varset = varsets_[loc];
-            state_cache_[loc] = std::vector<std::map<dai::Var, size_t>*>(varset.nrStates(), static_cast<std::map<dai::Var, size_t>*>(0));
-            for( int value = 0; value < int(varset.nrStates()); ++value ) {
-                std::map<dai::Var, size_t> *state = new std::map<dai::Var, size_t>(dai::calcState(varset, value));
-                state_cache_[loc][value] = state;
-                ++size;
-            }
-        }
-        std::cout << "# cache-for-states:"
-                  << " size=" << size
-                  //<< ", hits=" << cache_hits
-                  << ", time=" << Utils::read_time_in_seconds() - start_time
-                  << std::endl;
-    }
 
     static void compute_cache_for_compatible_values(int nrows, int ncols) {
         float start_time = Utils::read_time_in_seconds();
@@ -135,7 +86,6 @@ class cache_t {
                     } else {
                         unsigned char values = 0;
                         int ncompatible = 0;
-if( var_y == 0 && var_x == 2 && val_y == 1 ) std::cout << "var-y=" << var_y << ", val-y=" << val_y << ", var-x=" << var_x << ":";
                         for( int val_x = 0; val_x < int(varsets_[var_x].nrStates()); ++val_x ) {
                             bool compatible = true;
                             const std::map<dai::Var, size_t> &state_x = *state_cache_[var_x][val_x];
@@ -147,18 +97,16 @@ if( var_y == 0 && var_x == 2 && val_y == 1 ) std::cout << "var-y=" << var_y << "
                                 }
                             }
                             if( compatible ) {
-if( var_y == 0 && var_x == 2 && val_y == 1 ) std::cout << " " << val_x;
                                 assert(val_x < 8);
                                 int offset = val_x % 8;
                                 values |= 1 << offset;
                                 ++ncompatible;
                             }
                         }
-if( var_y == 0 && var_x == 2 && val_y == 1 ) std::cout << " values=" << unsigned(values) << std::endl;
                         assert((ncompatible > 0) && (ncompatible < int(varsets_[var_x].nrStates())));
                         assert(val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x < int(compatible_values_.size()));
                         compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x] = values;
-                        //cache.insert(std::make_pair(cache_key, values));
+                        cache.insert(std::make_pair(cache_key, values));
                     }
                 }
             }
@@ -176,26 +124,13 @@ if( var_y == 0 && var_x == 2 && val_y == 1 ) std::cout << " values=" << unsigned
 
     static void initialize(int nrows, int ncols) {
         num_locs_ = nrows * ncols;
-        compute_basic_elements(nrows, ncols);
-        compute_cache_for_states(nrows, ncols);
+        SLAM::cache_t::compute_basic_elements(nrows, ncols);
+        SLAM::cache_t::compute_cache_for_states(nrows, ncols);
         compute_cache_for_compatible_values(nrows, ncols);
     }
 
-    static const dai::VarSet& varset(int loc) {
-        return varsets_[loc];
-    }
     static unsigned char compatible_values(int val_y, int var_y, int var_x) {
         return compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x];
-    }
-    static std::map<dai::Var, size_t>& state(int var, int value) {
-        return *state_cache_[var][value];
-    }
-
-    static void print_state(std::ostream &os, const std::map<dai::Var, size_t> &state) {
-        os << "{";
-        for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
-            os << it->first << "=" << it->second << ",";
-        os << "}";
     }
 };
 
@@ -284,7 +219,7 @@ class weighted_varset_beam_t : public weighted_var_beam_t {
 
 class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weighted_varset_beam_t> {
     static CSP::constraint_digraph_t cg_;
-    mutable std::map<dai::Var, size_t> *state_x_;
+    mutable const std::map<dai::Var, size_t> *state_x_;
     mutable unsigned char bitmask_;
 
     static void construct_constraint_graph(int nrows, int ncols) {
@@ -331,7 +266,8 @@ class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weight
 
   public:
     weighted_arc_consistency_t() : CSP::weighted_arc_consistency_t<weighted_varset_beam_t>(cg_) { }
-    weighted_arc_consistency_t(const weighted_arc_consistency_t &ac) = delete;
+    weighted_arc_consistency_t(const weighted_arc_consistency_t &ac) : CSP::weighted_arc_consistency_t<weighted_varset_beam_t>(ac.cg_) { }
+    weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
     virtual ~weighted_arc_consistency_t() { }
 
     static void initialize(int nrows, int ncols) {
@@ -398,7 +334,7 @@ class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weight
     }
 };
 
-// Abstract Particle for the 2nd Rao-Blackwellised filter
+// Abstract Particle for Rao-Blackwellised filter
 struct rbpf_particle_t : public base_particle_t {
     std::vector<int> loc_history_;
 
@@ -407,139 +343,115 @@ struct rbpf_particle_t : public base_particle_t {
     }
 
     // arc consistency
+    bool use_ac3_;
     weighted_arc_consistency_t weighted_csp_;
-    std::set<int> affected_beams_;
 
-    // cache for conversion from factor values into slabels (it is dynamically filled by get_slabels())
-    static std::vector<std::vector<int> > slabels_;
+    // computation of marginals in factor model
+    std::vector<dai::Factor> factors_;
+    mutable std::vector<int> indices_for_updated_factors_;
+    mutable std::vector<dai::Factor> marginals_;
+    Inference::inference_t inference_;
 
-    rbpf_particle_t() {
+    rbpf_particle_t(bool use_ac3) : use_ac3_(use_ac3) {
+        if( !use_ac3_ ) {
+            factors_ = std::vector<dai::Factor>(base_->nloc_);
+            marginals_ = std::vector<dai::Factor>(base_->nloc_);
+            weighted_csp_.delete_domains_and_clear();
+        }
+
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
-
-        // create binary variables for each cell in the grid
-        int nloc = base_->nloc_;
-        std::vector<dai::Var> variables(nloc);
-        for( int loc = 0; loc < nloc; ++loc )
-            variables[loc] = dai::Var(loc, 2);
-
-        // create one factor for each location. The variables
-        // in the factor are the variables for the location
-        // surrounding the factor, including the variable
-        // for the "center" location. Also set up the center
-        // for each factor.
-        for( int loc = 0; loc < nloc; ++loc ) {
-            int row = loc / base_->ncols_, col = loc % base_->ncols_;
-            std::vector<dai::Var> vars;
-            for( int dr = -1; dr < 2; ++dr ) {
-                int nr = row + dr;
-                if( (nr < 0) || (nr >= base_->nrows_) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
-                    int nc = col + dc;
-                    if( (nc < 0) || (nc >= base_->ncols_) ) continue;
-                    vars.push_back(variables[nr * base_->ncols_ + nc]);
-                }
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            if( use_ac3_ ) {
+                weighted_csp_.set_domain(loc, new weighted_varset_beam_t(loc, cache_t::variable(loc), cache_t::varset(loc)));
+            } else {
+                factors_[loc] = dai::Factor(cache_t::varset(loc));
+                marginals_[loc] = dai::Factor(cache_t::varset(loc));
             }
-            std::sort(vars.begin(), vars.end());
-            dai::VarSet varset(vars.begin(), vars.end());
-            weighted_csp_.set_domain(loc, new weighted_varset_beam_t(loc, variables[loc], varset));
         }
+        if( !use_ac3_ ) inference_.create_and_initialize_algorithm(factors_);
     }
-    rbpf_particle_t(const rbpf_particle_t &p)
-      : loc_history_(p.loc_history_) {
-        weighted_csp_ = p.weighted_csp_;
+    rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(false) {
+        std::multimap<std::string, std::string>::const_iterator it = parameters.find("use-ac3");
+        if( it != parameters.end() )
+            use_ac3_ = it->second == "true";
     }
-#if 0
+    rbpf_particle_t(const rbpf_particle_t &p) {
+        if( !p.use_ac3_ ) weighted_csp_.delete_domains_and_clear();
+        *this = p;
+    }
     rbpf_particle_t(rbpf_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)),
-        weighted_csp_(std::move(p.weighted_csp_)) {
+        use_ac3_(p.use_ac3_),
+        weighted_csp_(std::move(p.weighted_csp_)),
+        factors_(std::move(p.factors_)),
+        indices_for_updated_factors_(std::move(p.indices_for_updated_factors_)),
+        marginals_(std::move(p.marginals_)),
+        inference_(std::move(p.inference_)) {
     }
-#endif
     virtual ~rbpf_particle_t() {
         weighted_csp_.delete_domains_and_clear();
     }
 
     const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
         loc_history_ = p.loc_history_;
+        use_ac3_ = p.use_ac3_;
         weighted_csp_ = p.weighted_csp_;
+        factors_ = p.factors_;
+        indices_for_updated_factors_ = p.indices_for_updated_factors_;
+        marginals_ = p.marginals_;
+        inference_ = p.inference_;
         return *this;
     }
 
     bool operator==(const rbpf_particle_t &p) const {
-        return (loc_history_ == p.loc_history_) && (weighted_csp_ == p.weighted_csp_);
+        return (loc_history_ == p.loc_history_) &&
+               (use_ac3_ == p.use_ac3_) &&
+               (weighted_csp_ == p.weighted_csp_) &&
+               (factors_ == p.factors_) &&
+               (indices_for_updated_factors_ == p.indices_for_updated_factors_) &&
+               (marginals_ == p.marginals_) &&
+               (inference_ == p.inference_);
     }
 
     void reset_csp() {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            weighted_csp_.domain(loc)->set_initial_configuration();
+            if( use_ac3_ )
+                weighted_csp_.domain(loc)->set_initial_configuration();
         }
     }
 
-    void initial_sampling_in_place() {
+    void initial_sampling_in_place(mpi_slam_t *mpi, int wid) {
         assert(base_->nlabels_ == 2);
         loc_history_.push_back(base_->initial_loc_);
-        reset_csp();
-        assert(weighted_csp_.is_consistent(0));
-    }
-
-    int get_slabels(int loc, const dai::VarSet &varset, int value) const {
-        assert((value >= 0) && (value < int(varset.nrStates())));
-
-        // allocate cache if this is first call
-        if( slabels_.empty() )
-            slabels_ = std::vector<std::vector<int> >(base_->nloc_, std::vector<int>(8, -1));
-        assert(loc < int(slabels_.size()));
-        if( slabels_[loc].empty() )
-            slabels_[loc] = std::vector<int>(varset.nrStates(), -1);
-        assert(value < int(slabels_[loc].size()));
-
-        // check whether there is a valid entry in cache
-        const std::vector<int> &slabels_for_loc = slabels_[loc];
-        if( slabels_for_loc[value] != -1 )
-            return slabels_for_loc[value];
-
-#ifdef DEBUG
-        std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
-#endif
-
-        // this is the first time that we access (beam,value)
-        // compute the correct value and cache it for later use
-        int slabels = 0;
-        const std::map<dai::Var, size_t> &state = cache_t::state(loc, value);
-        for( dai::VarSet::const_iterator it = varset.begin(); it != varset.end(); ++it ) {
-            const dai::Var &var = *it;
-            std::map<dai::Var, size_t>::const_iterator jt = state.find(var);
-            assert(jt != state.end());
-            size_t var_value = jt->second;
-            assert(var_value < 2); // because it is a binary variable
-            if( var_value ) {
-                int var_id = it->label();
-                assert((loc - var_id > -2) || (loc - var_id < 2));
-                int var_off = 1 + var_id - loc;
-                assert((var_off >= 0) && (var_off < 3));
-#ifdef DEBUG
-                std::cout << "    [var_id=" << var_id << ":" << coord_t(var_id)
-                          << ", var_value=1, off=" << var_off << "]"
-                          << std::endl;
-#endif
-                slabels += (1 << var_off);
+        if( use_ac3_ ) {
+            reset_csp();
+        } else {
+            // set initial history and reset factors for locations
+            indices_for_updated_factors_.clear();
+            indices_for_updated_factors_.reserve(base_->nloc_);
+            for( int loc = 0; loc < base_->nloc_; ++loc ) {
+                dai::Factor &factor = factors_[loc];
+                float p = 1.0 / (1 << factor.vars().size());
+                for( int i = 0; i < (1 << factor.vars().size()); ++i )
+                    factor.set(i, p);
+                indices_for_updated_factors_.push_back(loc);
             }
+            calculate_marginals(mpi, wid, false);
         }
-#ifdef DEBUG
-        std::cout << "    bits=|";
-        print_bits(std::cout, slabels, 9);
-        std::cout << "| (" << slabels << ")" << std::endl;
-#endif
-
-        // cache it and return
-        slabels_[loc][value] = slabels;
-        return slabels;
+        assert(!use_ac3_ || weighted_csp_.is_consistent(0));
     }
+
+    static int var_offset(int loc, int var_id) { return 1 + var_id - loc; }
     int get_slabels(const weighted_varset_beam_t &beam, int value) const {
-        return get_slabels(beam.loc(), beam.varset(), value);
+        return cache_t::get_slabels(beam.loc(), beam.varset(), value, var_offset);
+    }
+    int get_slabels(int loc, const dai::VarSet &varset, int value) const {
+        return cache_t::get_slabels(loc, varset, value, var_offset);
     }
 
-    bool update_factors(int last_action, int obs) {
+    bool update_factors_ac3(int last_action, int obs) {
+        assert(use_ac3_);
         int current_loc = loc_history_.back();
 #ifdef DEBUG
         std::cout << "factor before update: loc=" << current_loc << ", obs=" << obs << std::endl;
@@ -587,12 +499,63 @@ struct rbpf_particle_t : public base_particle_t {
 #endif
         return weighted_csp_.is_consistent(0);
     }
+    bool update_factors_gm(int last_action, int obs) {
+        assert(!use_ac3_);
+        int current_loc = loc_history_.back();
+#ifdef DEBUG
+        std::cout << "factor before update: loc=" << current_loc << ", obs=" << obs << std::endl;
+        std::cout << "  factor: ";
+        inference_.print_factor(std::cout, current_loc, factors_, "factors");
+        std::cout << std::endl;
+#endif
+        assert(current_loc < int(factors_.size()));
+        dai::Factor &factor = factors_[current_loc];
+        for( int value = 0; value < int(factor.nrStates()); ++value ) {
+            int slabels = get_slabels(current_loc, factor.vars(), value);
+            factor.set(value, factor[value] * base_->probability_obs(obs, current_loc, slabels, last_action));
+        }
+        factor.normalize();
+        indices_for_updated_factors_.push_back(current_loc);
+#ifdef DEBUG
+        std::cout << "factor after update: loc=" << current_loc << ", obs=" << obs << std::endl;
+        std::cout << "  factor: ";
+        inference_.print_factor(std::cout, current_loc, factors_, "factors");
+        std::cout << std::endl;
+#endif
+        return true;
+    }
+    bool update_factors(int last_action, int obs) {
+        return use_ac3_ ? update_factors_ac3(last_action, obs) : update_factors_gm(last_action, obs);
+    }
+
+    void calculate_marginals(mpi_slam_t *mpi, int wid, bool print_marginals = false) const {
+#ifndef USE_MPI
+        inference_.calculate_marginals(cache_t::variables(),
+                                       indices_for_updated_factors_,
+                                       factors_,
+                                       marginals_,
+                                       Inference::edbp_t::edbp_factor_index,
+                                       print_marginals);
+#else
+        assert(mpi != 0);
+        assert((wid > 0) && (wid < mpi->nworkers_));
+        mpi->calculate_marginals(factors_, indices_for_updated_factors_, wid);
+        assert(indices_for_updated_factors_.empty());
+#endif
+    }
 
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            const weighted_varset_beam_t &beam = *weighted_csp_.domain(loc);
-            for( int label = 0; label < base_->nlabels_; ++label )
-                marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * beam.marginal(label));
+            if( use_ac3_ ) {
+                const weighted_varset_beam_t &beam = *weighted_csp_.domain(loc);
+                for( int label = 0; label < base_->nlabels_; ++label )
+                    marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * beam.marginal(label));
+            } else {
+                dai::Factor marginal = marginals_[loc].marginal(dai::Var(loc, 2));
+                assert(base_->nlabels_ == int(marginal.nrStates()));
+                for( int label = 0; label < base_->nlabels_; ++label )
+                    marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * marginal[label]);
+            }
         }
         int current_loc = loc_history_.back();
         marginals_on_vars[base_->nloc_].set(current_loc, marginals_on_vars[base_->nloc_][current_loc] + weight);
@@ -600,8 +563,23 @@ struct rbpf_particle_t : public base_particle_t {
 
     int value_for(int /*var*/) const { return -1; }
 
-    void initialize_mpi_worker(mpi_slam_t * /*mpi*/, int /*wid*/) { }
-    void mpi_update_marginals(mpi_slam_t * /*mpi*/, int /*wid*/) { }
+    void initialize_mpi_worker(mpi_slam_t *mpi, int wid) {
+#ifdef USE_MPI
+        assert(mpi != 0);
+
+        // initialize io buffers
+        if( mpi->io_buffer_ == 0 )
+            mpi->initialize_buffers(factors_);
+
+        // initialize worker 
+        mpi->initialize_worker(cache_t::variables(), factors_, wid);
+#endif
+    }
+    void mpi_update_marginals(mpi_slam_t *mpi, int wid) {
+#ifdef USE_MPI
+        mpi->read_marginals_from_worker(marginals_, wid);
+#endif
+    }
 
     void print(std::ostream &os) const {
         if( loc_history_.empty() )
@@ -613,14 +591,10 @@ struct rbpf_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter
 struct motion_model_rbpf_particle_t : public rbpf_particle_t {
-
-    motion_model_rbpf_particle_t() : rbpf_particle_t() { }
-    motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p)
-      : rbpf_particle_t(p) {
-    }
-    motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p)
-      : rbpf_particle_t(std::move(p)) {
-    }
+    motion_model_rbpf_particle_t(bool use_ac3) : rbpf_particle_t(use_ac3) { }
+    motion_model_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
+    motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p) : rbpf_particle_t(p) { }
+    motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
     ~motion_model_rbpf_particle_t() { }
 
     const motion_model_rbpf_particle_t& operator=(const motion_model_rbpf_particle_t &p) {
@@ -640,7 +614,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
-                                mpi_slam_t * /*mpi*/,
+                                mpi_slam_t *mpi,
                                 int wid) const {
 #ifdef DEBUG
         assert(np == *this);
@@ -649,7 +623,9 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
         np.loc_history_.push_back(next_loc);
         if( !history_container.contains(np.loc_history_) ) {
             // this is a new loc history, perform update
-            return np.update_factors(last_action, obs);
+            bool status = np.update_factors(last_action, obs);
+            if( !use_ac3_ && status ) np.calculate_marginals(mpi, wid, false);
+            return status;
         }
         return true;
     }
@@ -657,18 +633,26 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
     virtual float importance_weight(const rbpf_particle_t &np, int last_action, int obs) const {
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
-        const weighted_varset_beam_t &beam = *weighted_csp_.domain(np_current_loc);
-        const dai::VarSet &varset = beam.varset();
-        for( int value = 0; value < int(varset.nrStates()); ++value ) {
-            int slabels = get_slabels(beam, value);
-            weight += beam.probability(value) * base_->probability_obs(obs, np_current_loc, slabels, last_action);
+        if( use_ac3_ ) {
+            const weighted_varset_beam_t &beam = *weighted_csp_.domain(np_current_loc);
+            const dai::VarSet &varset = beam.varset();
+            for( int value = 0; value < int(varset.nrStates()); ++value ) {
+                int slabels = get_slabels(beam, value);
+                weight += beam.probability(value) * base_->probability_obs(obs, np_current_loc, slabels, last_action);
+            }
+        } else {
+            const dai::Factor &marginal = marginals_[np_current_loc];
+            for( int value = 0; value < int(marginal.nrStates()); ++value ) {
+                int slabels = get_slabels(np_current_loc, marginal.vars(), value);
+                weight += marginal[value] * base_->probability_obs(obs, np_current_loc, slabels, last_action);
+            }
         }
         return weight;
     }
 
-    motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int wid) {
-        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t;
-        p->initial_sampling_in_place();
+    motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
+        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_);
+        p->initial_sampling_in_place(mpi, wid);
         return p;
     }
 };
@@ -677,26 +661,19 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
-#if 0 // for some reason, it runs faster without these...
-    optimal_rbpf_particle_t() : rbpf_particle_t() { }
+    optimal_rbpf_particle_t(bool use_ac3) : rbpf_particle_t(use_ac3) { }
+    optimal_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
+    optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) : rbpf_particle_t(p) { }
+    optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
     ~optimal_rbpf_particle_t() { }
-
-    optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) {
-        *this = p;
-    }
-
-    optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) {
-    }
 
     const optimal_rbpf_particle_t& operator=(const optimal_rbpf_particle_t &p) {
         *static_cast<rbpf_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const optimal_rbpf_particle_t &p) const {
         return *static_cast<const rbpf_particle_t*>(this) == p;
     }
-#endif
 
     static std::string type() {
         return std::string("opt_rbpf4_sir");
@@ -704,7 +681,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
 
     void calculate_cdf(int last_action, int obs, std::vector<float> &cdf) const {
         // make sure there is no pending inference on factor model
- #if 0
+#if 0
         assert(indices_for_updated_factors_.empty());
 
         cdf.clear();
@@ -740,17 +717,20 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
                                 int last_action,
                                 int obs,
                                 const history_container_t &history_container,
-                                mpi_slam_t * /*mpi*/,
+                                mpi_slam_t *mpi,
                                 int wid) const {
 #ifdef DEBUG
-        assert(*this == np);
+        assert(dynamic_cast<optimal_rbpf_particle_t*>(&np) != 0);
+        assert(*this == *static_cast<optimal_rbpf_particle_t*>(&np));
 #endif
         calculate_cdf(last_action, obs, cdf_);
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);
         np.loc_history_.push_back(next_loc);
         if( !history_container.contains(np.loc_history_) ) {
             // this is a new loc history, perform update
-            return np.update_factors(last_action, obs);
+            bool status = np.update_factors(last_action, obs);
+            if( !use_ac3_ && status ) np.calculate_marginals(mpi, wid, false);
+            return status;
         }
         return true;
     }
@@ -759,7 +739,8 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
         float weight = 0;
         int current_loc = loc_history_.back();
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
-            const weighted_varset_beam_t &beam = *weighted_csp_.domain(current_loc);
+            assert(use_ac3_);
+            const weighted_varset_beam_t &beam = *weighted_csp_.domain(current_loc); // CHECK: conditional on use_ac3_ (see above)
             const dai::VarSet &varset = beam.varset();
             float p = 0;
             for( int value = 0; value < int(varset.nrStates()); ++value ) {
@@ -771,9 +752,9 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
         return weight;
     }
 
-    optimal_rbpf_particle_t* initial_sampling(mpi_slam_t * /*mpi*/, int wid) {
-        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t;
-        p->initial_sampling_in_place();
+    optimal_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
+        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_);
+        p->initial_sampling_in_place(mpi, wid);
         return p;
     }
 };
