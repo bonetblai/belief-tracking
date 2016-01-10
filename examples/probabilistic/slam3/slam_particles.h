@@ -357,8 +357,7 @@ struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
                                 mpi_slam_t * /*mpi*/,
                                 int /*wid*/) const {
 #ifdef DEBUG
-        assert(dynamic_cast<motion_model_rbpf_slam_particle_t*>(&np) != 0);
-        assert(*this == *static_cast<motion_model_rbpf_slam_particle_t*>(&np));
+        assert(np == *this);
 #endif
         int next_loc = base_->sample_loc(loc_history_.back(), last_action);
         np.loc_history_.push_back(next_loc);
@@ -450,8 +449,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
                                 mpi_slam_t * /*mpi*/,
                                 int /*wid*/) const {
 #ifdef DEBUG
-        assert(dynamic_cast<optimal_rbpf_slam_particle_t*>(&np) != 0);
-        assert(*this == *static_cast<optimal_rbpf_slam_particle_t*>(&np));
+        assert(np == *this);
 #endif
         try {
             calculate_cdf(last_action, obs, cdf_);

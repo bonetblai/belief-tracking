@@ -907,8 +907,7 @@ struct optimal_rbpf_slam3_particle_t : public rbpf_slam3_particle_t {
                                 mpi_slam_t * /*mpi*/,
                                 int wid) const {
 #ifdef DEBUG
-        assert(dynamic_cast<optimal_rbpf_slam3_particle_t*>(&np) != 0);
-        assert(*this == *static_cast<optimal_rbpf_slam3_particle_t*>(&np));
+        assert(np == *this);
 #endif
         calculate_cdf(last_action, obs, cdf_);
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);
