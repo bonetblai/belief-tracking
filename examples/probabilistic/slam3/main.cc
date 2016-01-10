@@ -76,6 +76,7 @@ vector<const char*> slam3::cache_t::compatible_values_;
 map<vector<int>, const char*> slam3::cache_t::cache_;
 vector<vector<map<dai::Var, size_t>*> > slam3::cache_t::state_cache_;
 CSP::constraint_digraph_t slam3::arc_consistency_t::cg_;
+CSP::constraint_digraph_t OreSLAM::weighted_arc_consistency_t::cg_;
 vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 
 // static members for kappa handling
@@ -214,7 +215,6 @@ int main(int argc, const char **argv) {
     float kappa = 0.1;
 
     cellmap_t::slam_type_t slam_type = cellmap_t::COLOR_SLAM;
-    bool use_ac3 = false;
 
     int gtype = -1;
     int ptype = 0;
@@ -398,14 +398,16 @@ int main(int argc, const char **argv) {
 
     Inference::edbp_t::initialize();
     Inference::inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
+    kappa_t::initialize(kappa, 10);
 
     if( slam_type == cellmap_t::ORE_SLAM ) {
         slam3::cache_t::initialize(nrows, ncols);
         slam3::arc_consistency_t::initialize(nrows, ncols);
         slam3::varset_beam_t::set_kappa(kappa);
+        OreSLAM::cache_t::initialize(nrows, ncols);
+        OreSLAM::weighted_arc_consistency_t::initialize(nrows, ncols);
     }
     if( slam_type == cellmap_t::AISLE_SLAM ) {
-        kappa_t::initialize(kappa, 10);
         AisleSLAM::cache_t::initialize(nrows, ncols);
         AisleSLAM::weighted_arc_consistency_t::initialize(nrows, ncols);
     }
@@ -456,11 +458,7 @@ int main(int argc, const char **argv) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( slam_type == cellmap_t::ORE_SLAM ) {
-                // CHECK do something similar to aisle-slam below (i.e. implement set_ac3)
-                if( !use_ac3 )
-                    tracker = new RBPF_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
-                else
-                    tracker = new RBPF_t<motion_model_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
+                tracker = new RBPF_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
                 tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
@@ -469,14 +467,10 @@ int main(int argc, const char **argv) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( slam_type == cellmap_t::ORE_SLAM ) {
-                // CHECK do something similar to aisle-slam below (i.e. implement set_ac3)
-                if( !use_ac3 )
-                    tracker = new RBPF_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
-                else
-                    tracker = new RBPF_t<optimal_rbpf_slam3_particle_t, cellmap_t>(name, cellmap, parameters);
+                tracker = new RBPF_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
-                tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
+                tracker = new RBPF_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else {
             cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
