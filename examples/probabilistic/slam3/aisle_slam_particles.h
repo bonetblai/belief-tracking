@@ -253,6 +253,7 @@ class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weight
         return true;
     }
 
+#if 0
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y) const {
         bitmask_ = 0;
     }
@@ -263,6 +264,7 @@ class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weight
         int offset = val_x % 8;
         return ((bitmask_ >> offset) & 0x1) == 1;
     }
+#endif
 
   public:
     weighted_arc_consistency_t() : CSP::weighted_arc_consistency_t<weighted_varset_beam_t>(cg_) { }
@@ -346,21 +348,23 @@ struct rbpf_particle_t : public base_particle_t {
     bool use_ac3_;
     weighted_arc_consistency_t weighted_csp_;
 
-    // computation of marginals in factor model
+    // factors
     std::vector<dai::Factor> factors_;
+
+    // computation of marginals in factor model
     mutable std::vector<int> indices_for_updated_factors_;
     mutable std::vector<dai::Factor> marginals_;
     Inference::inference_t inference_;
 
     rbpf_particle_t(bool use_ac3) : use_ac3_(use_ac3) {
+        assert(base_ != 0);
+        assert(base_->nlabels_ == 2);
         if( !use_ac3_ ) {
             factors_ = std::vector<dai::Factor>(base_->nloc_);
             marginals_ = std::vector<dai::Factor>(base_->nloc_);
             weighted_csp_.delete_domains_and_clear();
         }
 
-        assert(base_ != 0);
-        assert(base_->nlabels_ == 2);
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             if( use_ac3_ ) {
                 weighted_csp_.set_domain(loc, new weighted_varset_beam_t(loc, cache_t::variable(loc), cache_t::varset(loc)));
@@ -391,6 +395,7 @@ struct rbpf_particle_t : public base_particle_t {
     }
     virtual ~rbpf_particle_t() {
         weighted_csp_.delete_domains_and_clear();
+        if( use_ac3_) inference_.destroy_inference_algorithm();
     }
 
     const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
@@ -415,10 +420,22 @@ struct rbpf_particle_t : public base_particle_t {
     }
 
     void reset_csp() {
-        for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            if( use_ac3_ )
-                weighted_csp_.domain(loc)->set_initial_configuration();
-        }
+        assert(use_ac3_);
+        for( int loc = 0; loc < base_->nloc_; ++loc )
+            weighted_csp_.domain(loc)->set_initial_configuration();
+    }
+
+    void initialize_mpi_worker(mpi_slam_t *mpi, int wid) {
+#ifdef USE_MPI
+        assert(mpi != 0);
+
+        // initialize io buffers
+        if( mpi->io_buffer_ == 0 )
+            mpi->initialize_buffers(factors_);
+
+        // initialize worker 
+        mpi->initialize_worker(cache_t::variables(), factors_, wid);
+#endif
     }
 
     void initial_sampling_in_place(mpi_slam_t *mpi, int wid) {
@@ -563,18 +580,6 @@ struct rbpf_particle_t : public base_particle_t {
 
     int value_for(int /*var*/) const { return -1; }
 
-    void initialize_mpi_worker(mpi_slam_t *mpi, int wid) {
-#ifdef USE_MPI
-        assert(mpi != 0);
-
-        // initialize io buffers
-        if( mpi->io_buffer_ == 0 )
-            mpi->initialize_buffers(factors_);
-
-        // initialize worker 
-        mpi->initialize_worker(cache_t::variables(), factors_, wid);
-#endif
-    }
     void mpi_update_marginals(mpi_slam_t *mpi, int wid) {
 #ifdef USE_MPI
         mpi->read_marginals_from_worker(marginals_, wid);
@@ -601,13 +606,12 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
         *static_cast<rbpf_particle_t*>(this) = p;
         return *this;
     }
-
     bool operator==(const motion_model_rbpf_particle_t &p) const {
         return *static_cast<const rbpf_particle_t*>(this) == p;
     }
 
     static std::string type() {
-        return std::string("mm_rbpf4_sir");
+        return std::string("mm_rbpf_sir");
     }
 
     virtual bool sample_from_pi(rbpf_particle_t &np,
@@ -631,14 +635,14 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
     }
 
     virtual float importance_weight(const rbpf_particle_t &np, int last_action, int obs) const {
+        assert(indices_for_updated_factors_.empty());
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
         if( use_ac3_ ) {
             const weighted_varset_beam_t &beam = *weighted_csp_.domain(np_current_loc);
-            const dai::VarSet &varset = beam.varset();
-            for( int value = 0; value < int(varset.nrStates()); ++value ) {
-                int slabels = get_slabels(beam, value);
-                weight += beam.probability(value) * base_->probability_obs(obs, np_current_loc, slabels, last_action);
+            for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+                int slabels = get_slabels(beam, *it);
+                weight += beam.probability(*it, it.weight()) * base_->probability_obs(obs, np_current_loc, slabels, last_action);
             }
         } else {
             const dai::Factor &marginal = marginals_[np_current_loc];
@@ -676,12 +680,11 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 
     static std::string type() {
-        return std::string("opt_rbpf4_sir");
+        return std::string("opt_rbpf_sir");
     }
 
     void calculate_cdf(int last_action, int obs, std::vector<float> &cdf) const {
         // make sure there is no pending inference on factor model
-#if 0
         assert(indices_for_updated_factors_.empty());
 
         cdf.clear();
@@ -694,13 +697,21 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
         float previous = 0;
         int current_loc = loc_history_.back();
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
-            const dai::Factor &p_marginal = marginals_[nloc];
-            float prob = 0;
-            for( int value = 0; value < int(p_marginal.nrStates()); ++value ) {
-                int slabels = get_slabels(nloc, p_marginal.vars(), value);
-                prob += p_marginal[value] * base_->probability_obs(obs, nloc, slabels, last_action);
+            float p = 0;
+            if( use_ac3_ ) {
+                const weighted_varset_beam_t &beam = *weighted_csp_.domain(nloc);
+                for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+                    int slabels = get_slabels(beam, *it);
+                    p += beam.probability(*it, it.weight()) * base_->probability_obs(obs, nloc, slabels, last_action);
+                }
+            } else {
+                const dai::Factor &marginal = marginals_[nloc];
+                for( int value = 0; value < int(marginal.nrStates()); ++value ) {
+                    int slabels = get_slabels(nloc, marginal.vars(), value);
+                    p += marginal[value] * base_->probability_obs(obs, nloc, slabels, last_action);
+                }
             }
-            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, nloc) * prob);
+            cdf.push_back(previous + base_->probability_tr_loc(last_action, current_loc, nloc) * p);
             previous = cdf.back();
         }
 
@@ -709,8 +720,6 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
             cdf[nloc] /= cdf.back();
         }
-#endif
-        assert(0);
     }
 
     virtual bool sample_from_pi(rbpf_particle_t &np,
@@ -720,8 +729,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
                                 mpi_slam_t *mpi,
                                 int wid) const {
 #ifdef DEBUG
-        assert(dynamic_cast<optimal_rbpf_particle_t*>(&np) != 0);
-        assert(*this == *static_cast<optimal_rbpf_particle_t*>(&np));
+        assert(np == *this);
 #endif
         calculate_cdf(last_action, obs, cdf_);
         int next_loc = Utils::sample_from_distribution(base_->nloc_, &cdf_[0]);
@@ -736,16 +744,22 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 
     virtual float importance_weight(const rbpf_particle_t &, int last_action, int obs) const {
-        float weight = 0;
         int current_loc = loc_history_.back();
+        float weight = 0;
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
-            assert(use_ac3_);
-            const weighted_varset_beam_t &beam = *weighted_csp_.domain(current_loc); // CHECK: conditional on use_ac3_ (see above)
-            const dai::VarSet &varset = beam.varset();
             float p = 0;
-            for( int value = 0; value < int(varset.nrStates()); ++value ) {
-                int slabels = get_slabels(beam, value);
-                p += beam.probability(value) * base_->probability_obs(obs, nloc, slabels, last_action);
+            if( use_ac3_ ) {
+                const weighted_varset_beam_t &beam = *weighted_csp_.domain(nloc);
+                for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+                    int slabels = get_slabels(beam, *it);
+                    p += beam.probability(*it, it.weight()) * base_->probability_obs(obs, nloc, slabels, last_action);
+                }
+            } else {
+                const dai::Factor &marginal = marginals_[nloc];
+                for( int value = 0; value < int(marginal.nrStates()); ++value ) {
+                    int slabels = get_slabels(nloc, marginal.vars(), value);
+                    p += marginal[value] * base_->probability_obs(obs, nloc, slabels, last_action);
+                }
             }
             weight += base_->probability_tr_loc(last_action, current_loc, nloc) * p;
         }
