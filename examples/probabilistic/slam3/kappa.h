@@ -28,30 +28,34 @@
 
 class kappa_t {
   protected:
-    static float kappa_;
+    static float epsilon_;
     static std::vector<float> powers_;
 
   public:
-    static void initialize(float kappa, int num_powers) {
-        kappa_ = kappa;
+    static void initialize(float epsilon, int num_powers) {
+        epsilon_ = epsilon;
         powers_ = std::vector<float>(num_powers);
         for( int i = 0; i < num_powers; ++i )
-            powers_[i] = powf(kappa_, i);
+            powers_[i] = powf(epsilon_, i);
     }
 
-    static float kappa() { return kappa_; }
+    static float epsilon() { return epsilon_; }
     static float power(int i) {
-        return i < int(powers_.size()) ? powers_[i] : powf(kappa_, i);
+        return i < int(powers_.size()) ? powers_[i] : powf(epsilon_, i);
     }
     static int kappa(float p) {
         if( p <= powers_.back() ) {
+#ifdef DEBUG
+            std::cout << "kappa: epsilon=" << epsilon_ << ", p=" << p << ", kappa=" << 1 + powers_.size() << " (limit)" << std::endl;
+#endif
             return 1 + powers_.size();
         } else {
             int start = 0;
             int end = int(powers_.size()) - 1;
             while( start < end ) {
 #ifdef DEBUG
-                std::cout << "kappa: p=" << p
+                std::cout << "kappa: epsilon=" << epsilon_
+                          << ", p=" << p
                           << ", start=" << start
                           << ", end=" << end
                           << ", pow[start]=" << powers_[start]
@@ -62,6 +66,9 @@ class kappa_t {
                 assert(1 + mid < int(powers_.size()));
                 if( (powers_[mid] >= p) && (p > powers_[1 + mid]) ) {
                     assert((p <= power(mid)) && (power(1 + mid) < p));
+#ifdef DEBUG
+                    std::cout << "kappa: epsilon=" << epsilon_ << ", p=" << p << ", kappa=" << mid << std::endl;
+#endif
                     return mid;
                 } else if( p > powers_[mid] ) {
                     end = mid;
@@ -70,6 +77,9 @@ class kappa_t {
                 }
             }
             assert(p == powers_[start]);
+#ifdef DEBUG
+            std::cout << "kappa: epsilon=" << epsilon_ << ", p=" << p << ", kappa=" << start << std::endl;
+#endif
             return start;
         }
     }
