@@ -226,13 +226,15 @@ class weighted_ordered_vector_t {
         }
     }
 
-    void increase_weight(int index, int amount = 1) {
+    void increase_weight(int index, int amount = 1, int cap = std::numeric_limits<int>::max()) {
         assert(index < size_);
-        if( weight_[index] != std::numeric_limits<int>::max() )
+        if( weight_[index] != std::numeric_limits<int>::max() ) {
             weight_[index] += amount;
+            weight_[index] = std::min(weight_[index], cap);
+        }
     }
-    void increase_weight(const std::pair<int, int> &p) {
-        increase_weight(p.first, p.second);
+    void increase_weight(const std::pair<int, int> &p, int cap = std::numeric_limits<int>::max()) {
+        increase_weight(p.first, p.second, cap);
     }
     void set_weight(int index, int weight) {
         assert(index < size_);

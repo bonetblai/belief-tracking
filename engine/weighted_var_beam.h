@@ -120,13 +120,15 @@ class weighted_var_beam_t {
     void reserve(int capacity) { beam_.reserve(capacity); }
     void clear() { beam_.clear(); }
 
-    void increase_weight(int index, int amount) {
-        beam_.increase_weight(index, amount);
+    void increase_weight(int index, int amount, int cap = std::numeric_limits<int>::max()) {
+        beam_.increase_weight(index, amount, cap);
     }
-    void increase_weight(const std::pair<int, int> &p) {
-        beam_.increase_weight(p.first, p.second);
+    void increase_weight(const std::pair<int, int> &p, int cap = std::numeric_limits<int>::max()) {
+        beam_.increase_weight(p.first, p.second, cap);
     }
-    void set_weight(int index, int w) { beam_.set_weight(index, w); }
+    void set_weight(int index, int w) {
+        beam_.set_weight(index, w);
+    }
 
     void insert(int e, int w) { beam_.insert(e, w); }
     bool push_back(int e, int w) {

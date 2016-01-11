@@ -45,11 +45,13 @@ template<typename T> class weighted_arc_consistency_t {
     std::vector<T*> domain_;
     const constraint_digraph_t &digraph_;
 
+    mutable int max_allowed_weight_;
+
   public:
     weighted_arc_consistency_t(const constraint_digraph_t &digraph)
-      : nvars_(digraph.nvars()), domain_(nvars_, static_cast<T*>(0)), digraph_(digraph) { }
+      : nvars_(digraph.nvars()), domain_(nvars_, static_cast<T*>(0)), digraph_(digraph), max_allowed_weight_(std::numeric_limits<int>::max()) { }
     explicit weighted_arc_consistency_t(const weighted_arc_consistency_t &ac)
-      : nvars_(ac.nvars_), domain_(ac.domain_), digraph_(ac.digraph_) { }
+      : nvars_(ac.nvars_), domain_(ac.domain_), digraph_(ac.digraph_), max_allowed_weight_(ac.max_allowed_weight_) { }
     weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
     ~weighted_arc_consistency_t() { clear(); }
 
@@ -81,6 +83,19 @@ template<typename T> class weighted_arc_consistency_t {
     void clear_domains() {
         for( int var = 0; var < nvars_; ++var )
             domain_[var]->clear();
+    }
+
+    int max_weight(int var) const {
+        int weight = std::numeric_limits<int>::min();
+        for( typename T::const_iterator it = domain_[var]->begin(); it != domain_[var]->end(); ++it )
+            weight = std::max(weight, it.weight());
+        return weight;
+    }
+    int max_weight() const {
+        int weight = std::numeric_limits<int>::min();
+        for( int var = 0; var < nvars_; ++var )
+            weight = std::max(weight, max_weight(var));
+        return weight;
     }
 
     // used to insert edges into worklist prior to calling weighted-ac3
@@ -133,13 +148,15 @@ template<typename T> class weighted_arc_consistency_t {
         bool weight_change = false;
         arc_reduce_preprocessing_0(var_x, var_y);
         for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
+            assert(it.weight() <= max_allowed_weight_);
             arc_reduce_preprocessing_1(var_x, *it);
-            int min_weight = std::numeric_limits<int>::max();
+            int min_weight = max_allowed_weight_;
             for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
                 if( consistent(var_x, var_y, *it, *jt) ) {
                     min_weight = std::min(min_weight, jt.weight());
                 }
             }
+            assert(min_weight <= max_allowed_weight_);
 
             // should we remove valuations with max() value?
             // set weight of val_x to max of current weight and min_weight
