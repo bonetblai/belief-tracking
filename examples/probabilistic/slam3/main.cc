@@ -80,7 +80,7 @@ CSP::constraint_digraph_t OreSLAM::weighted_arc_consistency_t::cg_;
 vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 
 // static members for kappa handling
-float kappa_t::kappa_ = 0;
+float kappa_t::epsilon_ = 0;
 vector<float> kappa_t::powers_;
 
 // static members for aisle-slam particles
@@ -212,7 +212,7 @@ int main(int argc, const char **argv) {
 
     float pa = 0.9; // default value in K. P. Murphy's paper
     float po = 0.8; // default value in K. P. Murphy's paper
-    float kappa = 0.1;
+    float epsilon_for_kappa = 0.1;
 
     cellmap_t::slam_type_t slam_type = cellmap_t::COLOR_SLAM;
 
@@ -317,7 +317,7 @@ int main(int argc, const char **argv) {
             --argc;
             ++argv;
         } else if( !strcmp(argv[0], "--kappa") ) {
-            kappa = strtod(argv[1], 0);
+            epsilon_for_kappa = strtod(argv[1], 0);
             --argc;
             ++argv;
         } else if( !strcmp(argv[0], "--map-epsilon") ) {
@@ -398,12 +398,12 @@ int main(int argc, const char **argv) {
 
     Inference::edbp_t::initialize();
     Inference::inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
-    kappa_t::initialize(kappa, 10);
+    kappa_t::initialize(epsilon_for_kappa, 10);
 
     if( slam_type == cellmap_t::ORE_SLAM ) {
         slam3::cache_t::initialize(nrows, ncols);
         slam3::arc_consistency_t::initialize(nrows, ncols);
-        slam3::varset_beam_t::set_kappa(kappa);
+        slam3::varset_beam_t::set_kappa(epsilon_for_kappa);
         OreSLAM::cache_t::initialize(nrows, ncols);
         OreSLAM::weighted_arc_consistency_t::initialize(nrows, ncols);
     }
