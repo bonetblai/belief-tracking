@@ -40,7 +40,7 @@
 #include "var_beam.h"
 #include "arc_consistency.h"
 
-#define DEBUG
+//#define DEBUG
 
 namespace slam3 {
 

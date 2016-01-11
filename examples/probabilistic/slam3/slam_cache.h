@@ -120,7 +120,7 @@ class cache_t {
 
         // allocate cache if this is first call
         if( slabels_.empty() )
-            slabels_ = std::vector<std::vector<int> >(num_locs_, std::vector<int>(8, -1));
+            slabels_ = std::vector<std::vector<int> >(num_locs_, std::vector<int>(512, -1));
         assert(loc < int(slabels_.size()));
         if( slabels_[loc].empty() )
             slabels_[loc] = std::vector<int>(varset.nrStates(), -1);

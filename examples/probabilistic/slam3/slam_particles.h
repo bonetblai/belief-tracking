@@ -38,7 +38,7 @@
 
 #include "mpi_slam.h"
 
-#define DEBUG
+//#define DEBUG
 
 // Generic particle for the color-tile SLAM problem
 struct base_particle_t {

@@ -43,7 +43,7 @@
 #include "weighted_var_beam.h"
 #include "weighted_arc_consistency.h"
 
-#define DEBUG
+//#define DEBUG
 
 namespace OreSLAM {
 
