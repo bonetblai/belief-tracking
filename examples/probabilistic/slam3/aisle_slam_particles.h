@@ -272,10 +272,6 @@ class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weight
     weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
     virtual ~weighted_arc_consistency_t() { }
 
-    static void initialize(int nrows, int ncols) {
-        construct_constraint_graph(nrows, ncols);
-    }
-
     const weighted_arc_consistency_t& operator=(const weighted_arc_consistency_t &ac) {
         nvars_ = ac.nvars_;
         assert(domain_.size() == ac.domain_.size());
@@ -295,11 +291,20 @@ class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weight
         }
     }
 
+    static void initialize(int nrows, int ncols) {
+        construct_constraint_graph(nrows, ncols);
+    }
+
+    void set_max_kappa(int max_kappa) {
+        CSP::weighted_arc_consistency_t<weighted_varset_beam_t>::max_allowed_weight_ = max_kappa;
+    }
+
     bool weighted_ac3() {
         std::vector<int> revised_vars;
         bool something_removed = CSP::weighted_arc_consistency_t<weighted_varset_beam_t>::weighted_ac3(revised_vars, true);
         normalize_weights(revised_vars);
         calculate_normalization_constant(revised_vars);
+        assert(normalized_weights());
         return something_removed;
     }
 
@@ -346,6 +351,7 @@ struct rbpf_particle_t : public base_particle_t {
 
     // arc consistency
     bool use_ac3_;
+    int max_kappa_;
     weighted_arc_consistency_t weighted_csp_;
 
     // factors
@@ -356,7 +362,7 @@ struct rbpf_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     Inference::inference_t inference_;
 
-    rbpf_particle_t(bool use_ac3) : use_ac3_(use_ac3) {
+    rbpf_particle_t(bool use_ac3, int max_kappa) : use_ac3_(use_ac3), max_kappa_(max_kappa) {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
         if( !use_ac3_ ) {
@@ -375,10 +381,15 @@ struct rbpf_particle_t : public base_particle_t {
         }
         if( !use_ac3_ ) inference_.create_and_initialize_algorithm(factors_);
     }
-    rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(false) {
+    rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(false, std::numeric_limits<int>::max()) {
         std::multimap<std::string, std::string>::const_iterator it = parameters.find("use-ac3");
         if( it != parameters.end() )
             use_ac3_ = it->second == "true";
+        it = parameters.find("max-kappa");
+        if( it != parameters.end() ) {
+            max_kappa_ = strtod(it->second.c_str(), 0);
+            weighted_csp_.set_max_kappa(max_kappa_);
+        }
     }
     rbpf_particle_t(const rbpf_particle_t &p) {
         if( !p.use_ac3_ ) weighted_csp_.delete_domains_and_clear();
@@ -387,6 +398,7 @@ struct rbpf_particle_t : public base_particle_t {
     rbpf_particle_t(rbpf_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)),
         use_ac3_(p.use_ac3_),
+        max_kappa_(p.max_kappa_),
         weighted_csp_(std::move(p.weighted_csp_)),
         factors_(std::move(p.factors_)),
         indices_for_updated_factors_(std::move(p.indices_for_updated_factors_)),
@@ -401,6 +413,7 @@ struct rbpf_particle_t : public base_particle_t {
     const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
         loc_history_ = p.loc_history_;
         use_ac3_ = p.use_ac3_;
+        max_kappa_ = p.max_kappa_;
         weighted_csp_ = p.weighted_csp_;
         factors_ = p.factors_;
         indices_for_updated_factors_ = p.indices_for_updated_factors_;
@@ -412,6 +425,7 @@ struct rbpf_particle_t : public base_particle_t {
     bool operator==(const rbpf_particle_t &p) const {
         return (loc_history_ == p.loc_history_) &&
                (use_ac3_ == p.use_ac3_) &&
+               (max_kappa_ == p.max_kappa_) &&
                (weighted_csp_ == p.weighted_csp_) &&
                (factors_ == p.factors_) &&
                (indices_for_updated_factors_ == p.indices_for_updated_factors_) &&
@@ -484,7 +498,7 @@ struct rbpf_particle_t : public base_particle_t {
             int index = it.index();
             int slabels = get_slabels(beam, value);
             float p = base_->probability_obs(obs, current_loc, slabels, last_action);
-            int k_obs = kappa_t::kappa(p);
+            int k_obs = std::min(kappa_t::kappa(p), max_kappa_);
             weight_increases.push_back(std::make_pair(index, k_obs));
         }
 #ifdef DEBUG
@@ -504,7 +518,7 @@ struct rbpf_particle_t : public base_particle_t {
 
         assert(!beam.empty());
         for( int i = 0; i < int(weight_increases.size()); ++i )
-            weighted_csp_.domain(current_loc)->increase_weight(weight_increases[i]);
+            weighted_csp_.domain(current_loc)->increase_weight(weight_increases[i], max_kappa_);
         weighted_csp_.add_to_worklist(current_loc);
         weighted_csp_.weighted_ac3();
 
@@ -596,7 +610,7 @@ struct rbpf_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter
 struct motion_model_rbpf_particle_t : public rbpf_particle_t {
-    motion_model_rbpf_particle_t(bool use_ac3) : rbpf_particle_t(use_ac3) { }
+    motion_model_rbpf_particle_t(bool use_ac3, int max_kappa) : rbpf_particle_t(use_ac3, max_kappa) { }
     motion_model_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -655,7 +669,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
     }
 
     motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_);
+        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, max_kappa_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
@@ -665,7 +679,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
-    optimal_rbpf_particle_t(bool use_ac3) : rbpf_particle_t(use_ac3) { }
+    optimal_rbpf_particle_t(bool use_ac3, int max_kappa) : rbpf_particle_t(use_ac3, max_kappa) { }
     optimal_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -767,7 +781,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 
     optimal_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_);
+        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, max_kappa_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
