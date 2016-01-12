@@ -98,6 +98,15 @@ class cache_t {
     cache_t() { }
     ~cache_t() { }
 
+    static void finalize() {
+        for( int i = 0; i < int(state_cache_.size()); ++i ) {
+            for( int j = 0; j < int(state_cache_[i].size()); ++j ) {
+                std::map<dai::Var, size_t> *state = state_cache_[i][j];
+                delete state;
+            }
+        }
+    }
+
     static const std::vector<dai::Var>& variables() {
         return variables_;
     }
