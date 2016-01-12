@@ -76,15 +76,18 @@ vector<const char*> slam3::cache_t::compatible_values_;
 map<vector<int>, const char*> slam3::cache_t::cache_;
 vector<vector<map<dai::Var, size_t>*> > slam3::cache_t::state_cache_;
 CSP::constraint_digraph_t slam3::arc_consistency_t::cg_;
-CSP::constraint_digraph_t OreSLAM::weighted_arc_consistency_t::cg_;
 vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 
 // static members for kappa handling
 float kappa_t::epsilon_ = 0;
 vector<float> kappa_t::powers_;
 
+// static members for ore-slam particles
+vector<unsigned*> OreSLAM::cache_t::compatible_values_;
+CSP::constraint_digraph_t OreSLAM::weighted_arc_consistency_t::cg_;
+
 // static members for aisle-slam particles
-vector<unsigned char> AisleSLAM::cache_t::compatible_values_;
+vector<unsigned> AisleSLAM::cache_t::compatible_values_;
 CSP::constraint_digraph_t AisleSLAM::weighted_arc_consistency_t::cg_;
 
 // static members for MPI

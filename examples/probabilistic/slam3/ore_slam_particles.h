@@ -48,6 +48,88 @@
 namespace OreSLAM {
 
 class cache_t : public SLAM::cache_t {
+  protected:
+    static std::vector<unsigned*> compatible_values_;
+
+    static void compute_cache_for_compatible_values(int nrows, int ncols) {
+        float start_time = Utils::read_time_in_seconds();
+
+        // for each location (var_y) and value for it, for each adjacent loc in constraint graph,
+        // determine compatible values
+        std::map<std::string, unsigned*> cache;
+        unsigned cache_hits = 0;
+        compatible_values_ = std::vector<unsigned*>(num_locs_ * num_locs_ * 512, static_cast<unsigned*>(0));
+        for( int var_y = 0; var_y < num_locs_; ++var_y ) {
+            int row = var_y / ncols, col = var_y % ncols;
+            for( int val_y = 0; val_y < int(varsets_[var_y].nrStates()); ++val_y ) {
+                const std::map<dai::Var, size_t> &state_y = *state_cache_[var_y][val_y];
+                for( int dc = -2; dc < 3; ++dc ) {
+                    int nc = col + dc;
+                    if( (nc < 0) || (nc >= ncols) ) continue;
+                    for( int dr = -2; dr < 3; ++dr ) {
+                        int nr = row + dr;
+                        if( (nr < 0) || (nr >= nrows) ) continue;
+                        int var_x = nr * ncols + nc;
+                        if( var_x == var_y ) continue;
+
+                        // check whether we have already calculated this entry
+                        std::string cache_key;
+                        cache_key += std::to_string(varsets_[var_y].size()) + " ";
+                        cache_key += std::to_string(varsets_[var_x].size()) + " ";
+                        cache_key += std::to_string(dr) + " ";
+                        cache_key += std::to_string(dc) + " ";
+                        cache_key += std::to_string(val_y) + " ";
+                        cache_key += std::to_string(row == 0);
+                        cache_key += std::to_string(row == nrows - 1);
+                        cache_key += std::to_string(col == 0);
+                        cache_key += std::to_string(col == ncols - 1);
+                        cache_key += std::to_string(nr == 0);
+                        cache_key += std::to_string(nr == nrows - 1);
+                        cache_key += std::to_string(nc == 0);
+                        cache_key += std::to_string(nc == ncols - 1);
+                        std::map<std::string, unsigned*>::const_iterator cache_it = cache.find(cache_key);
+                        if( cache_it != cache.end() ) {
+                            ++cache_hits;
+                            assert(val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x < int(compatible_values_.size()));
+                            compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x] = cache_it->second;
+                        } else {
+                            int size = int(varsets_[var_x].nrStates()) >> 5;
+                            size = size == 0 ? 1 : size;
+                            unsigned *values = new unsigned[size]();
+                            int ncompatible = 0;
+                            for( int val_x = 0; val_x < int(varsets_[var_x].nrStates()); ++val_x ) {
+                                bool compatible = true;
+                                const std::map<dai::Var, size_t> &state_x = *state_cache_[var_x][val_x];
+                                for( std::map<dai::Var, size_t>::const_iterator it = state_x.begin(); it != state_x.end(); ++it ) {
+                                    std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
+                                    if( (jt != state_y.end()) && (jt->second != it->second) ) {
+                                        compatible = false;
+                                        break;
+                                    }
+                                }
+                                if( compatible ) {
+                                    int index = val_x / 32, offset = val_x % 32;
+                                    assert(index < size);
+                                    values[index] |= 1 << offset;
+                                    ++ncompatible;
+                                }
+                            }
+                            assert((ncompatible > 0) && (ncompatible < int(varsets_[var_x].nrStates())));
+                            assert(val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x < int(compatible_values_.size()));
+                            compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x] = values;
+                            cache.insert(std::make_pair(cache_key, values));
+                        }
+                    }
+                }
+            }
+        }
+        std::cout << "# cache-for-compatible-values:"
+                  << " size=" << cache.size()
+                  << ", hits=" << cache_hits
+                  << ", time=" << Utils::read_time_in_seconds() - start_time
+                  << std::endl;
+    }
+
   public:
     cache_t() { }
     ~cache_t() { }
@@ -56,6 +138,22 @@ class cache_t : public SLAM::cache_t {
         num_locs_ = nrows * ncols;
         SLAM::cache_t::compute_basic_elements(nrows, ncols);
         SLAM::cache_t::compute_cache_for_states(nrows, ncols);
+        compute_cache_for_compatible_values(nrows, ncols);
+    }
+    static void finalize() {
+        std::set<unsigned*> erased;
+        for( int i = 0; i < int(compatible_values_.size()); ++i ) {
+            unsigned *values = compatible_values_[i];
+            if( (values != 0) && (erased.find(values) == erased.end()) ) {
+                delete[] values;
+                erased.insert(values);
+            }
+        }
+        SLAM::cache_t::finalize();
+    }
+
+    static const unsigned* compatible_values(int val_y, int var_y, int var_x) {
+        return compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x];
     }
 };
 
@@ -167,15 +265,23 @@ class weighted_arc_consistency_t : public CSP::weighted_arc_consistency_t<weight
     }
 
     virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
-        state_x_ = &cache_t::state(var_x, val_x);
+        //state_x_ = &cache_t::state(var_x, val_x);
     }
     virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const {
+#if 0
         const std::map<dai::Var, size_t> &state_y = cache_t::state(var_y, val_y);
         for( std::map<dai::Var, size_t>::const_iterator it = state_x_->begin(); it != state_x_->end(); ++it ) {
             std::map<dai::Var, size_t>::const_iterator jt = state_y.find(it->first);
-            if( (jt != state_y.end()) && (it->second != jt->second) ) return false;
+            if( (jt != state_y.end()) && (it->second != jt->second) ) {
+                return false;
+            }
         }
         return true;
+#else
+        const unsigned *values = cache_t::compatible_values(val_y, var_y, var_x);
+        int index = val_x / 32, offset = val_x % 32;
+        return (values[index] & (1 << offset)) != 0;
+#endif
     }
 
 #if 0
