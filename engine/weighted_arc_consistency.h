@@ -144,23 +144,23 @@ template<typename T> class weighted_arc_consistency_t {
     // some element of var_x is removed or not.
     bool weighted_arc_reduce(int var_x, int var_y) {
         assert(var_x != var_y);
-
-        bool weight_change = false;
+        bool change = false;
         arc_reduce_preprocessing_0(var_x, var_y);
         for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
             assert(it.weight() <= max_allowed_weight_);
             arc_reduce_preprocessing_1(var_x, *it);
+            bool found_compatible = false;
             int min_weight = max_allowed_weight_;
             for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
                 if( consistent(var_x, var_y, *it, *jt) ) {
                     min_weight = std::min(min_weight, jt.weight());
+                    found_compatible = true;
                 }
             }
             assert(min_weight <= max_allowed_weight_);
 
-            // should we remove valuations with max() value?
             // set weight of val_x to max of current weight and min_weight
-            if( min_weight > it.weight() ) {
+            if( found_compatible && (min_weight > it.weight()) ) {
 #ifdef DEBUG
                 std::cout << "weighted-ac3: increasing weight of valuation " << *it
                           << " in domain of var_x=" << var_x
@@ -170,11 +170,14 @@ template<typename T> class weighted_arc_consistency_t {
                           << std::endl;
 #endif
                 domain_[var_x]->set_weight(it.index(), min_weight);
-                weight_change = true;
+                change = true;
+            } else if( !found_compatible ) {
+                // should we remove valuations with max() value?
+                assert(0);
             }
         }
         arc_reduce_postprocessing(var_x, var_y);
-        return weight_change;
+        return change;
     }
 
     // revise arc var_x -> var_y. This method is called after the reduction of
