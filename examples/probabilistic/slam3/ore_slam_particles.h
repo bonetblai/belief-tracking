@@ -538,11 +538,15 @@ struct rbpf_particle_t : public base_particle_t {
             std::pair<int, int> &p = weight_increases[i];
             int valuation = beam[p.first].first;
             int weight = beam[p.first].second;
+#if 0
             std::cout << " {" << p.first << ":" << valuation << ":";
             std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), valuation);
             for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
                 std::cout << it->first << "=" << it->second << ",";
             std::cout << "weight=" << weight << ",amount=" << p.second << "},";
+#else
+            std::cout << " " << p.second;
+#endif
         }
         std::cout << std::endl;
 #endif
@@ -550,6 +554,7 @@ struct rbpf_particle_t : public base_particle_t {
         assert(!beam.empty());
         for( int i = 0; i < int(weight_increases.size()); ++i )
             weighted_csp_.domain(current_loc)->increase_weight(weight_increases[i], max_kappa_);
+        assert(weighted_csp_.worklist().empty());
         weighted_csp_.add_to_worklist(current_loc);
         weighted_csp_.weighted_ac3();
 
