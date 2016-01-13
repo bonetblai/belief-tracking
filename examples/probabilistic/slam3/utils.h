@@ -73,7 +73,7 @@ inline double uniform() {
 }
 
 inline double uniform(double a, double b) {
-    double x = drand48();
+    double x = uniform();
     return a + b * x;
 }
 
