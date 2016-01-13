@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2012 Universidad Simon Bolivar
+ *  Copyright (C) 2016 Universidad Simon Bolivar
  * 
  *  Permission is hereby granted to distribute this software for
  *  non-commercial research purposes, provided that this copyright
@@ -84,13 +84,12 @@ template<typename T> class arc_consistency_t {
     typedef constraint_digraph_t::edge_list_t edge_list_t;
     typedef constraint_digraph_t::edge_t edge_t;
 
-  private:
-    edge_list_t worklist_;
-
   protected:
     int nvars_;
     std::vector<T*> domain_;
     const constraint_digraph_t &digraph_;
+
+    edge_list_t worklist_;
 
   public:
     arc_consistency_t(const constraint_digraph_t &digraph)
@@ -102,12 +101,14 @@ template<typename T> class arc_consistency_t {
 
     int nvars() const { return nvars_; }
     const constraint_digraph_t& digraph() const { return digraph_; }
-    bool is_consistent(int var) const { return !domain_[var]->empty(); }
     bool is_consistent() const {
         for( int var = 0; var < nvars_; ++var ) {
             if( !is_consistent(var) ) return false;
         }
         return true;
+    }
+    virtual bool is_consistent(int var) const {
+        return !domain_[var]->empty();
     }
 
     T* domain(int var) { return domain_[var]; }
@@ -150,6 +151,9 @@ template<typename T> class arc_consistency_t {
     }
     void add_all_edges_to_worklist() {
         add_to_worklist(-1);
+    }
+    const edge_list_t& worklist() const {
+        return worklist_;
     }
 
     // check whether the partial assignment [ var_x = val_x, var_y = val_y ] is

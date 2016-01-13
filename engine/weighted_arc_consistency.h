@@ -32,57 +32,37 @@
 
 namespace CSP {
 
-template<typename T> class weighted_arc_consistency_t {
+template<typename T> class weighted_arc_consistency_t : public arc_consistency_t<T> {
   public:
     typedef constraint_digraph_t::edge_list_t edge_list_t;
     typedef constraint_digraph_t::edge_t edge_t;
 
-  private:
-    edge_list_t worklist_;
-
   protected:
-    int nvars_;
-    std::vector<T*> domain_;
-    const constraint_digraph_t &digraph_;
-
     mutable int max_allowed_weight_;
+
+    using arc_consistency_t<T>::nvars_;
+    using arc_consistency_t<T>::domain_;
+    using arc_consistency_t<T>::digraph_;
+    using arc_consistency_t<T>::worklist_;
+
+  public:
+    using arc_consistency_t<T>::clear;
+    using arc_consistency_t<T>::consistent;
+    using arc_consistency_t<T>::add_to_worklist;
+    using arc_consistency_t<T>::arc_reduce_preprocessing_0;
+    using arc_consistency_t<T>::arc_reduce_preprocessing_1;
+    using arc_consistency_t<T>::arc_reduce_postprocessing;
 
   public:
     weighted_arc_consistency_t(const constraint_digraph_t &digraph)
-      : nvars_(digraph.nvars()), domain_(nvars_, static_cast<T*>(0)), digraph_(digraph), max_allowed_weight_(std::numeric_limits<int>::max()) { }
+      : arc_consistency_t<T>(digraph), max_allowed_weight_(std::numeric_limits<int>::max()) { }
     explicit weighted_arc_consistency_t(const weighted_arc_consistency_t &ac)
-      : nvars_(ac.nvars_), domain_(ac.domain_), digraph_(ac.digraph_), max_allowed_weight_(ac.max_allowed_weight_) { }
+      : arc_consistency_t<T>(ac), max_allowed_weight_(ac.max_allowed_weight_) { }
     weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
     ~weighted_arc_consistency_t() { clear(); }
 
-    int nvars() const { return nvars_; }
-    const constraint_digraph_t& digraph() const { return digraph_; }
-    bool is_consistent(int var) const {
+    virtual bool is_consistent(int var) const {
         return domain_[var]->min_weight() != std::numeric_limits<int>::max();
-    }
-    bool is_consistent() const {
-        for( int var = 0; var < nvars_; ++var ) {
-            if( !is_consistent(var) ) return false;
-        }
-        return true;
-    }
-
-    T* domain(int var) { return domain_[var]; }
-    const T* domain(int var) const { return domain_[var]; }
-    void set_domain(int var, T *domain) { domain_[var] = domain; }
-
-    void clear() {
-        for( int var = 0; var < nvars_; ++var )
-            domain_[var] = 0;
-    }
-    void delete_domains_and_clear() {
-        for( int var = 0; var < nvars_; ++var )
-            delete domain_[var];
-        domain_.clear();
-    }
-    void clear_domains() {
-        for( int var = 0; var < nvars_; ++var )
-            domain_[var]->clear();
     }
 
     int max_weight(int var) const {
@@ -97,46 +77,6 @@ template<typename T> class weighted_arc_consistency_t {
             weight = std::max(weight, max_weight(var));
         return weight;
     }
-
-    // used to insert edges into worklist prior to calling weighted-ac3
-    void add_to_worklist(edge_t edge) {
-        worklist_.push_back(edge);
-    }
-    void add_to_worklist(int seed_var) {
-        worklist_.reserve(digraph_.nedges());
-        if( seed_var > -1 ) {
-            // add all edges pointing to seed var
-            worklist_.insert(worklist_.end(),
-                             digraph_.edges_pointing_to(seed_var).begin(),
-                             digraph_.edges_pointing_to(seed_var).end());
-        } else {
-            // add every edge to worklist
-            for( int node = 0; node < digraph_.nvars(); ++node ) {
-                worklist_.insert(worklist_.end(),
-                                 digraph_.edges_pointing_to(node).begin(),
-                                 digraph_.edges_pointing_to(node).end());
-            }
-        }
-    }
-    void add_all_edges_to_worklist() {
-        add_to_worklist(-1);
-    }
-
-    // check whether the partial assignment [ var_x = val_x, var_y = val_y ] is
-    // consistent with the constraints. The preprocessing and postprocessing 
-    // methods are called before and after making the consistency checks
-    // associated with arc var_x -> var_y. By using them, one can save time in
-    // some cases; but they are not strictly needed.
-    //
-    // Pre/post-processing is typically used to set auxiliary variables that
-    // help in calculation of consistent(...).
-    virtual void arc_reduce_preprocessing_0(int var_x, int var_y) const { }
-    virtual void arc_reduce_preprocessing_1(int var_x, int val_x) const {
-        std::cout << "error: must implement 'arc_reduce_preprocessing()' for arc consistency" << std::endl;
-        assert(0);
-    }
-    virtual bool consistent(int var_x, int var_y, int val_x, int val_y) const { return false; }
-    virtual void arc_reduce_postprocessing(int var_x, int var_y) const { }
 
     // reduce arc var_x -> var_y. That is, for each value of var_x, find a
     // compatible value for var_y. If such value is not found, the value of
