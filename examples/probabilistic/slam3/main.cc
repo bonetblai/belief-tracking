@@ -51,14 +51,9 @@ int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
 
 // static members for inference algorithms
-string Inference::inference_t::algorithm_;
-string Inference::inference_t::options_;
-dai::PropertySet Inference::inference_t::libdai_options_;
-string Inference::inference_t::type_;
 string Inference::inference_t::edbp_factors_fn_;
 string Inference::inference_t::edbp_evid_fn_;
 string Inference::inference_t::edbp_output_fn_;
-int Inference::inference_t::edbp_max_iter_;
 vector<vector<int> > Inference::edbp_t::edbp_factor_indices_;
 
 // static member for SLAM cache
@@ -400,7 +395,7 @@ int main(int argc, const char **argv) {
     base_particle_t::base_ = &cellmap;
 
     Inference::edbp_t::initialize();
-    Inference::inference_t::set_inference_algorithm(inference_algorithm, "BEL", tmp_path);
+    Inference::inference_t::initialize_edbp(tmp_path);
     kappa_t::initialize(epsilon_for_kappa, 10);
 
     if( slam_type == cellmap_t::ORE_SLAM ) {
@@ -642,6 +637,7 @@ int main(int argc, const char **argv) {
     float elapsed_time = Utils::read_time_in_seconds() - start_time;
     cout << "# total time = " << setprecision(5) << elapsed_time << endl;
 
+    Inference::inference_t::finalize_edbp();
     finalize();
     return 0;
 }

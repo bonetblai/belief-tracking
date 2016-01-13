@@ -393,7 +393,7 @@ struct rbpf_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     Inference::inference_t inference_;
 
-    rbpf_particle_t(bool use_ac3, int max_kappa) : use_ac3_(use_ac3), max_kappa_(max_kappa) {
+    rbpf_particle_t(bool use_ac3, int max_kappa, const Inference::inference_t *i) : use_ac3_(use_ac3), max_kappa_(max_kappa) {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
         if( !use_ac3_ ) {
@@ -410,9 +410,10 @@ struct rbpf_particle_t : public base_particle_t {
                 marginals_[loc] = dai::Factor(cache_t::varset(loc));
             }
         }
-        if( !use_ac3_ ) inference_.create_and_initialize_algorithm(factors_);
+
+        if( !use_ac3_ && (i != 0) ) inference_ = *i;
     }
-    rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(false, std::numeric_limits<int>::max()) {
+    rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(false, std::numeric_limits<int>::max(), 0) {
         std::multimap<std::string, std::string>::const_iterator it = parameters.find("use-ac3");
         if( it != parameters.end() )
             use_ac3_ = it->second == "true";
@@ -421,6 +422,14 @@ struct rbpf_particle_t : public base_particle_t {
             max_kappa_ = strtod(it->second.c_str(), 0);
             weighted_csp_.set_max_kappa(max_kappa_);
         }
+        it = parameters.find("inference");
+        if( it != parameters.end() ) {
+            inference_.set_inference_algorithm(it->second, "BEL", true);
+            if( !use_ac3_ ) inference_.create_and_initialize_algorithm(factors_);
+        }
+        it = parameters.find("edbp-max-iter");
+        if( it != parameters.end() )
+            inference_.edbp_max_iter_ = strtoul(it->second.c_str(), 0, 0);
     }
     rbpf_particle_t(const rbpf_particle_t &p) {
         if( !p.use_ac3_ ) weighted_csp_.delete_domains_and_clear();
@@ -646,7 +655,7 @@ struct rbpf_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter
 struct motion_model_rbpf_particle_t : public rbpf_particle_t {
-    motion_model_rbpf_particle_t(bool use_ac3, int max_kappa) : rbpf_particle_t(use_ac3, max_kappa) { }
+    motion_model_rbpf_particle_t(bool use_ac3, int max_kappa, const Inference::inference_t *i) : rbpf_particle_t(use_ac3, max_kappa, i) { }
     motion_model_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -705,7 +714,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
     }
 
     motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, max_kappa_);
+        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, max_kappa_, &inference_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
@@ -715,7 +724,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
-    optimal_rbpf_particle_t(bool use_ac3, int max_kappa) : rbpf_particle_t(use_ac3, max_kappa) { }
+    optimal_rbpf_particle_t(bool use_ac3, int max_kappa, const Inference::inference_t *i) : rbpf_particle_t(use_ac3, max_kappa, i) { }
     optimal_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -817,7 +826,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 
     optimal_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, max_kappa_);
+        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, max_kappa_, &inference_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }

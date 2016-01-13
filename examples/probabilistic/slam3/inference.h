@@ -31,21 +31,22 @@
 namespace Inference {
 
 struct inference_t {
-    static std::string algorithm_;
-    static std::string options_;
+    std::string algorithm_;
+    std::string options_;
 
-    static dai::PropertySet libdai_options_;
-    static std::string type_;
+    dai::PropertySet libdai_options_;
+    std::string type_;
 
+    int edbp_max_iter_;
     static std::string edbp_factors_fn_;
     static std::string edbp_evid_fn_;
     static std::string edbp_output_fn_;
-    static int edbp_max_iter_;
 
     // inference algorithm
     dai::InfAlg *inference_algorithm_;
 
     inference_t() : inference_algorithm_(0) { }
+    inference_t(const inference_t &i) = delete;
     inference_t(inference_t &&i) {
         inference_algorithm_ = i.inference_algorithm_;
         i.inference_algorithm_ = 0;
@@ -55,10 +56,16 @@ struct inference_t {
     }
 
     const inference_t& operator=(const inference_t &i) {
-        if( i.inference_algorithm_ != 0 )
+        edbp_max_iter_ = i.edbp_max_iter_;
+        if( i.inference_algorithm_ != 0 ) {
             inference_algorithm_ = i.inference_algorithm_->clone();
-        else
+        } else {
             inference_algorithm_ = 0;
+            algorithm_ = i.algorithm_;
+            options_ = i.options_;
+            libdai_options_ = i.libdai_options_;
+            type_ = i.type_;
+        }
         return *this;
     }
 
@@ -67,44 +74,34 @@ struct inference_t {
                ((inference_algorithm_ != 0) && (i.inference_algorithm_ != 0));
     }
 
-    static void set_inference_algorithm(const std::string &algorithm_spec, const std::string &type, const std::string &tmp_path, bool verbose = true) {
+    static void initialize_edbp(const std::string &tmp_path) {
+        int pid = getpid();
+#if __cplusplus >= 201103L
+        assert(tmp_path.empty() || (tmp_path.back() == '/'));
+#endif
+        edbp_factors_fn_ = tmp_path + "dummy" + std::to_string((long long)pid) + ".factors";
+        edbp_evid_fn_ = tmp_path + "dummy" + std::to_string((long long)pid) + ".evid";
+        edbp_output_fn_ = "/dev/null";
+        system((std::string("echo 0 > ") + edbp_evid_fn_).c_str());
+    }
+
+    static void finalize_edbp() {
+        unlink(edbp_evid_fn_.c_str());
+    }
+
+    void set_inference_algorithm(const std::string &algorithm_spec, const std::string &type, bool verbose = true) {
         if( verbose ) {
-            std::cout << "# inference algorithm set to '"
-                      << algorithm_spec << "'"
+            std::cout << "# inference: algorithm='"
+                      << algorithm_spec
+                      << "', type=" << type
                       << std::endl;
         }
 
         type_ = type;
         parse_inference_algorithm(algorithm_spec);
-
-        // if edbp algorithm, create evidence file and set filenames
-        if( algorithm_ == "edbp" ) {
-            int pid = getpid();
-#if __cplusplus >= 201103L
-            assert(tmp_path.empty() || (tmp_path.back() == '/'));
-#endif
-            edbp_factors_fn_ = tmp_path + "dummy" + std::to_string((long long)pid) + ".factors";
-            edbp_evid_fn_ = tmp_path + "dummy" + std::to_string((long long)pid) + ".evid";
-            edbp_output_fn_ = "/dev/null";
-            system((std::string("echo 0 > ") + edbp_evid_fn_).c_str());
-            if( libdai_options_.hasKey("maxiter") )
-                edbp_max_iter_ = libdai_options_.getStringAs<size_t>("maxiter");
-            else
-                edbp_max_iter_ = 10;
-        }
     }
 
-    void clean_inference_algorithm() {
-        if( algorithm_ == "edbp" ) {
-            unlink(edbp_factors_fn_.c_str());
-            unlink((edbp_factors_fn_ + "." + type_).c_str());
-            unlink(edbp_evid_fn_.c_str());
-            if( edbp_output_fn_ != "/dev/null" )
-                unlink(edbp_output_fn_.c_str());
-        }
-    }
-
-    static void parse_inference_algorithm(const std::string &algorithm_spec) {
+    void parse_inference_algorithm(const std::string &algorithm_spec) {
         size_t first_par = algorithm_spec.find_first_of('(');
         size_t last_par = algorithm_spec.find_first_of(')');
         assert(first_par != std::string::npos);
@@ -169,6 +166,16 @@ struct inference_t {
                               << std::endl;
                     }
             }
+        }
+    }
+
+    void clean_inference_algorithm() {
+        if( algorithm_ == "edbp" ) {
+            unlink(edbp_factors_fn_.c_str());
+            unlink((edbp_factors_fn_ + "." + type_).c_str());
+            unlink(edbp_evid_fn_.c_str());
+            if( edbp_output_fn_ != "/dev/null" )
+                unlink(edbp_output_fn_.c_str());
         }
     }
 
