@@ -110,6 +110,7 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
                           << std::endl;
 #endif
                 domain_[var_x]->set_weight(it.index(), min_weight);
+                assert(it.weight() == min_weight);
                 change = true;
             } else if( !found_compatible ) {
                 // should we remove valuations with max() value?
