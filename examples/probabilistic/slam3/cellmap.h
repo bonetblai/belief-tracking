@@ -586,17 +586,26 @@ struct cellmap_t {
                     }
                     assert(probability_obs_ore_slam_[index] <= 1);
                     if( probability_obs_ore_slam_[index] == 0 ) {
-                        std::cout << "error: prob(obs=" << obs
+                        std::cout << "error: P(obs=" << obs
                                   << "|slabels=" << slabels
                                   << ", loc-type=" << loc_type
                                   << ") = " << probability_obs_ore_slam_[index]
                                   << std::endl;
                         assert(probability_obs_ore_slam_[index] > 0);
+                    } else {
+#if 0
+                        std::cout << "# P(obs=" << obs
+                                  << "|slabels=" << slabels
+                                  << ", loc_type=" << loc_type
+                                  << ")=" << probability_obs_ore_slam_[index]
+                                  << std::endl;
+#endif
                     }
                 }
             }
         }
 
+#if 0
         for( int obs = 0; obs < 10; ++obs ) {
             float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_MIDDLE)];
             std::cout << "# P(obs=" << obs << "|slabels=0,MIDDLE)=" << p << std::endl;
@@ -609,6 +618,7 @@ struct cellmap_t {
             float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_EDGE_UP)];
             std::cout << "# P(obs=" << obs << "|slabels=0,EDGE)=" << p << std::endl;
         }
+#endif
 
         // check probabilities for observation: \sum_{obs} P( obs | slabels ) = 1 for all slabels
         for( int loc_type = 0; loc_type < 9; ++loc_type ) {
@@ -617,7 +627,8 @@ struct cellmap_t {
                 float sum = 0;
                 for( int obs = 0; obs < 10; ++obs )
                     sum += probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type)];
-                assert(fabs(sum - 1) < 1e-6);
+                if( fabs(sum - 1) >= 1e-6 ) std::cout << "warning: |sum - 1| >= 1e-6,  sum=" << sum << std::endl;
+                //assert(fabs(sum - 1) < 1e-5);
 #ifdef DEBUG
                 std::cout << "total-mass[lt=" << loc_type << ",labels=" << slabels << "] = " << sum << std::endl;
 #endif
