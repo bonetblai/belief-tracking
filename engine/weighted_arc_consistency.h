@@ -104,18 +104,18 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
             assert(it.weight() <= max_allowed_weight_);
             if( it.weight() > cutoff_threshold_ ) continue;
             arc_reduce_preprocessing_1(var_x, *it);
-            bool found_compatible = false;
+            bool found_compatible_value = false;
             int min_weight = max_allowed_weight_;
             for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
                 if( consistent(var_x, var_y, *it, *jt) ) {
                     min_weight = std::min(min_weight, jt.weight());
-                    found_compatible = true;
+                    found_compatible_value = true;
                 }
             }
             assert(min_weight <= max_allowed_weight_);
 
             // set weight of val_x to max of current weight and min_weight
-            if( found_compatible && (min_weight > it.weight()) ) {
+            if( found_compatible_value && (min_weight > it.weight()) ) {
 #ifdef DEBUG
                 std::cout << "weighted-ac3: increasing weight of valuation " << *it
                           << " in domain of var_x=" << var_x
@@ -127,7 +127,7 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
                 domain_[var_x]->set_weight(it.index(), min_weight);
                 assert(it.weight() == min_weight);
                 change = true;
-            } else if( !found_compatible ) {
+            } else if( !found_compatible_value ) {
                 // should we remove valuations with max() value?
                 assert(0);
             }

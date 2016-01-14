@@ -91,9 +91,9 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
             arc_reduce_preprocessing_1(var_x, *it);
             bool found_compatible_value = false;
             for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
-                if( jt.weight() > level ) continue;
+                if( jt.weight() > level - it.weight() ) continue;
                 if( consistent(var_x, var_y, *it, *jt) )
-                    found_compatible = true;
+                    found_compatible_value = true;
             }
 
             // set weight of val_x to max of current weight and min_weight
@@ -175,7 +175,7 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
     bool iterated_weighted_ac3(int max_level, std::vector<int> &revised_vars, bool propagate = true) {
         std::vector<bool> set_revised_vars(nvars_, false);
         bool change = false;
-        for( int level = 0; level < level; ++level ) {
+        for( int level = 0; level < max_level; ++level ) {
             change = weighted_ac3(level, revised_vars, propagate) || change;
             for( int k = 0; k < int(revised_vars.size()); ++k )
                 set_revised_vars[k] = true;
