@@ -1,3 +1,5 @@
 - implement variable-size bitmasks for slam/csp
 - optimal resampling for aisle-slam
 - probabilistic inference on aisle-slam
+- update AC3 so it receives a bit vector on which to mark changed domains
+- implement inverse check on iterated weighted AC3
