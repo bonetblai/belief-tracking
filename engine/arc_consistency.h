@@ -93,9 +93,11 @@ template<typename T> class arc_consistency_t {
 
   public:
     arc_consistency_t(const constraint_digraph_t &digraph)
-      : nvars_(digraph.nvars()), domain_(nvars_, static_cast<T*>(0)), digraph_(digraph) { }
+      : nvars_(digraph.nvars()), domain_(nvars_, static_cast<T*>(0)), digraph_(digraph) {
+    }
     explicit arc_consistency_t(const arc_consistency_t &ac)
-      : nvars_(ac.nvars_), domain_(ac.domain_), digraph_(ac.digraph_) { }
+      : nvars_(ac.nvars_), domain_(ac.domain_), digraph_(ac.digraph_) {
+    }
     arc_consistency_t(arc_consistency_t &&ac) = default;
     ~arc_consistency_t() { clear(); }
 

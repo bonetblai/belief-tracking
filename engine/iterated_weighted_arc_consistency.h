@@ -17,8 +17,8 @@
  */
 
 
-#ifndef WEIGHTED_ARC_CONSISTENCY_H
-#define WEIGHTED_ARC_CONSISTENCY_H
+#ifndef ITERATED_WEIGHTED_ARC_CONSISTENCY_H
+#define ITERATED_WEIGHTED_ARC_CONSISTENCY_H
 
 #include <cassert>
 #include <iostream>
@@ -32,15 +32,12 @@
 
 namespace CSP {
 
-template<typename T> class weighted_arc_consistency_t : public arc_consistency_t<T> {
+template<typename T> class iterated_weighted_arc_consistency_t : public arc_consistency_t<T> {
   public:
     typedef constraint_digraph_t::edge_list_t edge_list_t;
     typedef constraint_digraph_t::edge_t edge_t;
 
   protected:
-    mutable int max_allowed_weight_;
-    mutable int cutoff_threshold_;
-
     using arc_consistency_t<T>::nvars_;
     using arc_consistency_t<T>::domain_;
     using arc_consistency_t<T>::digraph_;
@@ -55,28 +52,17 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
     using arc_consistency_t<T>::arc_reduce_postprocessing;
 
   public:
-    weighted_arc_consistency_t(const constraint_digraph_t &digraph)
-      : arc_consistency_t<T>(digraph),
-        max_allowed_weight_(std::numeric_limits<int>::max()),
-        cutoff_threshold_(std::numeric_limits<int>::max()) {
+    iterated_weighted_arc_consistency_t(const constraint_digraph_t &digraph)
+      : arc_consistency_t<T>(digraph) {
     }
-    explicit weighted_arc_consistency_t(const weighted_arc_consistency_t &ac)
-      : arc_consistency_t<T>(ac),
-        max_allowed_weight_(ac.max_allowed_weight_),
-        cutoff_threshold_(ac.cutoff_threshold_) {
+    explicit iterated_weighted_arc_consistency_t(const iterated_weighted_arc_consistency_t &ac)
+      : arc_consistency_t<T>(ac) {
     }
-    weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
-    ~weighted_arc_consistency_t() { clear(); }
+    iterated_weighted_arc_consistency_t(iterated_weighted_arc_consistency_t &&ac) = default;
+    ~iterated_weighted_arc_consistency_t() { clear(); }
 
     virtual bool is_consistent(int var) const {
         return domain_[var]->min_weight() != std::numeric_limits<int>::max();
-    }
-
-    int max_allowed_weight() const {
-        return max_allowed_weight_;
-    }
-    int cutoff_threshold() const {
-        return cutoff_threshold_;
     }
 
     int max_weight(int var) const {
@@ -92,44 +78,35 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
         return weight;
     }
 
-    // reduce arc var_x -> var_y. That is, for each value of var_x, find a
-    // compatible value for var_y. If such value is not found, the value of
-    // var_x is removed from the domain of var_x. The method returns whether
-    // some element of var_x is removed or not.
-    bool weighted_arc_reduce(int var_x, int var_y) {
+    // run standard arc-consistency in pruned domains with level i.
+    // A pruned domain with level i consists of all valuations with
+    // weight <= i. If there is no compatible value for valuation x,
+    // increase its weight by 1 unit
+    bool weighted_arc_reduce(int level, int var_x, int var_y) {
         assert(var_x != var_y);
         bool change = false;
         arc_reduce_preprocessing_0(var_x, var_y);
         for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
-            assert(it.weight() <= max_allowed_weight_);
-            if( it.weight() > cutoff_threshold_ ) continue;
+            if( it.weight() > level ) continue;
             arc_reduce_preprocessing_1(var_x, *it);
-            bool found_compatible = false;
-            int min_weight = max_allowed_weight_;
+            bool found_compatible_value = false;
             for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
-                if( consistent(var_x, var_y, *it, *jt) ) {
-                    min_weight = std::min(min_weight, jt.weight());
+                if( jt.weight() > level ) continue;
+                if( consistent(var_x, var_y, *it, *jt) )
                     found_compatible = true;
-                }
             }
-            assert(min_weight <= max_allowed_weight_);
 
             // set weight of val_x to max of current weight and min_weight
-            if( found_compatible && (min_weight > it.weight()) ) {
+            if( !found_compatible_value ) {
 #ifdef DEBUG
-                std::cout << "weighted-ac3: increasing weight of valuation " << *it
-                          << " in domain of var_x=" << var_x
-                          << " to " << min_weight
-                          << " [old_weight=" << it.weight()
-                          << ", var_y=" << var_y << "]"
-                          << std::endl;
+                    std::cout << "weighted-ac3: increasing weight of valuation " << *it
+                              << " in domain of var_x=" << var_x
+                              << " to " << it.weight() + 1
+                              << " [var_y=" << var_y << "]"
+                              << std::endl;
 #endif
-                domain_[var_x]->set_weight(it.index(), min_weight);
-                assert(it.weight() == min_weight);
+                domain_[var_x]->set_weight(it.index(), 1 + it.weight());
                 change = true;
-            } else if( !found_compatible ) {
-                // should we remove valuations with max() value?
-                assert(0);
             }
         }
         arc_reduce_postprocessing(var_x, var_y);
@@ -151,9 +128,9 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
         }
     }
 
-    // Weighed AC3: Weighted Arc Consistency.
+    // iterated weighed AC3: iterated weighted arc consistency with given level
     // Returns true iff some weight changed
-    bool weighted_ac3(std::vector<int> &revised_vars, bool propagate = true) {
+    bool weighted_ac3(int level, std::vector<int> &revised_vars, bool propagate = true) {
 
         // allocate space for revised vars
         std::vector<bool> inserted(nvars_, false);
@@ -179,7 +156,7 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
 #endif
 
             // try to reduce arc var_x -> var_y
-            if( weighted_arc_reduce(var_x, var_y) ) {
+            if( weighted_arc_reduce(level, var_x, var_y) ) {
                 weight_change = true;
 
                 // some weight in var_x changed, schedule revision
@@ -193,6 +170,22 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
             }
         }
         return weight_change;
+    }
+
+    bool iterated_weighted_ac3(int max_level, std::vector<int> &revised_vars, bool propagate = true) {
+        std::vector<bool> set_revised_vars(nvars_, false);
+        bool change = false;
+        for( int level = 0; level < level; ++level ) {
+            change = weighted_ac3(level, revised_vars, propagate) || change;
+            for( int k = 0; k < int(revised_vars.size()); ++k )
+                set_revised_vars[k] = true;
+        }
+        revised_vars.clear();
+        for( int k = 0; k < int(set_revised_vars.size()); ++k ) {
+            if( set_revised_vars[k] )
+                revised_vars.push_back(k);
+        }
+        return change;
     }
 };
 
