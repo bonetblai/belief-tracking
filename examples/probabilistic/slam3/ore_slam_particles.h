@@ -424,7 +424,7 @@ struct rbpf_particle_t : public base_particle_t {
         }
         it = parameters.find("inference");
         if( it != parameters.end() ) {
-            inference_.set_inference_algorithm(it->second, "BEL", true);
+            inference_.set_inference_algorithm(it->second, "BEL", false);
             if( !use_ac3_ ) inference_.create_and_initialize_algorithm(factors_);
         }
         it = parameters.find("edbp-max-iter");
