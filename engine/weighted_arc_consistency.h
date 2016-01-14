@@ -39,6 +39,7 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
 
   protected:
     mutable int max_allowed_weight_;
+    mutable int cutoff_threshold_;
 
     using arc_consistency_t<T>::nvars_;
     using arc_consistency_t<T>::domain_;
@@ -55,9 +56,15 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
 
   public:
     weighted_arc_consistency_t(const constraint_digraph_t &digraph)
-      : arc_consistency_t<T>(digraph), max_allowed_weight_(std::numeric_limits<int>::max()) { }
+      : arc_consistency_t<T>(digraph),
+        max_allowed_weight_(std::numeric_limits<int>::max()),
+        cutoff_threshold_(std::numeric_limits<int>::max()) {
+    }
     explicit weighted_arc_consistency_t(const weighted_arc_consistency_t &ac)
-      : arc_consistency_t<T>(ac), max_allowed_weight_(ac.max_allowed_weight_) { }
+      : arc_consistency_t<T>(ac),
+        max_allowed_weight_(ac.max_allowed_weight_),
+        cutoff_threshold_(ac.cutoff_threshold_) {
+    }
     weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
     ~weighted_arc_consistency_t() { clear(); }
 
@@ -88,6 +95,7 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
         arc_reduce_preprocessing_0(var_x, var_y);
         for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
             assert(it.weight() <= max_allowed_weight_);
+            if( it.weight() > cutoff_threshold_ ) continue;
             arc_reduce_preprocessing_1(var_x, *it);
             bool found_compatible = false;
             int min_weight = max_allowed_weight_;
