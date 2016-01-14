@@ -40,7 +40,6 @@
 
 #include "slam_particles.h"
 #include "ore_slam_particles.h"
-#include "slam3_particles.h"
 #include "aisle_slam_particles.h"
 
 using namespace std;
@@ -62,16 +61,6 @@ vector<dai::Var> SLAM::cache_t::variables_;
 vector<dai::VarSet> SLAM::cache_t::varsets_;
 vector<vector<map<dai::Var, size_t>*> > SLAM::cache_t::state_cache_;
 vector<vector<int> > SLAM::cache_t::slabels_;
-
-float slam3::varset_beam_t::kappa_ = 0;
-int slam3::cache_t::num_locs_ = 0;
-vector<dai::Var> slam3::cache_t::variables_;
-vector<dai::VarSet> slam3::cache_t::varsets_;
-vector<const char*> slam3::cache_t::compatible_values_;
-map<vector<int>, const char*> slam3::cache_t::cache_;
-vector<vector<map<dai::Var, size_t>*> > slam3::cache_t::state_cache_;
-CSP::constraint_digraph_t slam3::arc_consistency_t::cg_;
-vector<vector<int> > rbpf_slam3_particle_t::slabels_;
 
 // static members for kappa handling
 float kappa_t::epsilon_ = 0;
@@ -257,8 +246,6 @@ int main(int argc, const char **argv) {
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<motion_model_rbpf_slam3_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<optimal_rbpf_slam3_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
 
@@ -399,9 +386,6 @@ int main(int argc, const char **argv) {
     kappa_t::initialize(epsilon_for_kappa, 10);
 
     if( slam_type == cellmap_t::ORE_SLAM ) {
-        slam3::cache_t::initialize(nrows, ncols);
-        slam3::arc_consistency_t::initialize(nrows, ncols);
-        slam3::varset_beam_t::set_kappa(epsilon_for_kappa);
         OreSLAM::cache_t::initialize(nrows, ncols);
         OreSLAM::weighted_arc_consistency_t::initialize(nrows, ncols);
     }
