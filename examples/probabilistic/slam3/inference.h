@@ -89,6 +89,13 @@ struct inference_t {
         unlink(edbp_evid_fn_.c_str());
     }
 
+    const std::string& algorithm() const {
+        return algorithm_;
+    }
+    const dai::PropertySet& options() const {
+        return libdai_options_;
+    }
+
     void set_inference_algorithm(const std::string &algorithm_spec, const std::string &type, bool verbose = true) {
         if( verbose ) {
             std::cout << "# inference: algorithm='"
@@ -134,6 +141,10 @@ struct inference_t {
         parameter_type["type"] = "string";
         parameter_type["updates"] = "string";
         parameter_type["verbose"] = "size_t";
+
+        // parameters for iterated-ac3
+        parameter_type["level"] = "size_t";
+        parameter_type["inverse-check"] = "boolean";
 
         // set parameters
         std::vector<std::string> tokens = dai::tokenizeString(options_, false, ", ");

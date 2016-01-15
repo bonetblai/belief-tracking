@@ -38,6 +38,7 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
     typedef constraint_digraph_t::edge_t edge_t;
 
   protected:
+    mutable int level_;
     using arc_consistency_t<T>::nvars_;
     using arc_consistency_t<T>::domain_;
     using arc_consistency_t<T>::digraph_;
@@ -46,6 +47,7 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
   public:
     using arc_consistency_t<T>::clear;
     using arc_consistency_t<T>::consistent;
+    using arc_consistency_t<T>::is_consistent;
     using arc_consistency_t<T>::add_to_worklist;
     using arc_consistency_t<T>::arc_reduce_preprocessing_0;
     using arc_consistency_t<T>::arc_reduce_preprocessing_1;
@@ -78,26 +80,36 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
         return weight;
     }
 
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int level) const { }
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y, int weight) const {
+        std::cout << "error: must implement 'arc_reduce_inverse_check_preprocessing()' for inverse-check in arc consistency" << std::endl;
+        assert(0);
+    }
+    virtual bool arc_reduce_inverse_check(int val_x, int weight) const { return false; }
+    virtual void arc_reduce_inverse_check_postprocessing(int var_x, int var_y) const { }
+
     // run standard arc-consistency in pruned domains with level i.
     // A pruned domain with level i consists of all valuations with
     // weight <= i. If there is no compatible value for valuation x,
     // increase its weight by 1 unit
-    bool weighted_arc_reduce(int level, int var_x, int var_y) {
+    bool weighted_arc_reduce(std::vector<bool> &revised_vars, int level, int var_x, int var_y, bool inverse_check) {
         assert(var_x != var_y);
         bool change = false;
-        arc_reduce_preprocessing_0(var_x, var_y);
-        for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
-            if( it.weight() > level ) continue;
-            arc_reduce_preprocessing_1(var_x, *it);
-            bool found_compatible_value = false;
-            for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
-                if( jt.weight() > level - it.weight() ) continue;
-                if( consistent(var_x, var_y, *it, *jt) )
-                    found_compatible_value = true;
-            }
 
-            // set weight of val_x to max of current weight and min_weight
-            if( !found_compatible_value ) {
+        if( !inverse_check ) {
+            arc_reduce_preprocessing_0(var_x, var_y);
+            for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
+                if( it.weight() > level ) continue;
+                arc_reduce_preprocessing_1(var_x, *it);
+                bool found_compatible_value = false;
+                for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
+                    if( jt.weight() > level - it.weight() ) continue;
+                    if( consistent(var_x, var_y, *it, *jt) ) {
+                        found_compatible_value = true;
+                        break;
+                    }
+                }
+                if( !found_compatible_value ) {
 #ifdef DEBUG
                     std::cout << "weighted-ac3: increasing weight of valuation " << *it
                               << " in domain of var_x=" << var_x
@@ -105,11 +117,33 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
                               << " [var_y=" << var_y << "]"
                               << std::endl;
 #endif
-                domain_[var_x]->set_weight(it.index(), 1 + it.weight());
-                change = true;
+                    domain_[var_x]->set_weight(it.index(), 1 + it.weight());
+                    revised_vars[var_x] = true;
+                    change = true;
+                }
             }
+            arc_reduce_postprocessing(var_x, var_y);
+        } else {
+            arc_reduce_inverse_check_preprocessing(var_x, var_y, level);
+            for( typename T::const_iterator it = domain_[var_y]->begin(); it != domain_[var_y]->end(); ++it )
+                arc_reduce_inverse_check_preprocessing(var_x, var_y, *it, it.weight());
+
+            for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
+                if( !arc_reduce_inverse_check(*it, it.weight()) ) {
+#ifdef DEBUG
+                    std::cout << "weighted-ac3: increasing weight of valuation " << *it
+                              << " in domain of var_x=" << var_x
+                              << " to " << it.weight() + 1
+                              << " [var_y=" << var_y << "]"
+                              << std::endl;
+#endif
+                    domain_[var_x]->set_weight(it.index(), 1 + it.weight());
+                    revised_vars[var_x] = true;
+                    change = true;
+                }
+            }
+            arc_reduce_inverse_check_postprocessing(var_x, var_y);
         }
-        arc_reduce_postprocessing(var_x, var_y);
         return change;
     }
 
@@ -130,12 +164,8 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
 
     // iterated weighed AC3: iterated weighted arc consistency with given level
     // Returns true iff some weight changed
-    bool weighted_ac3(int level, std::vector<int> &revised_vars, bool propagate = true) {
-
-        // allocate space for revised vars
-        std::vector<bool> inserted(nvars_, false);
-        revised_vars.reserve(nvars_);
-        revised_vars.clear();
+    bool weighted_ac3(int level, std::vector<bool> &revised_vars, bool propagate = true, bool inverse_check = false) {
+        assert(int(revised_vars.size()) >= nvars_);
 
         // revise arcs until worklist becomes empty
         bool weight_change = false;
@@ -145,18 +175,12 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
             int var_x = edge.first;
             int var_y = edge.second;
 
-            // keep record of revised vars
-            if( !inserted[var_y] ) {
-                inserted[var_y] = true;
-                revised_vars.push_back(var_y);
-            }
-
 #ifdef DEBUG
             std::cout << "weighed-ac3: revise arc " << var_x << " --> " << var_y << std::endl;
 #endif
 
             // try to reduce arc var_x -> var_y
-            if( weighted_arc_reduce(level, var_x, var_y) ) {
+            if( weighted_arc_reduce(revised_vars, level, var_x, var_y, inverse_check) ) {
                 weight_change = true;
 
                 // some weight in var_x changed, schedule revision
@@ -171,19 +195,32 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
         }
         return weight_change;
     }
+    bool weighted_ac3(int level, std::vector<int> &revised_vars, bool propagate = true, bool inverse_check = false) {
+        std::vector<bool> revised_vars_tmp(nvars_, false);
+        bool change = weighted_ac3(level, revised_vars_tmp, propagate, inverse_check);
+        revised_vars.clear();
+        for( int var = 0; var < nvars_; ++var ) {
+            if( revised_vars_tmp[var] )
+                revised_vars.push_back(var);
+        }
+        return change;
+    }
 
-    bool iterated_weighted_ac3(int max_level, std::vector<int> &revised_vars, bool propagate = true) {
-        std::vector<bool> set_revised_vars(nvars_, false);
+    bool iterated_weighted_ac3(int max_level, std::vector<bool> &revised_vars, bool propagate = true) {
         bool change = false;
+        revised_vars = std::vector<bool>(nvars_, false);
         for( int level = 0; level < max_level; ++level ) {
             change = weighted_ac3(level, revised_vars, propagate) || change;
-            for( int k = 0; k < int(revised_vars.size()); ++k )
-                set_revised_vars[k] = true;
         }
+        return change;
+    }
+    bool iterated_weighted_ac3(int max_level, std::vector<int> &revised_vars, bool propagate = true) {
+        std::vector<bool> revised_vars_tmp(nvars_, false);
+        bool change = iterated_weighted_ac3(max_level, revised_vars_tmp, propagate);
         revised_vars.clear();
-        for( int k = 0; k < int(set_revised_vars.size()); ++k ) {
-            if( set_revised_vars[k] )
-                revised_vars.push_back(k);
+        for( int var = 0; var < nvars_; ++var ) {
+            if( revised_vars_tmp[var] )
+                revised_vars.push_back(var);
         }
         return change;
     }
