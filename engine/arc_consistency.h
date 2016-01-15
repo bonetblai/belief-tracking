@@ -176,7 +176,7 @@ template<typename T> class arc_consistency_t {
 
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y) const { }
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y) const {
-        std::cout << "error: must implement 'arc_reduce_compatible_values()' for inverse-check in arc consistency" << std::endl;
+        std::cout << "error: must implement 'arc_reduce_inverse_check_preprocessing()' for inverse-check in arc consistency" << std::endl;
         assert(0);
     }
     virtual bool arc_reduce_inverse_check(int val_x) const { return false; }
@@ -186,7 +186,7 @@ template<typename T> class arc_consistency_t {
     // compatible value for var_y. If such value is not found, the value of
     // var_x is removed from the domain of var_x. The method returns whether
     // some element of var_x is removed or not.
-    bool arc_reduce(int var_x, int var_y, bool inverse_check = false) {
+    bool arc_reduce(std::vector<bool> &revised_vars, int var_x, int var_y, bool inverse_check = false) {
         assert(var_x != var_y);
         static std::vector<int> indices_to_erase;
         indices_to_erase.reserve(domain_[var_x]->size());
@@ -204,15 +204,18 @@ template<typename T> class arc_consistency_t {
                     }
                 }
                 if( !found_compatible_value ) {
-                    indices_to_erase.push_back(it.index());
 #ifdef DEBUG
                     std::cout << "ac3: removing " << *it
                               << " from domain of var_x=" << var_x
                               << " [var_y=" << var_y << "]"
                               << std::endl;
 #endif
+                    indices_to_erase.push_back(it.index());
+                    revised_vars[var_x] = true;
                 }
             }
+            domain_[var_x]->erase_ordered_indices(indices_to_erase);
+            arc_reduce_postprocessing(var_x, var_y);
         } else {
             arc_reduce_inverse_check_preprocessing(var_x, var_y);
             for( typename T::const_iterator it = domain_[var_y]->begin(); it != domain_[var_y]->end(); ++it )
@@ -220,22 +223,19 @@ template<typename T> class arc_consistency_t {
 
             for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
                 if( !arc_reduce_inverse_check(*it) ) {
-                    indices_to_erase.push_back(it.index());
 #ifdef DEBUG
                     std::cout << "ac3: removing " << *it
                               << " from domain of var_x=" << var_x
                               << " [var_y=" << var_y << "]"
                               << std::endl;
 #endif
+                    indices_to_erase.push_back(it.index());
+                    revised_vars[var_x] = true;
                 }
             }
-        }
-
-        domain_[var_x]->erase_ordered_indices(indices_to_erase);
-        if( !inverse_check )
-            arc_reduce_postprocessing(var_x, var_y);
-        else
+            domain_[var_x]->erase_ordered_indices(indices_to_erase);
             arc_reduce_inverse_check_postprocessing(var_x, var_y);
+        }
         return !indices_to_erase.empty();
     }
 
@@ -262,12 +262,8 @@ template<typename T> class arc_consistency_t {
     // since this is the maximum size of the worklist.
     //
     // Returns true iff some value is removed from some domain
-    bool ac3(std::vector<int> &revised_vars, bool propagate = true, bool inverse_check = false) {
-
-        // allocate space for revised vars
-        std::vector<bool> inserted(nvars_, false);
-        revised_vars.reserve(nvars_);
-        revised_vars.clear();
+    bool ac3(std::vector<bool> &revised_vars, bool propagate = true, bool inverse_check = false) {
+        assert(int(revised_vars.size()) >= nvars_);
 
         // revise arcs until worklist becomes empty
         bool something_removed = false;
@@ -277,18 +273,12 @@ template<typename T> class arc_consistency_t {
             int var_x = edge.first;
             int var_y = edge.second;
 
-            // keep record of revised vars
-            if( !inserted[var_y] ) {
-                inserted[var_y] = true;
-                revised_vars.push_back(var_y);
-            }
-
 #ifdef DEBUG
             std::cout << "ac3: revise arc " << var_x << " --> " << var_y << std::endl;
 #endif
 
             // try to reduce arc var_x -> var_y
-            if( arc_reduce(var_x, var_y, inverse_check) ) {
+            if( arc_reduce(revised_vars, var_x, var_y, inverse_check) ) {
                 something_removed = true;
                 if( domain_[var_x]->empty() ) {
                     // domain of var_x became empty. This means that the
@@ -307,6 +297,16 @@ template<typename T> class arc_consistency_t {
                     }
                 }
             }
+        }
+        return something_removed;
+    }
+    bool ac3(std::vector<int> &revised_vars, bool propagate = true, bool inverse_check = false) {
+        std::vector<bool> revised_vars_tmp(nvars_, false);
+        bool something_removed = ac3(revised_vars_tmp, propagate, inverse_check);
+        revised_vars.clear();
+        for( int var = 0; var < nvars_; ++var ) {
+            if( revised_vars_tmp[var] )
+                revised_vars.push_back(var);
         }
         return something_removed;
     }
