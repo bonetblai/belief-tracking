@@ -381,8 +381,8 @@ int main(int argc, const char **argv) {
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
 
-    Inference::edbp_t::initialize();
-    Inference::inference_t::initialize_edbp(tmp_path);
+    //Inference::edbp_t::initialize();
+    //Inference::inference_t::initialize_edbp(tmp_path);
     kappa_t::initialize(epsilon_for_kappa, 10);
 
     if( slam_type == cellmap_t::ORE_SLAM ) {
