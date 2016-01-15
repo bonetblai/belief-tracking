@@ -27,6 +27,7 @@
 #include <map>
 #include <sstream>
 #include <string.h>
+#include <strings.h>
 #include <set>
 #include <vector>
 
@@ -157,16 +158,16 @@ class cache_t : public SLAM::cache_t {
     }
 };
 
-class weighted_varset_beam_t : public weighted_var_beam_t {
+class kappa_varset_beam_t : public weighted_var_beam_t {
   protected:
     const int loc_;
-    const dai::Var var_;
-    const dai::VarSet varset_;
+    const dai::Var &var_;
+    const dai::VarSet &varset_;
     unsigned mask_;
     float normalization_constant_;
 
   public:
-    weighted_varset_beam_t(int loc, const dai::Var &var, const dai::VarSet &varset)
+    kappa_varset_beam_t(int loc, const dai::Var &var, const dai::VarSet &varset)
       : weighted_var_beam_t(1, varset.nrStates()), loc_(loc), var_(var), varset_(varset), mask_(0), normalization_constant_(1) {
         mask_ = unsigned(-1);
         for( dai::State state(varset_); state.valid(); state++ ) {
@@ -174,10 +175,10 @@ class weighted_varset_beam_t : public weighted_var_beam_t {
                 mask_ = mask_ & dai::calcLinearState(varset_, state);
         }
 #ifdef DEBUG
-        std::cout << "weighted_varset_beam_t: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
+        std::cout << "kappa_varset_beam_t: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
 #endif
     }
-    weighted_varset_beam_t(const weighted_varset_beam_t &beam)
+    kappa_varset_beam_t(const kappa_varset_beam_t &beam)
       : weighted_var_beam_t(beam),
         loc_(beam.loc_),
         var_(beam.var_),
@@ -185,10 +186,10 @@ class weighted_varset_beam_t : public weighted_var_beam_t {
         mask_(beam.mask_),
         normalization_constant_(beam.normalization_constant_) {
 #ifdef DEBUG
-        std::cout << "weighted_varset_beam_t: copy-constructor: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
+        std::cout << "kappa_varset_beam_t: copy-constructor: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
 #endif
     }
-    weighted_varset_beam_t(weighted_varset_beam_t &&beam)
+    kappa_varset_beam_t(kappa_varset_beam_t &&beam)
       : weighted_var_beam_t(std::move(beam)),
         loc_(beam.loc_),
         var_(beam.var_),
@@ -196,24 +197,29 @@ class weighted_varset_beam_t : public weighted_var_beam_t {
         mask_(beam.mask_),
         normalization_constant_(beam.normalization_constant_) {
 #ifdef DEBUG
-        std::cout << "weighted_varset_beam_t: move-constructor: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
+        std::cout << "kappa_varset_beam_t: move-constructor: loc=" << loc_ << ", var=" << var_ << ", varset=" << varset_ << ", mask=" << mask_ << std::endl;
 #endif
     }
-    ~weighted_varset_beam_t() { }
+    ~kappa_varset_beam_t() {
+    }
 
-    bool operator==(const weighted_varset_beam_t &beam) const {
+    bool operator==(const kappa_varset_beam_t &beam) const {
         return (loc_ == beam.loc_) && (*static_cast<const weighted_var_beam_t*>(this) == *static_cast<const weighted_var_beam_t*>(&beam));
     }
 
     int loc() const { return loc_; }
     const dai::VarSet& varset() const { return varset_; }
 
-    float probability(unsigned valuation, int weight) const {
-        return weight == std::numeric_limits<int>::max() ? 0 : normalization_constant_ * kappa_t::power(weight);
+    void increase_kappa(const std::pair<int, int> &p) {
+        weighted_var_beam_t::increase_weight(p);
+    }
+
+    float probability(unsigned valuation, int kappa) const {
+        return kappa == std::numeric_limits<int>::max() ? 0 : normalization_constant_ * kappa_t::power(kappa);
     }
     float probability(int valuation) const {
-        int w = weight(valuation);
-        return w == -1 ? 0 : probability(valuation, w);
+        int kappa = weight(valuation);
+        return kappa == -1 ? 0 : probability(valuation, kappa);
     }
     float marginal(int label) const {
         float p = 0;
@@ -240,10 +246,16 @@ class weighted_varset_beam_t : public weighted_var_beam_t {
     }
 };
 
-class weighted_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<weighted_varset_beam_t> {
+class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t> {
     static CSP::constraint_digraph_t cg_;
-    mutable const std::map<dai::Var, size_t> *state_x_;
-    mutable unsigned char bitmask_;
+
+    int iterated_level_;
+    bool inverse_check_;
+
+    mutable int level_;
+    //mutable const std::map<dai::Var, size_t> *state_x_;
+    mutable std::vector<unsigned*> bitmask_;
+    //mutable int bitmask_size_;
 
     static void construct_constraint_graph(int nrows, int ncols) {
         int num_locs = nrows * ncols;
@@ -284,38 +296,71 @@ class weighted_arc_consistency_t : public CSP::iterated_weighted_arc_consistency
 #endif
     }
 
-#if 0
-    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y) const {
-        bitmask_ = 0;
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int level) const {
+        assert(1 + level <= int(bitmask_.size()));
+        level_ = level;
+        //bitmask_size_ = cache_t::varset(var_x).nrStates() >> 5;
+        //bitmask_size_ = bitmask_size_ == 0 ? 1 : bitmask_size_;
+        for( int i = 0; i <= level_; ++i )
+            bzero(bitmask_[i], 64);
     }
-    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y) const {
-        bitmask_ |= cache_t::compatible_values(val_y, var_y, var_x);
+    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y, int kappa) const {
+        if( kappa <= level_ ) {
+            assert(1 + kappa <= int(bitmask_.size()));
+            const unsigned *bitmask = cache_t::compatible_values(val_y, var_y, var_x);
+            for( int i = 0; i < 16; ++i ) bitmask_[kappa][i] |= bitmask[i];
+        }
     }
-    virtual bool arc_reduce_inverse_check(int val_x) const {
-        int offset = val_x % 8;
-        return ((bitmask_ >> offset) & 0x1) == 1;
+    virtual bool arc_reduce_inverse_check(int val_x, int kappa) const {
+        if( kappa <= level_ ) {
+            assert(1 + level_ - kappa <= int(bitmask_.size()));
+            int index = val_x / 32, offset = val_x % 32;
+            //assert(index < bitmask_size_);
+            for( int i = 0; i <= level_ - kappa; ++i ) {
+                if( ((bitmask_[i][index] >> offset) & 0x1) == 1 )
+                    return true;
+            }
+            return false;
+        } else {
+            return true;
+        }
     }
-#endif
 
   public:
-    weighted_arc_consistency_t()
-      : CSP::iterated_weighted_arc_consistency_t<weighted_varset_beam_t>(cg_) {
+    kappa_arc_consistency_t()
+      : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(cg_),
+        iterated_level_(0),
+        inverse_check_(false) {
+        set_iterated_level(iterated_level_);
     }
-    weighted_arc_consistency_t(const weighted_arc_consistency_t &ac)
-      : CSP::iterated_weighted_arc_consistency_t<weighted_varset_beam_t>(ac.cg_) {
+    kappa_arc_consistency_t(const kappa_arc_consistency_t &ac)
+      : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(ac.cg_),
+        iterated_level_(ac.iterated_level_),
+        inverse_check_(ac.inverse_check_) {
+        set_iterated_level(iterated_level_);
     }
-    weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
-    virtual ~weighted_arc_consistency_t() { }
+    kappa_arc_consistency_t(kappa_arc_consistency_t &&ac)
+      : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(std::move(ac)),
+        iterated_level_(ac.iterated_level_),
+        inverse_check_(ac.inverse_check_),
+        bitmask_(std::move(ac.bitmask_)) {
+        ac.bitmask_.clear();
+    }
+    virtual ~kappa_arc_consistency_t() {
+        clean_bitmask();
+    }
 
-    const weighted_arc_consistency_t& operator=(const weighted_arc_consistency_t &ac) {
+    const kappa_arc_consistency_t& operator=(const kappa_arc_consistency_t &ac) {
         nvars_ = ac.nvars_;
+        set_iterated_level(ac.iterated_level_);
+        inverse_check_ = ac.inverse_check_;
         assert(domain_.size() == ac.domain_.size());
         for( int loc = 0; loc < int(ac.domain_.size()); ++loc )
-            set_domain(loc, new weighted_varset_beam_t(*ac.domain(loc)));
+            set_domain(loc, new kappa_varset_beam_t(*ac.domain(loc)));
         return *this;
     }
-    bool operator==(const weighted_arc_consistency_t &ac) const {
-        if( (nvars_ == ac.nvars_) && (domain_.size() == ac.domain_.size()) ) {
+    bool operator==(const kappa_arc_consistency_t &ac) const {
+        if( (nvars_ == ac.nvars_) && (iterated_level_ == ac.iterated_level_) && (inverse_check_ == ac.inverse_check_) && (domain_.size() == ac.domain_.size()) ) {
             for( int loc = 0; loc < int(domain_.size()); ++loc ) {
                 if( !(*domain_[loc] == *ac.domain_[loc]) )
                     return false;
@@ -330,12 +375,28 @@ class weighted_arc_consistency_t : public CSP::iterated_weighted_arc_consistency
         construct_constraint_graph(nrows, ncols);
     }
 
-    bool weighted_ac3(int level) {
+    void clean_bitmask() {
+        for( int i = 0; i < int(bitmask_.size()); ++i )
+            delete[] bitmask_[i];
+        bitmask_.clear();
+    }
+    void set_iterated_level(int iterated_level) {
+        iterated_level_ = iterated_level;
+        clean_bitmask();
+        bitmask_ = std::vector<unsigned*>(iterated_level_ + 1);
+        for( int i = 0; i <= iterated_level_; ++i )
+            bitmask_[i] = new unsigned[16];
+    }
+    void set_inverse_check(bool inverse_check) {
+        inverse_check_ = inverse_check;
+    }
+
+    bool kappa_ac3() {
         std::vector<int> revised_vars;
-        bool something_removed = CSP::iterated_weighted_arc_consistency_t<weighted_varset_beam_t>::weighted_ac3(level, revised_vars, true);
-        normalize_weights(revised_vars);
+        bool something_removed = CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>::weighted_ac3(iterated_level_, revised_vars, true, inverse_check_);
+        normalize_kappas(revised_vars);
         calculate_normalization_constant(revised_vars);
-        assert(normalized_weights());
+        assert(normalized_kappas());
         return something_removed;
     }
 
@@ -347,20 +408,26 @@ class weighted_arc_consistency_t : public CSP::iterated_weighted_arc_consistency
             calculate_normalization_constant(revised_vars[i]);
     }
 
-    void normalize_weights(const std::vector<int> &revised_vars) {
-        for( int i = 0; i < int(revised_vars.size()); ++i )
-            domain_[revised_vars[i]]->normalize();
+    void normalize_kappas(int loc) {
+        domain_[loc]->normalize();
     }
-    bool normalized_weights() {
+    void normalize_kappas(const std::vector<int> &revised_vars) {
+        for( int i = 0; i < int(revised_vars.size()); ++i )
+            normalize_kappas(revised_vars[i]);
+    }
+    bool normalized_kappas(int loc) {
+        return domain_[loc]->normalized();
+    }
+    bool normalized_kappas() {
         for( int i = 0; i < int(domain_.size()); ++i ) {
-            if( !domain_[i]->normalized() )
+            if( !normalized_kappas(i) )
                 return false;
         }
         return true;
     }
 
     void print_factor(std::ostream &os, int loc) const {
-        const weighted_varset_beam_t &beam = *domain_[loc];
+        const kappa_varset_beam_t &beam = *domain_[loc];
         os << "loc=" << loc << ",sz=" << beam.size() << ",domain=" << beam;
     }
     void print(std::ostream &os) const {
@@ -383,7 +450,8 @@ struct rbpf_particle_t : public base_particle_t {
     // arc consistency
     bool use_ac3_;
     int iterated_level_;
-    weighted_arc_consistency_t weighted_csp_;
+    bool inverse_check_;
+    kappa_arc_consistency_t kappa_csp_;
 
     // factors
     std::vector<dai::Factor> factors_;
@@ -393,18 +461,21 @@ struct rbpf_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     Inference::inference_t inference_;
 
-    rbpf_particle_t(bool use_ac3, int iterated_level, const Inference::inference_t *i)
-      : use_ac3_(use_ac3), iterated_level_(iterated_level) {
+    rbpf_particle_t(bool use_ac3, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : use_ac3_(use_ac3), iterated_level_(iterated_level), inverse_check_(inverse_check)  {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
         if( !use_ac3_ ) {
             factors_ = std::vector<dai::Factor>(base_->nloc_);
             marginals_ = std::vector<dai::Factor>(base_->nloc_);
-            weighted_csp_.delete_domains_and_clear();
+            kappa_csp_.delete_domains_and_clear();
+        } else {
+            kappa_csp_.set_iterated_level(iterated_level_);
+            kappa_csp_.set_inverse_check(inverse_check_);
         }
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             if( use_ac3_ ) {
-                weighted_csp_.set_domain(loc, new weighted_varset_beam_t(loc, cache_t::variable(loc), cache_t::varset(loc)));
+                kappa_csp_.set_domain(loc, new kappa_varset_beam_t(loc, cache_t::variable(loc), cache_t::varset(loc)));
             } else {
                 factors_[loc] = dai::Factor(cache_t::varset(loc));
                 marginals_[loc] = dai::Factor(cache_t::varset(loc));
@@ -413,38 +484,45 @@ struct rbpf_particle_t : public base_particle_t {
         if( !use_ac3_ && (i != 0) ) inference_ = *i;
     }
     rbpf_particle_t(const std::multimap<std::string, std::string> &parameters)
-      : rbpf_particle_t(false, std::numeric_limits<int>::max(), 0) {
-        std::multimap<std::string, std::string>::const_iterator it = parameters.find("use-ac3");
-        if( it != parameters.end() )
-            use_ac3_ = it->second == "true";
-        it = parameters.find("iterated-level");
-        if( it != parameters.end() )
-            iterated_level_ = strtod(it->second.c_str(), 0);
-        it = parameters.find("inference");
+      : rbpf_particle_t(false, 0, false, 0) {
+        std::multimap<std::string, std::string>::const_iterator it = parameters.find("inference");
         if( it != parameters.end() ) {
             inference_.set_inference_algorithm(it->second, "BEL", false);
-            if( !use_ac3_ ) inference_.create_and_initialize_algorithm(factors_);
+            if( inference_.algorithm() == "iterated-ac3" ) {
+                const dai::PropertySet &options = inference_.options();
+                use_ac3_ = true;
+                if( options.hasKey("level") )
+                    iterated_level_ = int(options.getStringAs<size_t>("level"));
+                if( options.hasKey("inverse-check") )
+                    inverse_check_ = options.getStringAs<bool>("inverse-check");
+                kappa_csp_.set_iterated_level(iterated_level_);
+                kappa_csp_.set_inverse_check(inverse_check_);
+            } else {
+                use_ac3_ = false;
+                inference_.create_and_initialize_algorithm(factors_);
+            }
         }
         it = parameters.find("edbp-max-iter");
         if( it != parameters.end() )
             inference_.edbp_max_iter_ = strtoul(it->second.c_str(), 0, 0);
     }
     rbpf_particle_t(const rbpf_particle_t &p) {
-        if( !p.use_ac3_ ) weighted_csp_.delete_domains_and_clear();
+        if( !p.use_ac3_ ) kappa_csp_.delete_domains_and_clear();
         *this = p;
     }
     rbpf_particle_t(rbpf_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)),
         use_ac3_(p.use_ac3_),
         iterated_level_(p.iterated_level_),
-        weighted_csp_(std::move(p.weighted_csp_)),
+        inverse_check_(p.inverse_check_),
+        kappa_csp_(std::move(p.kappa_csp_)),
         factors_(std::move(p.factors_)),
         indices_for_updated_factors_(std::move(p.indices_for_updated_factors_)),
         marginals_(std::move(p.marginals_)),
         inference_(std::move(p.inference_)) {
     }
     virtual ~rbpf_particle_t() {
-        weighted_csp_.delete_domains_and_clear();
+        kappa_csp_.delete_domains_and_clear();
         if( use_ac3_) inference_.destroy_inference_algorithm();
     }
 
@@ -452,7 +530,8 @@ struct rbpf_particle_t : public base_particle_t {
         loc_history_ = p.loc_history_;
         use_ac3_ = p.use_ac3_;
         iterated_level_ = p.iterated_level_;
-        weighted_csp_ = p.weighted_csp_;
+        inverse_check_ = p.inverse_check_;
+        kappa_csp_ = p.kappa_csp_;
         factors_ = p.factors_;
         indices_for_updated_factors_ = p.indices_for_updated_factors_;
         marginals_ = p.marginals_;
@@ -464,7 +543,8 @@ struct rbpf_particle_t : public base_particle_t {
         return (loc_history_ == p.loc_history_) &&
                (use_ac3_ == p.use_ac3_) &&
                (iterated_level_ == p.iterated_level_) &&
-               (weighted_csp_ == p.weighted_csp_) &&
+               (inverse_check_ == p.inverse_check_) &&
+               (kappa_csp_ == p.kappa_csp_) &&
                (factors_ == p.factors_) &&
                (indices_for_updated_factors_ == p.indices_for_updated_factors_) &&
                (marginals_ == p.marginals_) &&
@@ -473,8 +553,11 @@ struct rbpf_particle_t : public base_particle_t {
 
     void reset_csp() {
         assert(use_ac3_);
-        for( int loc = 0; loc < base_->nloc_; ++loc )
-            weighted_csp_.domain(loc)->set_initial_configuration();
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            kappa_csp_.domain(loc)->set_initial_configuration();
+            kappa_csp_.calculate_normalization_constant(loc);
+        }
+        assert(kappa_csp_.normalized_kappas());
     }
 
     void initialize_mpi_worker(mpi_slam_t *mpi, int wid) {
@@ -508,11 +591,11 @@ struct rbpf_particle_t : public base_particle_t {
             }
             calculate_marginals(mpi, wid, false);
         }
-        assert(!use_ac3_ || weighted_csp_.is_consistent(0));
+        assert(!use_ac3_ || kappa_csp_.is_consistent());
     }
 
     static int var_offset(int loc, int var_id) { return base_->var_offset(loc, var_id); }
-    int get_slabels(const weighted_varset_beam_t &beam, int value) const {
+    int get_slabels(const kappa_varset_beam_t &beam, int value) const {
         return cache_t::get_slabels(beam.loc(), beam.varset(), value, var_offset);
     }
     int get_slabels(int loc, const dai::VarSet &varset, int value) const {
@@ -524,33 +607,33 @@ struct rbpf_particle_t : public base_particle_t {
         int current_loc = loc_history_.back();
 #ifdef DEBUG
         std::cout << "factor before update: loc=" << current_loc << ", obs=" << obs << std::endl;
-        std::cout << "  weighted-csp: ";
-        weighted_csp_.print_factor(std::cout, current_loc);
+        std::cout << "  kappa-csp: ";
+        kappa_csp_.print_factor(std::cout, current_loc);
         std::cout << std::endl;
 #endif
-        assert(current_loc < int(weighted_csp_.nvars()));
-        std::vector<std::pair<int, int> > weight_increases;
-        weighted_varset_beam_t &beam = *weighted_csp_.domain(current_loc);
-        for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+        assert(current_loc < int(kappa_csp_.nvars()));
+        std::vector<std::pair<int, int> > kappa_increases;
+        kappa_varset_beam_t &beam = *kappa_csp_.domain(current_loc);
+        for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
             int value = *it;
             int index = it.index();
             int slabels = get_slabels(beam, value);
             float p = base_->probability_obs(obs, current_loc, slabels, last_action);
             int k_obs = kappa_t::kappa(p);
-            weight_increases.push_back(std::make_pair(index, k_obs));
+            kappa_increases.push_back(std::make_pair(index, k_obs));
         }
 #ifdef DEBUG
         std::cout << "  increases:";
-        for( int i = 0; i < int(weight_increases.size()); ++i ) {
-            std::pair<int, int> &p = weight_increases[i];
+        for( int i = 0; i < int(kappa_increases.size()); ++i ) {
+            std::pair<int, int> &p = kappa_increases[i];
             int valuation = beam[p.first].first;
-            int weight = beam[p.first].second;
+            int kappa = beam[p.first].second;
 #if 0
             std::cout << " {" << p.first << ":" << valuation << ":";
             std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), valuation);
             for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
                 std::cout << it->first << "=" << it->second << ",";
-            std::cout << "weight=" << weight << ",amount=" << p.second << "},";
+            std::cout << "kappa=" << kappa << ",amount=" << p.second << "},";
 #else
             std::cout << " " << p.second;
 #endif
@@ -559,19 +642,22 @@ struct rbpf_particle_t : public base_particle_t {
 #endif
 
         assert(!beam.empty());
-        for( int i = 0; i < int(weight_increases.size()); ++i )
-            weighted_csp_.domain(current_loc)->increase_weight(weight_increases[i]);
-        assert(weighted_csp_.worklist().empty());
-        weighted_csp_.add_to_worklist(current_loc);
-        weighted_csp_.weighted_ac3(iterated_level_);
+        for( int i = 0; i < int(kappa_increases.size()); ++i )
+            kappa_csp_.domain(current_loc)->increase_kappa(kappa_increases[i]);
+        assert(kappa_csp_.worklist().empty());
+        kappa_csp_.add_to_worklist(current_loc);
+        kappa_csp_.normalize_kappas(current_loc);
+        kappa_csp_.kappa_ac3();
+        kappa_csp_.normalize_kappas(current_loc);
+        kappa_csp_.calculate_normalization_constant(current_loc);
 
 #ifdef DEBUG
         std::cout << "factor after update: loc=" << current_loc << ", obs=" << obs << std::endl;
-        std::cout << "  weighted-csp: ";
-        weighted_csp_.print_factor(std::cout, current_loc);
+        std::cout << "  kappa-csp: ";
+        kappa_csp_.print_factor(std::cout, current_loc);
         std::cout << std::endl;
 #endif
-        return weighted_csp_.is_consistent(0);
+        return kappa_csp_.is_consistent(0);
     }
     bool update_factors_gm(int last_action, int obs) {
         assert(!use_ac3_);
@@ -621,7 +707,7 @@ struct rbpf_particle_t : public base_particle_t {
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             if( use_ac3_ ) {
-                const weighted_varset_beam_t &beam = *weighted_csp_.domain(loc);
+                const kappa_varset_beam_t &beam = *kappa_csp_.domain(loc);
                 for( int label = 0; label < base_->nlabels_; ++label )
                     marginals_on_vars[loc].set(label, marginals_on_vars[loc][label] + weight * beam.marginal(label));
             } else {
@@ -653,8 +739,8 @@ struct rbpf_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter
 struct motion_model_rbpf_particle_t : public rbpf_particle_t {
-    motion_model_rbpf_particle_t(bool use_ac3, int iterated_level, const Inference::inference_t *i)
-      : rbpf_particle_t(use_ac3, iterated_level, i) { }
+    motion_model_rbpf_particle_t(bool use_ac3, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : rbpf_particle_t(use_ac3, iterated_level, inverse_check, i) { }
     motion_model_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -697,8 +783,8 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
         if( use_ac3_ ) {
-            const weighted_varset_beam_t &beam = *weighted_csp_.domain(np_current_loc);
-            for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+            const kappa_varset_beam_t &beam = *kappa_csp_.domain(np_current_loc);
+            for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
                 int slabels = get_slabels(beam, *it);
                 weight += beam.probability(*it, it.weight()) * base_->probability_obs(obs, np_current_loc, slabels, last_action);
             }
@@ -713,7 +799,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
     }
 
     motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, iterated_level_, &inference_);
+        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, iterated_level_, inverse_check_, &inference_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
@@ -723,8 +809,8 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
-    optimal_rbpf_particle_t(bool use_ac3, int iterated_level, const Inference::inference_t *i)
-      : rbpf_particle_t(use_ac3, iterated_level, i) { }
+    optimal_rbpf_particle_t(bool use_ac3, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : rbpf_particle_t(use_ac3, iterated_level, inverse_check, i) { }
     optimal_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -758,8 +844,8 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
             float p = 0;
             if( use_ac3_ ) {
-                const weighted_varset_beam_t &beam = *weighted_csp_.domain(nloc);
-                for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+                const kappa_varset_beam_t &beam = *kappa_csp_.domain(nloc);
+                for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
                     int slabels = get_slabels(beam, *it);
                     p += beam.probability(*it, it.weight()) * base_->probability_obs(obs, nloc, slabels, last_action);
                 }
@@ -808,8 +894,8 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
         for( int nloc = 0; nloc < base_->nloc_; ++nloc ) {
             float p = 0;
             if( use_ac3_ ) {
-                const weighted_varset_beam_t &beam = *weighted_csp_.domain(nloc);
-                for( weighted_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+                const kappa_varset_beam_t &beam = *kappa_csp_.domain(nloc);
+                for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
                     int slabels = get_slabels(beam, *it);
                     p += beam.probability(*it, it.weight()) * base_->probability_obs(obs, nloc, slabels, last_action);
                 }
@@ -826,7 +912,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 
     optimal_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, iterated_level_, &inference_);
+        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, iterated_level_, inverse_check_, &inference_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }

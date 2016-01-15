@@ -68,11 +68,11 @@ vector<float> kappa_t::powers_;
 
 // static members for ore-slam particles
 vector<unsigned*> OreSLAM::cache_t::compatible_values_;
-CSP::constraint_digraph_t OreSLAM::weighted_arc_consistency_t::cg_;
+CSP::constraint_digraph_t OreSLAM::kappa_arc_consistency_t::cg_;
 
 // static members for aisle-slam particles
 vector<unsigned> AisleSLAM::cache_t::compatible_values_;
-CSP::constraint_digraph_t AisleSLAM::weighted_arc_consistency_t::cg_;
+CSP::constraint_digraph_t AisleSLAM::kappa_arc_consistency_t::cg_;
 
 // static members for MPI
 mpi_slam_t *mpi_base_t::mpi_ = 0;
@@ -387,11 +387,11 @@ int main(int argc, const char **argv) {
 
     if( slam_type == cellmap_t::ORE_SLAM ) {
         OreSLAM::cache_t::initialize(nrows, ncols);
-        OreSLAM::weighted_arc_consistency_t::initialize(nrows, ncols);
+        OreSLAM::kappa_arc_consistency_t::initialize(nrows, ncols);
     }
     if( slam_type == cellmap_t::AISLE_SLAM ) {
         AisleSLAM::cache_t::initialize(nrows, ncols);
-        AisleSLAM::weighted_arc_consistency_t::initialize(nrows, ncols);
+        AisleSLAM::kappa_arc_consistency_t::initialize(nrows, ncols);
     }
 
     // tracking algorithms
