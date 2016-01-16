@@ -494,6 +494,7 @@ int main(int argc, const char **argv) {
 
     // run for the specified number of trials and collect statistics
     cout << fixed;
+    int total_execution_length = 0;
     cellmap_t::execution_t fixed_execution;
     vector<Utils::stat_t> stats_unknown(trackers.size());
     vector<Utils::stat_t> stats_error(trackers.size());
@@ -513,6 +514,7 @@ int main(int argc, const char **argv) {
         cout << "# output-execution: sz=" << output_execution.size() << endl;
         //cout << "# output-execution[sz=" << output_execution.size() << "]=" << output_execution << endl;
         //trackers[0]->print(cout);
+        total_execution_length += output_execution.size();
 
         // calculate final marginals
         for( size_t i = 0; i < trackers.size(); ++i )
@@ -618,6 +620,7 @@ int main(int argc, const char **argv) {
              << ", avg-elapsed-time-per-step=" << setprecision(5) << tracker.total_elapsed_time() / tracker.total_num_steps()
              << endl;
     }
+    cout << "# avg execution length = " << float(total_execution_length) / float(ntrials) << endl;
 
     // stop timer
     float elapsed_time = Utils::read_time_in_seconds() - start_time;
