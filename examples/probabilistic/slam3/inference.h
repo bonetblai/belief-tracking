@@ -56,16 +56,12 @@ struct inference_t {
     }
 
     const inference_t& operator=(const inference_t &i) {
+        algorithm_ = i.algorithm_;
+        options_ = i.options_;
+        libdai_options_ = i.libdai_options_;
+        type_ = i.type_;
         edbp_max_iter_ = i.edbp_max_iter_;
-        if( i.inference_algorithm_ != 0 ) {
-            inference_algorithm_ = i.inference_algorithm_->clone();
-        } else {
-            inference_algorithm_ = 0;
-            algorithm_ = i.algorithm_;
-            options_ = i.options_;
-            libdai_options_ = i.libdai_options_;
-            type_ = i.type_;
-        }
+        inference_algorithm_ = i.inference_algorithm_ != 0 ?  i.inference_algorithm_->clone() : 0;
         return *this;
     }
 
