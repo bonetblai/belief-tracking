@@ -465,13 +465,13 @@ struct rbpf_particle_t : public base_particle_t {
       : use_ac3_(use_ac3), iterated_level_(iterated_level), inverse_check_(inverse_check)  {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
-        if( !use_ac3_ ) {
+        if( use_ac3_ ) {
+            kappa_csp_.set_iterated_level(iterated_level_);
+            kappa_csp_.set_inverse_check(inverse_check_);
+        } else {
             factors_ = std::vector<dai::Factor>(base_->nloc_);
             marginals_ = std::vector<dai::Factor>(base_->nloc_);
             kappa_csp_.delete_domains_and_clear();
-        } else {
-            kappa_csp_.set_iterated_level(iterated_level_);
-            kappa_csp_.set_inverse_check(inverse_check_);
         }
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             if( use_ac3_ ) {
@@ -700,8 +700,8 @@ struct rbpf_particle_t : public base_particle_t {
         assert(mpi != 0);
         assert((wid > 0) && (wid < mpi->nworkers_));
         mpi->calculate_marginals(factors_, indices_for_updated_factors_, wid);
-        assert(indices_for_updated_factors_.empty());
 #endif
+        assert(indices_for_updated_factors_.empty());
     }
 
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
