@@ -38,9 +38,6 @@
 
 //#define DEBUG
 
-//#define NON_PEAKED_SENSING
-#define PEAKED_SENSING
-
 
 inline int bit(int n, int k) {
     return (n >> k) & 0x1;
@@ -125,7 +122,7 @@ struct cellmap_t {
     int marginals_size_;
 
     // type of slam problem
-    typedef enum { COLOR_SLAM, ORE_SLAM, AISLE_SLAM } slam_type_t;
+    typedef enum { COLOR_SLAM, ORE_SLAM_PEAKED, ORE_SLAM_NON_PEAKED, AISLE_SLAM } slam_type_t;
     slam_type_t slam_type_;
 
     float pa_;
@@ -149,7 +146,7 @@ struct cellmap_t {
         pa_(pa), po_(po), base_obs_noise_(base_obs_noise) {
         cells_ = std::vector<cell_t>(nloc_);
         marginals_size_ = 2 * nloc_ + nloc_;
-        if( slam_type_ == ORE_SLAM ) precompute_stored_information_ore_slam();
+        if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) ) precompute_stored_information_ore_slam();
         if( slam_type_ == AISLE_SLAM ) precompute_stored_information_aisle_slam();
     }
     ~cellmap_t() { }
@@ -263,7 +260,7 @@ struct cellmap_t {
         float q = pa == -1 ? pa_ : pa;
         if( slam_type_ == COLOR_SLAM )
             return probability_tr_loc_standard(action, old_loc, new_loc, q);
-        else if( slam_type_ == ORE_SLAM )
+        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
             return probability_tr_loc_ore_slam(action, old_loc, new_loc, q);
         else
             return probability_tr_loc_aisle_slam(action, old_loc, new_loc, q);
@@ -306,7 +303,7 @@ struct cellmap_t {
         float q = pa == -1 ? pa_ : pa;
         if( slam_type_ == COLOR_SLAM )
             return sample_loc_standard(loc, action, q);
-        else if( slam_type_ == ORE_SLAM )
+        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
             return sample_loc_ore_slam(loc, action, q);
         else
             return sample_loc_aisle_slam(loc, action, q);
@@ -328,57 +325,55 @@ struct cellmap_t {
     }
 
     float probability_obs_ore_slam(int obs, int loc, int slabels, int /*last_action*/) const {
-        assert(slam_type_ == ORE_SLAM);
-#ifdef NON_PEAKED_SENSING
-        return probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type_[loc])];
-#endif
-#ifdef PEAKED_SENSING
-        int label = (slabels >> 4) & 0x1;
-        int noise = popcount(slabels);
-        float p = po_ + (8 - noise) * base_obs_noise_;
-        assert((p >= 0) && (p <= 1));
-        return obs == label ? p : 1 - p;
-#endif
+        assert((slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED));
+        if( slam_type_ == ORE_SLAM_NON_PEAKED ) {
+            return probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type_[loc])];
+        } else {
+            int label = (slabels >> 4) & 0x1;
+            int noise = popcount(slabels);
+            float p = po_ + (8 - noise) * base_obs_noise_;
+            assert((p >= 0) && (p <= 1));
+            return obs == label ? p : 1 - p;
+        }
     }
     float probability_obs_ore_slam(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        assert(slam_type_ == ORE_SLAM);
-#ifdef NON_PEAKED_SENSING
-        int slabels = 0;
-        int row = loc / ncols_, col = loc % ncols_;
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue;
-            for( int dc = -1; dc < 2; ++dc ) {
-                int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue;
-                int bit = (dr + 1) * 3 + (dc + 1);
-                int off_loc = nrow * ncols_ + ncol;
-                int label = labels[off_loc];
-                slabels += (label << bit);
+        assert((slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED));
+        if( slam_type_ == ORE_SLAM_NON_PEAKED ) {
+            int slabels = 0;
+            int row = loc / ncols_, col = loc % ncols_;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nrow = row + dr;
+                if( (nrow < 0) || (nrow >= nrows_) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int ncol = col + dc;
+                    if( (ncol < 0) || (ncol >= ncols_) ) continue;
+                    int bit = (dr + 1) * 3 + (dc + 1);
+                    int off_loc = nrow * ncols_ + ncol;
+                    int label = labels[off_loc];
+                    slabels += (label << bit);
+                }
             }
-        }
-        assert((slabels >= 0) && (slabels < 512));
-        return probability_obs_ore_slam(obs, loc, slabels, last_action);
-#endif
-#ifdef PEAKED_SENSING
-        int noise = 0;
-        int row = loc / ncols_, col = loc % ncols_;
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue;
-            for( int dc = -1; dc < 2; ++dc ) {
-                if( (dr == 0) && (dc == 0) ) continue;
-                int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue;
-                int new_loc = nrow * ncols_ + ncol;
-                noise += labels[new_loc] != labels[loc] ? 1 : 0;
+            assert((slabels >= 0) && (slabels < 512));
+            return probability_obs_ore_slam(obs, loc, slabels, last_action);
+        } else {
+            int noise = 0;
+            int row = loc / ncols_, col = loc % ncols_;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nrow = row + dr;
+                if( (nrow < 0) || (nrow >= nrows_) ) continue;
+                for( int dc = -1; dc < 2; ++dc ) {
+                    if( (dr == 0) && (dc == 0) ) continue;
+                    int ncol = col + dc;
+                    if( (ncol < 0) || (ncol >= ncols_) ) continue;
+                    int new_loc = nrow * ncols_ + ncol;
+                    noise += labels[new_loc] != labels[loc] ? 1 : 0;
+                }
             }
+            assert(noise < 9);
+            float p = po_ + (8 - noise) * base_obs_noise_;
+            assert((p >= 0) && (p <= 1));
+            return obs == labels[loc] ? p : 1 - p;
         }
-        assert(noise < 9);
-        float p = po_ + (8 - noise) * base_obs_noise_;
-        assert((p >= 0) && (p <= 1));
-        return obs == labels[loc] ? p : 1 - p;
-#endif
     }
 
     float probability_obs_aisle_slam(int obs, int loc, int slabels, int last_action) const {
@@ -401,7 +396,7 @@ struct cellmap_t {
     float probability_obs(int obs, int loc, int label_or_slabels, int last_action) const {
         if( slam_type_ == COLOR_SLAM )
             return probability_obs_standard(obs, loc, label_or_slabels, last_action);
-        else if( slam_type_ == ORE_SLAM )
+        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
             return probability_obs_ore_slam(obs, loc, label_or_slabels, last_action);
         else
             return probability_obs_aisle_slam(obs, loc, label_or_slabels, last_action);
@@ -409,7 +404,7 @@ struct cellmap_t {
     float probability_obs(int obs, int loc, const std::vector<int> &labels, int last_action) const {
         if( slam_type_ == COLOR_SLAM )
             return probability_obs_standard(obs, loc, labels, last_action);
-        else if( slam_type_ == ORE_SLAM )
+        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
             return probability_obs_ore_slam(obs, loc, labels, last_action);
         else
             return probability_obs_aisle_slam(obs, loc, labels, last_action);
@@ -440,50 +435,48 @@ struct cellmap_t {
     }
 
     int sample_obs_ore_slam(int loc, int /*last_action*/, float q) const {
-        assert(slam_type_ == ORE_SLAM);
+        assert((slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED));
         assert((q >= 0) && (q <= 1));
         assert((loc >= 0) && (loc < nloc_));
 
         int obs = 0;
         int row = loc / ncols_, col = loc % ncols_;
 
-#ifdef NON_PEAKED_SENSING
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue; // for outside-of-the-grid cell, sampled value = 0
-            for( int dc = -1; dc < 2; ++dc ) {
-                int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, sampled value = 0
-                int new_loc = nrow * ncols_ + ncol;
-                int label = cells_[new_loc].label_;
-                assert((label == 0) || (label == 1));
-                float p = base_obs_noise_ * (dr != 0 ? q : 1) * (dc != 0 ? q : 1);
-                obs += Utils::uniform() < p ? label : 1 - label;
+        if( slam_type_ == ORE_SLAM_NON_PEAKED ) {
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nrow = row + dr;
+                if( (nrow < 0) || (nrow >= nrows_) ) continue; // for outside-of-the-grid cell, sampled value = 0
+                for( int dc = -1; dc < 2; ++dc ) {
+                    int ncol = col + dc;
+                    if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, sampled value = 0
+                    int new_loc = nrow * ncols_ + ncol;
+                    int label = cells_[new_loc].label_;
+                    assert((label == 0) || (label == 1));
+                    float p = base_obs_noise_ * (dr != 0 ? q : 1) * (dc != 0 ? q : 1);
+                    obs += Utils::uniform() < p ? label : 1 - label;
+                }
             }
-        }
-        assert((obs >= 0) && (obs < 10));
-#endif
-#ifdef PEAKED_SENSING
-        int loc_label = cells_[loc].label_;
-        int noise = 0;
-        for( int dr = -1; dr < 2; ++dr ) {
-            int nrow = row + dr;
-            if( (nrow < 0) || (nrow >= nrows_) ) continue;     // for outside-of-the-grid cell, zero added noise
-            for( int dc = -1; dc < 2; ++dc ) {
-                if( (dr == 0) && (dc == 0) ) continue;         // no noise for same loc
-                int ncol = col + dc;
-                if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, zero added noise
-                int new_loc = nrow * ncols_ + ncol;
-                int label = cells_[new_loc].label_;
-                noise += label != loc_label ? 1 : 0;
+            assert((obs >= 0) && (obs < 10));
+        } else {
+            int loc_label = cells_[loc].label_;
+            int noise = 0;
+            for( int dr = -1; dr < 2; ++dr ) {
+                int nrow = row + dr;
+                if( (nrow < 0) || (nrow >= nrows_) ) continue;     // for outside-of-the-grid cell, zero added noise
+                for( int dc = -1; dc < 2; ++dc ) {
+                    if( (dr == 0) && (dc == 0) ) continue;         // no noise for same loc
+                    int ncol = col + dc;
+                    if( (ncol < 0) || (ncol >= ncols_) ) continue; // for outside-of-the-grid cell, zero added noise
+                    int new_loc = nrow * ncols_ + ncol;
+                    int label = cells_[new_loc].label_;
+                    noise += label != loc_label ? 1 : 0;
+                }
             }
+            assert(noise < 9);
+            float p = po_ + (8 - noise) * base_obs_noise_;
+            assert((p >= 0) && (p <= 1)); //if( (p < 0) || (p > 1) ) std::cout << "error: parameter po must be >= 0.8875, po=" << q << ", p=" << p << std::endl;
+            obs = sample_label(loc_label, p);
         }
-        assert(noise < 9);
-        float p = po_ + (8 - noise) * base_obs_noise_;
-        assert((p >= 0) && (p <= 1)); //if( (p < 0) || (p > 1) ) std::cout << "error: parameter po must be >= 0.8875, po=" << q << ", p=" << p << std::endl;
-        obs = sample_label(loc_label, p);
-#endif
-
         return obs;
     }
 
@@ -500,7 +493,7 @@ struct cellmap_t {
         float q = po == -1 ? po_ : po;
         if( slam_type_ == COLOR_SLAM )
             return sample_obs_standard(loc, last_action, q);
-        else if( slam_type_ == ORE_SLAM )
+        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
             return sample_obs_ore_slam(loc, last_action, q);
         else
             return sample_obs_aisle_slam(loc, last_action, q);
@@ -530,7 +523,7 @@ struct cellmap_t {
     }
 
     void precompute_stored_information_ore_slam() {
-        assert(slam_type_ == ORE_SLAM);
+        assert((slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED));
 
         // location types for each cell: bits for corner and side
         loc_type_ = std::vector<int>(nloc_, 0);
@@ -605,112 +598,111 @@ struct cellmap_t {
         //                      = \sum_{val} P( obs | val ) \prod_{loc} P( val[loc] | slabels[loc] )
         //                      = \sum_{val} [[ obs = #{ loc : val[loc] = 1 } ]] \prod_{loc} P( val[loc] | slabels[loc] )
 
-#ifdef NON_PEAKED_SENSING
-        // dimension is product of 512 valuations, 10 obs and 9 loc-types
-        probability_obs_ore_slam_ = std::vector<float>(512 * 10 * 9, 0);
-        for( int loc_type = 0; loc_type < 9; ++loc_type ) {
+        if( slam_type_ == ORE_SLAM_NON_PEAKED ) {
+            // dimension is product of 512 valuations, 10 obs and 9 loc-types
+            probability_obs_ore_slam_ = std::vector<float>(512 * 10 * 9, 0);
+            for( int loc_type = 0; loc_type < 9; ++loc_type ) {
+                for( int obs = 0; obs < 10; ++obs ) {
+                    for( int slabels = 0; slabels < 512; ++slabels ) {
+                        //if( incompatible_slabels(slabels, loc_type) ) continue;
+                        int index = calculate_index_ore_slam(slabels, obs, loc_type);
+                        for( int valuation = 0; valuation < 512; ++valuation ) {
+                            //if( incompatible_slabels(valuation, loc_type) ) continue;
+                            if( int(popcount(valuation)) != obs ) continue;
+                            float p = 1;
+                            for( int rloc = 0; rloc < 9; ++rloc ) { // computes \prod_{loc} P( val[loc] | slabels[loc] ) onto p
+                                if( incompatible_loc(rloc, loc_type) ) {
+                                    //continue;
+                                    p *= bit(valuation, rloc) == 0 ? 0.99 : 0.01;
+                                } else {
+                                    // loc=4 refers to the center of the 3x3 window
+                                    float q = base_obs_noise_ * (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_);
+                                    p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
+                                }
+                            }
+                            probability_obs_ore_slam_[index] += p;
+                        }
+                        assert(probability_obs_ore_slam_[index] <= 1);
+                        if( probability_obs_ore_slam_[index] == 0 ) {
+                            std::cout << "error: P(obs=" << obs
+                                      << "|slabels=" << slabels
+                                      << ", loc-type=" << loc_type
+                                      << ") = " << probability_obs_ore_slam_[index]
+                                      << std::endl;
+                            assert(probability_obs_ore_slam_[index] > 0);
+                        } else {
+#if 0
+                            std::cout << "# P(obs=" << obs
+                                      << "|slabels=" << slabels
+                                      << ", loc_type=" << loc_type
+                                      << ")=" << probability_obs_ore_slam_[index]
+                                      << std::endl;
+#endif
+                        }
+                    }
+                }
+            }
+
             for( int obs = 0; obs < 10; ++obs ) {
+                float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_MIDDLE)];
+                std::cout << "# P(obs=" << obs << "|slabels=0,MIDDLE)=" << p << std::endl;
+            }
+            for( int obs = 0; obs < 10; ++obs ) {
+                float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_CORNER_UP_RI)];
+                std::cout << "# P(obs=" << obs << "|slabels=0,CORNER)=" << p << std::endl;
+            }
+            for( int obs = 0; obs < 10; ++obs ) {
+                float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_EDGE_UP)];
+                std::cout << "# P(obs=" << obs << "|slabels=0,EDGE)=" << p << std::endl;
+            }
+
+            // check probabilities for observation: \sum_{obs} P( obs | slabels ) = 1 for all slabels
+            for( int loc_type = 0; loc_type < 9; ++loc_type ) {
                 for( int slabels = 0; slabels < 512; ++slabels ) {
                     //if( incompatible_slabels(slabels, loc_type) ) continue;
-                    int index = calculate_index_ore_slam(slabels, obs, loc_type);
-                    for( int valuation = 0; valuation < 512; ++valuation ) {
-                        //if( incompatible_slabels(valuation, loc_type) ) continue;
-                        if( popcount(valuation) != obs ) continue;
-                        float p = 1;
-                        for( int rloc = 0; rloc < 9; ++rloc ) { // computes \prod_{loc} P( val[loc] | slabels[loc] ) onto p
-                            if( incompatible_loc(rloc, loc_type) ) {
-                                //continue;
-                                p *= bit(valuation, rloc) == 0 ? 0.99 : 0.01;
-                            } else {
-                                // loc=4 refers to the center of the 3x3 window
-                                float q = base_obs_noise_ * (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_);
-                                p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
-                            }
+                    float sum = 0;
+                    for( int obs = 0; obs < 10; ++obs )
+                        sum += probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type)];
+                    if( fabs(sum - 1) >= 1e-6 ) std::cout << "warning: |sum - 1| >= 1e-6,  sum=" << sum << std::endl;
+                    //assert(fabs(sum - 1) < 1e-5);
+#ifdef DEBUG
+                    std::cout << "total-mass[lt=" << loc_type << ",labels=" << slabels << "] = " << sum << std::endl;
+#endif
+                }
+            }
+
+#if 0
+            // check that the most plausible obs correspond to number of ore bits
+            for( int loc_type = 0; loc_type < 9; ++loc_type ) {
+                for( int slabels = 0; slabels < 512; ++slabels ) {
+                    int best_obs = 0;
+                    float best_obs_prob = 0;
+                    for( int obs = 0; obs < 10; ++obs ) {
+                        float p = probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type)];
+                        if( p > best_obs_prob ) {
+                            best_obs = obs;
+                            best_obs_prob = p;
                         }
-                        probability_obs_ore_slam_[index] += p;
                     }
-                    assert(probability_obs_ore_slam_[index] <= 1);
-                    if( probability_obs_ore_slam_[index] == 0 ) {
-                        std::cout << "error: P(obs=" << obs
-                                  << "|slabels=" << slabels
-                                  << ", loc-type=" << loc_type
-                                  << ") = " << probability_obs_ore_slam_[index]
+                    int correct_obs = popcount(slabels);
+                    if( best_obs != correct_obs ) {
+                        std::cout << "warning: most plausible obs for (loc-type=" << loc_type
+                                  << ", slabels=" << slabels
+                                  << ", bits=|";
+                        print_bits(std::cout, slabels, 9);
+                        std::cout << "|) is " << best_obs
+                                  << " with p=" << best_obs_prob
+                                  << "; correct obs " << correct_obs
+                                  << " has p="
+                                  << probability_obs_ore_slam_[calculate_index_ore_slam(slabels, correct_obs, loc_type)]
                                   << std::endl;
-                        assert(probability_obs_ore_slam_[index] > 0);
-                    } else {
-#  if 0
-                        std::cout << "# P(obs=" << obs
-                                  << "|slabels=" << slabels
-                                  << ", loc_type=" << loc_type
-                                  << ")=" << probability_obs_ore_slam_[index]
-                                  << std::endl;
-#  endif
                     }
                 }
             }
-        }
-
-        for( int obs = 0; obs < 10; ++obs ) {
-            float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_MIDDLE)];
-            std::cout << "# P(obs=" << obs << "|slabels=0,MIDDLE)=" << p << std::endl;
-        }
-        for( int obs = 0; obs < 10; ++obs ) {
-            float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_CORNER_UP_RI)];
-            std::cout << "# P(obs=" << obs << "|slabels=0,CORNER)=" << p << std::endl;
-        }
-        for( int obs = 0; obs < 10; ++obs ) {
-            float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_EDGE_UP)];
-            std::cout << "# P(obs=" << obs << "|slabels=0,EDGE)=" << p << std::endl;
-        }
-
-        // check probabilities for observation: \sum_{obs} P( obs | slabels ) = 1 for all slabels
-        for( int loc_type = 0; loc_type < 9; ++loc_type ) {
-            for( int slabels = 0; slabels < 512; ++slabels ) {
-                //if( incompatible_slabels(slabels, loc_type) ) continue;
-                float sum = 0;
-                for( int obs = 0; obs < 10; ++obs )
-                    sum += probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type)];
-                if( fabs(sum - 1) >= 1e-6 ) std::cout << "warning: |sum - 1| >= 1e-6,  sum=" << sum << std::endl;
-                //assert(fabs(sum - 1) < 1e-5);
-#  ifdef DEBUG
-                std::cout << "total-mass[lt=" << loc_type << ",labels=" << slabels << "] = " << sum << std::endl;
-#  endif
-            }
-        }
-
-#  if 0
-        // check that the most plausible obs correspond to number of ore bits
-        for( int loc_type = 0; loc_type < 9; ++loc_type ) {
-            for( int slabels = 0; slabels < 512; ++slabels ) {
-                int best_obs = 0;
-                float best_obs_prob = 0;
-                for( int obs = 0; obs < 10; ++obs ) {
-                    float p = probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type)];
-                    if( p > best_obs_prob ) {
-                        best_obs = obs;
-                        best_obs_prob = p;
-                    }
-                }
-                int correct_obs = popcount(slabels);
-                if( best_obs != correct_obs ) {
-                    std::cout << "warning: most plausible obs for (loc-type=" << loc_type
-                              << ", slabels=" << slabels
-                              << ", bits=|";
-                    print_bits(std::cout, slabels, 9);
-                    std::cout << "|) is " << best_obs
-                              << " with p=" << best_obs_prob
-                              << "; correct obs " << correct_obs
-                              << " has p="
-                              << probability_obs_ore_slam_[calculate_index_ore_slam(slabels, correct_obs, loc_type)]
-                              << std::endl;
-                }
-            }
-        }
-#  endif
 #endif
-#ifdef PEAKED_SENSING
-        base_obs_noise_ = (1.0 - po_) / 9.0;
-#endif
+        } else {
+            base_obs_noise_ = (1.0 - po_) / 9.0;
+        }
 
         // calculate var offsets
         var_offset_ = std::vector<int>(nloc_ * nloc_, -1);
