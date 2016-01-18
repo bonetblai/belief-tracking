@@ -531,7 +531,7 @@ int main(int argc, const char **argv) {
 
         // print final (tracked) map and location
         vector<pair<float, int> > map_values;
-        cout << "# final(" << setw(size_longest_name) << "real" << "): map=";
+        cout << "# final(" << setw(size_longest_name) << "real" << "): #steps=" << output_execution.size() << ", map=";
         cellmap.print_labels(cout);
         cout << ", loc=" << coord_t(output_execution.back().loc_) << ":" << output_execution.back().loc_ << endl;
 
@@ -559,7 +559,7 @@ int main(int argc, const char **argv) {
             // print map and stats
             int unknowns = 0;
             int errors = 0;
-            cout << "# final(" << setw(size_longest_name) << tracker.name_ << "): map=[";
+            cout << "# final(" << setw(size_longest_name) << tracker.name_ << "): #steps=" << output_execution.size() << ", map=[";
             for( int loc = 0; loc < nrows * ncols; ++loc ) {
                 tracker.MAP_on_var(repos[i], loc, map_values, map_epsilon);
                 assert(!map_values.empty());
