@@ -94,7 +94,7 @@ struct slam_particle_t : public base_particle_t {
 struct sis_slam_particle_t : public slam_particle_t {
     sis_slam_particle_t() : slam_particle_t() { }
     sis_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : slam_particle_t(parameters) { }
-    sis_slam_particle_t(const sis_slam_particle_t &p) {
+    sis_slam_particle_t(const sis_slam_particle_t &p) : slam_particle_t() {
         *this = p;
     }
     sis_slam_particle_t(sis_slam_particle_t &&p) : slam_particle_t(std::move(p)) {
@@ -131,7 +131,7 @@ struct sis_slam_particle_t : public slam_particle_t {
 struct motion_model_sir_slam_particle_t : public slam_particle_t {
     motion_model_sir_slam_particle_t() : slam_particle_t() { }
     motion_model_sir_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : slam_particle_t(parameters) { }
-    motion_model_sir_slam_particle_t(const motion_model_sir_slam_particle_t &p) {
+    motion_model_sir_slam_particle_t(const motion_model_sir_slam_particle_t &p) : slam_particle_t() {
         *this = p;
     }
     motion_model_sir_slam_particle_t(motion_model_sir_slam_particle_t &&p) : slam_particle_t(std::move(p)) {
@@ -175,7 +175,7 @@ struct motion_model_sir_slam_particle_t : public slam_particle_t {
 struct optimal_sir_slam_particle_t : public slam_particle_t {
     optimal_sir_slam_particle_t() : slam_particle_t() { }
     optimal_sir_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : slam_particle_t(parameters) { }
-    optimal_sir_slam_particle_t(const optimal_sir_slam_particle_t &p) {
+    optimal_sir_slam_particle_t(const optimal_sir_slam_particle_t &p) : slam_particle_t() {
         *this = p;
     }
     optimal_sir_slam_particle_t(optimal_sir_slam_particle_t &&p) : slam_particle_t(std::move(p)) {
@@ -331,7 +331,7 @@ struct rbpf_slam_particle_t : public base_particle_t {
 struct motion_model_rbpf_slam_particle_t : public rbpf_slam_particle_t {
     motion_model_rbpf_slam_particle_t() : rbpf_slam_particle_t() { }
     motion_model_rbpf_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_slam_particle_t(parameters) { }
-    motion_model_rbpf_slam_particle_t(const motion_model_rbpf_slam_particle_t &p) {
+    motion_model_rbpf_slam_particle_t(const motion_model_rbpf_slam_particle_t &p) : slam_particle_t() {
         *this = p;
     }
     motion_model_rbpf_slam_particle_t(motion_model_rbpf_slam_particle_t &&p) : rbpf_slam_particle_t(std::move(p)) {
@@ -390,7 +390,7 @@ struct optimal_rbpf_slam_particle_t : public rbpf_slam_particle_t {
 
     optimal_rbpf_slam_particle_t() : rbpf_slam_particle_t() { }
     optimal_rbpf_slam_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_slam_particle_t(parameters) { }
-    optimal_rbpf_slam_particle_t(const optimal_rbpf_slam_particle_t &p) {
+    optimal_rbpf_slam_particle_t(const optimal_rbpf_slam_particle_t &p) : slam_particle_t() {
         *this = p;
     }
     optimal_rbpf_slam_particle_t(optimal_rbpf_slam_particle_t &&p) : rbpf_slam_particle_t(std::move(p)) {
