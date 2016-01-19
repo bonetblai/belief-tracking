@@ -24,5 +24,5 @@ $root/slam --${slam_type} --seed $RANDOM -c $nc -r $nr -p 1 $p --pa .9 --po $po 
     --tracker="${type}-rbpf(nparticles=64,force-resampling=true,sus=false,inference=iterated-ac3(level=0,inverse-check=true))" \
     --tracker="${type}-rbpf(nparticles=128,force-resampling=true,sus=false,inference=iterated-ac3(level=0,inverse-check=true))" \
     --tracker="${type}-rbpf(nparticles=256,force-resampling=true,sus=false,inference=iterated-ac3(level=0,inverse-check=true))" \
-    --tracker="${type}-rbpf(nparticles=512,force-resampling=true,sus=false,inference=iterated-ac3(level=0,inverse-check=true))" \
+    --tracker="${type}-rbpf(nparticles=512,force-resampling=true,sus=false,inference=iterated-ac3(level=0,inverse-check=true))"
 
