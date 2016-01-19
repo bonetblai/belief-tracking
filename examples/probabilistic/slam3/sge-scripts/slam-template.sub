@@ -24,7 +24,7 @@ dim=`echo $record | awk '{print $3;}'`
 np=`echo $record | awk '{print $4;}'`
 kappa=`echo $record | awk '{print $5;}'`
 
-output_path=$root/results/$rdir
+output_path=$root/sge-results/$rdir
 mkdir -p $output_path
 
 export LD_LIBRARY_PATH=~/lib
