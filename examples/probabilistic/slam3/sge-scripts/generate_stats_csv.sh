@@ -8,10 +8,11 @@ extracted=tmp.$output.txt
 grep $string $raw_file | sed "s/=/ /g" | sed "s/,/ /g" > $extracted
 nf=`head -1 $extracted | awk '{ print NF; }'`
 
+echo "s1,file,steps,unknowns,errors,time" > $output.csv
 if [ "$nf" == "51" ]; then # this is AC3
-  awk '{ printf "%s,%s,%s,%s,%s,%s\n", s1, s2, $21, $(NF-4), $(NF-2), $NF; }' s1=$output s2=$raw_file < $extracted > $output.csv
+  awk '{ printf "%s,%s,%s,%s,%s,%s\n", s1, s2, $21, $(NF-4), $(NF-2), $NF; }' s1=$output s2=$raw_file < $extracted >> $output.csv
 else
-  awk '{ printf "%s,%s,%s,%s,%s,%s\n", s1, s2, $24, $(NF-4), $(NF-2), $NF; }' s1=$output s2=$raw_file < $extracted > $output.csv
+  awk '{ printf "%s,%s,%s,%s,%s,%s\n", s1, s2, $24, $(NF-4), $(NF-2), $NF; }' s1=$output s2=$raw_file < $extracted >> $output.csv
 fi
 echo `wc -l $output.csv | awk '{ print $1; }'` "record(s) generated in '$output.csv'"
 

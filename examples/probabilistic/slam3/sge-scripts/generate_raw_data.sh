@@ -3,7 +3,8 @@
 parameters=$1
 dir=$2
 
-sort -u < $parameters > tmp.benchmark
+benchmark=tmp.benchmark
+sort -u < $parameters > $benchmark
 nb=`wc -l $benchmark | awk '{ print $1; }'`
 
 root=$HOME/software/github/belief-tracking/examples/probabilistic/slam3
@@ -15,6 +16,6 @@ for ((nr=1;nr<=$nb;++nr)); do
   dim=`echo $record | awk '{print $3;}'`
   np=`echo $record | awk '{print $4;}'`
   kappa=`echo $record | awk '{print $5;}'`
-  grep $root/$dir/output.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=*.txt > $root/$dir/raw_data.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.txt
+  grep final $root/$dir/output.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=*.txt > $root/$dir/raw_data.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.txt
 done
-  
+
