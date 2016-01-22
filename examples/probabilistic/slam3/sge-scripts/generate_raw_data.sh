@@ -16,6 +16,8 @@ for ((nr=1;nr<=$nb;++nr)); do
   dim=`echo $record | awk '{print $3;}'`
   np=`echo $record | awk '{print $4;}'`
   kappa=`echo $record | awk '{print $5;}'`
-  grep final $root/$dir/output.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=*.txt > $root/$dir/raw_data.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.txt
+  grep -h final $root/$dir/output.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=*.txt > $root/$dir/raw_data.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.txt
 done
+
+rm $benchmark
 
