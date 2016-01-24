@@ -503,7 +503,7 @@ struct rbpf_particle_t : public base_particle_t {
     }
     virtual ~rbpf_particle_t() {
         kappa_csp_.delete_domains_and_clear();
-        if( use_ac3_) inference_.destroy_inference_algorithm();
+        if( use_ac3_) inference_.destroy_inference_algorithm(); // CHECK: if this ok, should it be !use_ac3_?
     }
 
     const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
