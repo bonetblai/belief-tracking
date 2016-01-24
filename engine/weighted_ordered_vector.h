@@ -228,7 +228,9 @@ class weighted_ordered_vector_t {
 
     void increase_weight(int index, int amount = 1, int cap = std::numeric_limits<int>::max()) {
         assert(index < size_);
-        if( weight_[index] != std::numeric_limits<int>::max() ) {
+        if( amount == std::numeric_limits<int>::max() ) {
+            weight_[index] = std::numeric_limits<int>::max();
+        } else if( weight_[index] != std::numeric_limits<int>::max() ) {
             weight_[index] += amount;
             weight_[index] = std::min(weight_[index], cap);
         }
