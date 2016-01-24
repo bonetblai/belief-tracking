@@ -2,3 +2,4 @@
 - merge ore slam with aisle slam into single program
 - implement weighted ac3 on minesweeper?
 - simplify main: it still has stuff from old versions
+- remove slam3_particles.h
