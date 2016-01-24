@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2014 Universidad Simon Bolivar
+ *  Copyright (C) 2015-2016 Universidad Simon Bolivar
  *
  *  Permission is hereby granted to distribute this software for
  *  non-commercial research purposes, provided that this copyright
@@ -28,31 +28,89 @@
 #include <math.h>
 
 #include <dai/alldai.h>
-#include "../slam2/inference.h"
-#include "../slam2/utils.h"
+#include "../slam3/kappa.h"
+#include "../slam3/inference.h"
+#include "../slam3/edbp.h"
+#include "../slam3/utils.h"
 
 using namespace std;
 
+// static members for inference algorithms
+string Inference::inference_t::edbp_factors_fn_;
+string Inference::inference_t::edbp_evid_fn_;
+string Inference::inference_t::edbp_output_fn_;
+vector<vector<int> > Inference::edbp_t::edbp_factor_indices_;
 
-// static members
-string inference_t::algorithm_;
-string inference_t::options_;
-dai::PropertySet inference_t::libdai_options_;
-string inference_t::type_;
-string inference_t::edbp_factors_fn_;
-string inference_t::edbp_evid_fn_;
-string inference_t::edbp_output_fn_;
-int inference_t::edbp_max_iter_;
+// static members for kappa handling
+float kappa_t::epsilon_ = 0;
+vector<float> kappa_t::powers_;
 
-
-// probabilistic belief tracking for minesweeper
-struct pbt_t {
-    // grid dimension, num of mines, and noisy flag
+class tracking_t {
+  protected:
+    // game parameters
     int nrows_;
     int ncols_;
     int nmines_;
     bool noisy_;
 
+    // statistics
+    mutable int ngames_;
+    mutable int nwins_;
+    mutable int nguesses_;
+    mutable int ndecisions_;
+    mutable int ninferences_;
+    mutable float elapsed_time_;
+ 
+  public:
+    tracking_t(int nrows, int ncols, int nmines, bool noisy)
+      : nrows_(nrows), ncols_(ncols), nmines_(nmines), noisy_(noisy) {
+    }
+    virtual ~tracking_t() { }
+
+    bool is_flag_action(int action) const {
+        return action < nrows_ * ncols_ ? true : false;
+    }
+    int get_cell(int action) const {
+        return is_flag_action(action) ? action : action - (nrows_ * ncols_);
+    }
+
+    void initialize_stats() const {
+        ngames_ = 0;
+        nwins_ = 0;
+        nguesses_ = 0;
+        ndecisions_ = 0;
+        ninferences_ = 0;
+        elapsed_time_ = 0;
+    }
+    void print_stats(ostream &os) const {
+          os << "stats: #games=" << ngames_
+             << ", #wins=" << nwins_
+             << ", %win=" << float(nwins_) / float(ngames_)
+             << ", #guesses=" << nguesses_
+             << ", #decisions=" << ndecisions_
+             << ", #inferences=" << ninferences_
+             << ", etime=" << elapsed_time_
+             << ", etime/game=" << elapsed_time_ / float(ngames_)
+             << ", etime/decision=" << elapsed_time_ / float(ndecisions_)
+             << ", etime/inference=" << elapsed_time_ / float(ninferences_)
+             << endl;
+    }
+
+    void increase_elapsed_time(float time) {
+        elapsed_time_ += time;
+    }
+    void increase_wins() {
+        ++nwins_;
+    }
+
+    virtual string id() const = 0;
+    virtual void reset() = 0;
+    virtual void update(bool flag_action, int cell, int obs) = 0;
+    virtual int get_action() const = 0;
+};
+
+// standard belief tracking for minesweeper
+class pbt_t : public tracking_t {
     // variables, factors and centers for each beam
     vector<dai::Var> variables_;
     vector<dai::Factor> factors_;
@@ -63,28 +121,27 @@ struct pbt_t {
     mutable vector<dai::Factor> marginals_;
 
     // inference algorithm and parameters
-    inference_t inference_;
+    Inference::inference_t inference_;
+
+    // arc consistency
+    bool use_ac3_;
+    int iterated_level_;
+    bool inverse_check_;
+    //CHECK kappa_arc_consistency_t kappa_csp_;
 
     // variables for game play
     set<int> plays_;
     int nflags_;
 
-    // action selection
+    // for action selection
     mutable float best_prob_for_open_;
     mutable float best_prob_for_flag_;
     mutable vector<int> best_for_open_;
     mutable vector<int> best_for_flag_;
 
-    // statistics
-    mutable int ngames_;
-    mutable int nwins_;
-    mutable int nguesses_;
-    mutable int ndecisions_;
-    mutable int ninferences_;
-    mutable float elapsed_time_;
-
-    pbt_t(int nrows, int ncols, int nmines, bool noisy)
-      : nrows_(nrows), ncols_(ncols), nmines_(nmines), noisy_(noisy) {
+  public:
+    pbt_t(int nrows, int ncols, int nmines, bool noisy, const multimap<string, string> parameters)
+      : tracking_t(nrows, ncols, nmines, noisy) {
         // create binary variables for each cell in the grid
         variables_ = vector<dai::Var>(nrows_ * ncols_);
         for( int loc = 0; loc < nrows_ * ncols_; ++loc )
@@ -121,13 +178,37 @@ struct pbt_t {
              << ", #factors=" << factors_.size()
              << endl;
 
-        // create inference algorithm
-        inference_.create_and_initialize_algorithm(factors_);
+        multimap<string, string>::const_iterator it = parameters.find("inference");
+        if( it != parameters.end() ) {
+            inference_.set_inference_algorithm(it->second, "MAR", true);
+            if( inference_.algorithm() == "iterated-ac3" ) {
+                const dai::PropertySet &options = inference_.options();
+                use_ac3_ = true;
+                if( options.hasKey("level") )
+                    iterated_level_ = int(options.getStringAs<size_t>("level"));
+                if( options.hasKey("inverse-check") )
+                    inverse_check_ = options.getStringAs<bool>("inverse-check");
+                //CHECK kappa_csp_.set_iterated_level(iterated_level_);
+                //CHECK kappa_csp_.set_inverse_check(inverse_check_);
+            } else {
+                use_ac3_ = false;
+                inference_.create_and_initialize_algorithm(factors_);
+            }
+        }
+        it = parameters.find("edbp-max-iter");
+        if( it != parameters.end() )
+            inference_.edbp_max_iter_ = strtoul(it->second.c_str(), 0, 0);
     }
-    ~pbt_t() { }
+    virtual ~pbt_t() { }
+
+    virtual string id() const {
+        string id_str;
+        id_str = string("pbt()"); // CHECK
+        return id_str;
+    }
 
     // reset all factors and game-play variables
-    void reset() {
+    virtual void reset() {
         indices_for_updated_factors_.clear();
         indices_for_updated_factors_.reserve(nrows_ * ncols_);
         for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
@@ -142,11 +223,11 @@ struct pbt_t {
         best_for_open_.clear();
         best_for_flag_.clear();
         ++ngames_;
-        inference_.destroy_inference_algorithm();
+        //CHECK inference_.destroy_inference_algorithm();
     }
 
-    // update factors for obtained obs for cell
-    void update_factors(bool flag_action, int cell, int obs) {
+    // update for obtained obs for cell
+    void update(bool flag_action, int cell, int obs) {
         assert(plays_.find(cell) == plays_.end());
         plays_.insert(cell);
         //int row = cell / ncols_, col = cell % ncols_;
@@ -200,18 +281,8 @@ struct pbt_t {
         }
     }
 
-    void calculate_marginals(bool print_marginals = false) const {
-        ++ninferences_;
-        inference_.calculate_marginals(variables_,
-                                       indices_for_updated_factors_,
-                                       factors_,
-                                       marginals_,
-                                       0, // not used because type = MAR
-                                       print_marginals);
-    }
-
     // recommend action using information in the marginals
-    int get_action() const {
+    virtual int get_action() const {
         ++ndecisions_;
         int action = -1;
         if( (best_prob_for_open_ == 1) && !best_for_open_.empty() ) {
@@ -296,34 +367,15 @@ struct pbt_t {
         return action;
     }
 
-    bool is_flag_action(int action) const {
-        return action < nrows_ * ncols_ ? true : false;
-    }
-    int get_cell(int action) const {
-        return is_flag_action(action) ? action : action - (nrows_ * ncols_);
-    }
-
-    void initialize_stats() const {
-        ngames_ = 0;
-        nwins_ = 0;
-        nguesses_ = 0;
-        ndecisions_ = 0;
-        ninferences_ = 0;
-        elapsed_time_ = 0;
-    }
-
-    void print_stats(ostream &os) const {
-          os << "stats: #games=" << ngames_
-             << ", #wins=" << nwins_
-             << ", %win=" << (float)nwins_ / (float)ngames_
-             << ", #guesses=" << nguesses_
-             << ", #decisions=" << ndecisions_ // not updated
-             << ", #inferences=" << ninferences_
-             << ", etime=" << elapsed_time_
-             << ", etime/game=" << elapsed_time_ / (float)ngames_
-             << ", etime/decision=" << elapsed_time_ / (float)ndecisions_
-             << ", etime/inference=" << elapsed_time_ / (float)ninferences_
-             << endl;
+  protected:
+    void calculate_marginals(bool print_marginals = false) const {
+        ++ninferences_;
+        inference_.calculate_marginals(variables_,
+                                       indices_for_updated_factors_,
+                                       factors_,
+                                       marginals_,
+                                       0, // not used because type = MAR
+                                       print_marginals);
     }
 };
 
@@ -333,7 +385,8 @@ struct cell_t {
     cell_t() : mine_(false), nmines_(0) { }
 };
 
-struct minefield_t {
+class minefield_t {
+  protected:
     int nrows_;
     int ncols_;
     int ncells_;
@@ -342,11 +395,11 @@ struct minefield_t {
 
     vector<cell_t> cells_;
 
+  public:
     minefield_t(int nrows, int ncols, int nmines)
       : nrows_(nrows), ncols_(ncols), ncells_(nrows_ * ncols_), nmines_(nmines) {
     }
-
-    int num_remaining_mines() const { return num_remaining_mines_; }
+    ~minefield_t() { }
 
     void sample(int initial_cell) {
         // do not place a mine at the initial cell or surrounding cells
@@ -404,26 +457,17 @@ struct minefield_t {
         num_remaining_mines_ = nmines_;
     }
 
-    int flag_cell(int cell, bool verbose) {
-        int r = cell / ncols_, c = cell % ncols_;
-        if( verbose ) cout << "flag_cell(" << c << "," << r << "): mine=" << (cells_[cell].mine_ ? 1 : 0) << endl;
-        num_remaining_mines_ -= cells_[cell].mine_ ? 1 : 0;
-        return -1;
-    }
-
-    int open_cell(int cell, bool verbose) {
-        int r = cell / ncols_, c = cell % ncols_;
-        if( verbose ) cout << "open_cell(" << c << "," << r << "): mine=" << (cells_[cell].mine_ ? 1 : 0) << ", #mines=" << cells_[cell].nmines_ << endl;
-        return cells_[cell].mine_ ? 9 : cells_[cell].nmines_;
-    }
-
-    int apply_action(const pbt_t &pbt, int action, bool verbose) {
-        int cell = pbt.get_cell(action);
-        if( pbt.is_flag_action(action) ) {
+    int apply_action(const tracking_t &tracker, int action, bool verbose) {
+        int cell = tracker.get_cell(action);
+        if( tracker.is_flag_action(action) ) {
             return flag_cell(cell, verbose);
         } else {
             return open_cell(cell, verbose);
         }
+    }
+
+    bool is_mine(int cell) const {
+        return cells_[cell].mine_;
     }
 
     void print(ostream &os, bool formatted = false) const {
@@ -437,6 +481,24 @@ struct minefield_t {
             }
             if( formatted ) os << endl;
         }
+    }
+
+  protected:
+    int num_remaining_mines() const {
+        return num_remaining_mines_;
+    }
+
+    int flag_cell(int cell, bool verbose) {
+        int r = cell / ncols_, c = cell % ncols_;
+        if( verbose ) cout << "flag_cell(" << c << "," << r << "): mine=" << (cells_[cell].mine_ ? 1 : 0) << endl;
+        num_remaining_mines_ -= cells_[cell].mine_ ? 1 : 0;
+        return -1;
+    }
+
+    int open_cell(int cell, bool verbose) {
+        int r = cell / ncols_, c = cell % ncols_;
+        if( verbose ) cout << "open_cell(" << c << "," << r << "): mine=" << (cells_[cell].mine_ ? 1 : 0) << ", #mines=" << cells_[cell].nmines_ << endl;
+        return cells_[cell].mine_ ? 9 : cells_[cell].nmines_;
     }
 };
 
@@ -493,6 +555,9 @@ void usage(ostream &os) {
        << endl;
 }
 
+void finalize() {
+}
+
 int main(int argc, const char **argv) {
     int ntrials = 1;
     int nrows = 16;
@@ -500,125 +565,146 @@ int main(int argc, const char **argv) {
     int nmines = 40;
     int seed = 0;
     bool verbose = false;
+    float epsilon_for_kappa = 0.1;
     string tmp_path = "";
+    vector<string> tracker_strings;
 
-    // inference algorithm
-    //string inference_algorithm = "edbp(maxiter=10)";
-    //string inference_algorithm = "jt(updates=HUGIN)";
-    string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-3,maxiter=20,maxtime=1,damping=.2)";
-    //string inference_algorithm = "cbp(updates=SEQRND,clamp=CLAMP_VAR,choose=CHOOSE_RANDOM,min_max_adj=10,bbp_props=,bbp_cfn=,recursion=REC_FIXED,tol=1e-3,rec_tol=1e-3,maxiter=100)";
-    //string inference_algorithm = "lc(updates=SEQRND,cavity=FULL,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
-    //string inference_algorithm = "mr(updates=LINEAR,inits=RESPPROP,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
-    //string inference_algorithm = "hak(doubleloop=true,clusters=MIN,init=UNIFORM,tol=1e-3,maxiter=100,maxtime=1)";
-
-    --argc;
-    ++argv;
-    while( (argc > 0) && (**argv == '-') ) {
-        if( !strcmp(argv[0], "-i") || !strcmp(argv[0], "--inference") ) {
-            inference_algorithm = argv[1];
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "--tmp-path") ) {
+    // parse arguments
+    for( --argc, ++argv; (argc > 0) && (**argv == '-'); --argc, ++argv ) {
+        if( !strcmp(argv[0], "--tmp-path") ) {
             tmp_path = argv[1];
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
-            ntrials = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-r") || !strcmp(argv[0], "--nrows") ) {
-            nrows = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-c") || !strcmp(argv[0], "--ncols") ) {
-            ncols = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-m") || !strcmp(argv[0], "--nmines") ) {
-            nmines = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
-            seed = atoi(argv[1]);
-            argc -= 2;
-            argv += 2;
-        } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
-            verbose = true;
             --argc;
             ++argv;
+        } else if( !strcmp(argv[0], "-t") || !strcmp(argv[0], "--ntrials") ) {
+            ntrials = atoi(argv[1]);
+            --argc;
+            ++argv;
+        } else if( !strcmp(argv[0], "-r") || !strcmp(argv[0], "--nrows") ) {
+            nrows = atoi(argv[1]);
+            --argc;
+            ++argv;
+        } else if( !strcmp(argv[0], "-c") || !strcmp(argv[0], "--ncols") ) {
+            ncols = atoi(argv[1]);
+            --argc;
+            ++argv;
+        } else if( !strcmp(argv[0], "-m") || !strcmp(argv[0], "--nmines") ) {
+            nmines = atoi(argv[1]);
+            --argc;
+            ++argv;
+        } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
+            seed = atoi(argv[1]);
+            --argc;
+            ++argv;
+        } else if( !strncmp(argv[0], "--tracker=", 10) ) {
+            string tracker(&argv[0][10]);
+            Utils::tokenize(tracker, tracker_strings);
+        } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
+            verbose = true;
         } else if( !strcmp(argv[0], "-?") || !strcmp(argv[0], "--help") ) {
             usage(cout);
             exit(-1);
         } else {
             cout << "error: unexpected argument: " << argv[0] << endl;
-            --argc;
-            ++argv;
         }
     }
 
     // set seed
-    cout << "SEED=" << seed << endl;
-    unsigned short seeds[3];
-    seeds[0] = seeds[1] = seeds[2] = seed;
-    seed48(seeds);
+    Utils::set_seed(seed);
+    cout << "# seed=" << seed << endl;
 
-    // create distributions
+    // set static members
     if( !tmp_path.empty() && (tmp_path.back() != '/') ) tmp_path += '/';
-    inference_t::set_inference_algorithm(inference_algorithm, "MAR", tmp_path);
-    pbt_t pbt(nrows, ncols, nmines, false);
+    //Inference::edbp_t::initialize();
+    //Inference::inference_t::initialize_edbp(tmp_path);
+    kappa_t::initialize(epsilon_for_kappa, 10);
+
+    // tracking algorithms
+    vector<tracking_t*> trackers;
+    for( size_t i = 0; i < tracker_strings.size(); ++i ) {
+        tracking_t *tracker = 0;
+        const string &name = tracker_strings[i];
+        string short_name;
+        string parameter_str;
+        multimap<string, string> parameters;
+        Utils::split_request(name, short_name, parameter_str);
+        Utils::tokenize(parameter_str, parameters);
+        if( short_name == "pbt" ) {
+            tracker = new pbt_t(nrows, ncols, nmines, false, parameters);
+        } else {
+            cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
+        }
+        if( tracker != 0 ) trackers.push_back(tracker);
+    }
+
+    // check that there is something to do
+    if( trackers.empty() ) {
+        cout << "warning: no tracker specified. Terminating..." << endl;
+        finalize();
+        return 0;
+    }
+
+    // print identity of trackers
+    for( size_t i = 0; i < trackers.size(); ++i )
+        cout << "# tracker[" << i << "].id=\"" << trackers[i]->id() << "\"" << endl;
+    
+    // initialize stats for trackers
+    for( size_t i = 0; i < trackers.size(); ++i )
+        trackers[i]->initialize_stats();
 
     // run for the specified number of trials
-    pbt.initialize_stats();
     for( int trial = 0; trial < ntrials; ) {
-        minefield_t minefield(nrows, ncols, nmines);
-        pbt.reset();
-        float start_time = Utils::read_time_in_seconds();
+        for( int i = 0; i < int(trackers.size()); ++i ) {
+            minefield_t minefield(nrows, ncols, nmines);
+            tracking_t &tracker = *trackers[i];
+            tracker.reset();
+            float start_time = Utils::read_time_in_seconds();
 
-        bool win = true;
-        vector<pair<int,int> > execution(nrows * ncols);
-        for( int play = 0; play < nrows * ncols; ++play ) {
-            int action = pbt.get_action();
-            bool is_flag_action = pbt.is_flag_action(action);
-            int cell = pbt.get_cell(action);
-            cout << "Play: n=" << play
-                 << ", type=" << (is_flag_action ? "FLAG" : "OPEN")
-                 << ", cell=" << cell << ":(" << cell % ncols << "," << cell / ncols << ")"
-                 << flush;
+            bool win = true;
+            vector<pair<int,int> > execution(nrows * ncols);
+            for( int play = 0; play < nrows * ncols; ++play ) {
+                int action = tracker.get_action();
+                bool is_flag_action = tracker.is_flag_action(action);
+                int cell = tracker.get_cell(action);
+                cout << "Play: n=" << play
+                     << ", type=" << (is_flag_action ? "FLAG" : "OPEN")
+                     << ", cell=" << cell << ":(" << cell % ncols << "," << cell / ncols << ")"
+                     << flush;
 
-            // if this is first play, then it must be an open action. The minefield
-            // gets sampled using the action's cell.
-            if( play == 0 ) {
-                assert(!pbt.is_flag_action(action));
-                int cell = pbt.get_cell(action);
-                minefield.sample(cell);
-                assert(!minefield.cells_[cell].mine_);
-                cout << ", obs=0" << endl << endl;
-                minefield.print(cout, true);
-                cout << endl;
+                // if this is first play, then it must be an open action. The minefield
+                // gets sampled using the action's cell.
+                if( play == 0 ) {
+                    assert(!tracker.is_flag_action(action));
+                    int cell = tracker.get_cell(action);
+                    minefield.sample(cell);
+                    assert(!minefield.is_mine(cell));
+                    cout << ", obs=0" << endl << endl;
+                    minefield.print(cout, true);
+                    cout << endl;
+                }
+
+                // obtain observation for this action. If first play, observation
+                // must be zero.
+                int obs = minefield.apply_action(tracker, action, verbose);
+                assert((obs == 0) || (play > 0));
+                if( play > 0 ) cout << ", obs=" << obs << endl;
+                if( obs == 9 ) {
+                    cout << "**** BOOM!!! ****" << endl;
+                    win = false;
+                    break;
+                }
+
+                // update execution and agent's belief 
+                execution[play] = make_pair(action, obs);
+
+                // update agent's belief
+                tracker.update(tracker.is_flag_action(action), tracker.get_cell(action), obs);
             }
+            tracker.increase_elapsed_time(Utils::read_time_in_seconds() - start_time);
 
-            // obtain observation for this action. If first play, observation
-            // must be zero.
-            int obs = minefield.apply_action(pbt, action, verbose);
-            assert((obs == 0) || (play > 0));
-            if( play > 0 ) cout << ", obs=" << obs << endl;
-            if( obs == 9 ) {
-                cout << "**** BOOM!!! ****" << endl;
-                win = false;
-                break;
-            }
-
-            // update execution and agent's belief 
-            execution[play] = make_pair(action, obs);
-
-            // update agent's belief
-            pbt.update_factors(pbt.is_flag_action(action), pbt.get_cell(action), obs);
+            if( win ) tracker.increase_wins();
+            tracker.print_stats(cout);
+            ++trial;
         }
-        pbt.elapsed_time_ += Utils::read_time_in_seconds() - start_time;
-
-        if( win ) ++pbt.nwins_;
-        pbt.print_stats(cout);
-        ++trial;
     }
     return 0;
 }
