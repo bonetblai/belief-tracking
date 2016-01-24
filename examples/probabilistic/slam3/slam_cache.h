@@ -25,11 +25,86 @@
 #include <vector>
 
 #include <dai/alldai.h>
+#include "libdai_cache.h"
 
 //#define DEBUG
 
 namespace SLAM {
 
+class cache_t : public dai::cache_t {
+  protected:
+    static std::vector<std::vector<int> > slabels_;
+
+    static void compute_basic_elements(int nrows, int ncols) {
+        dai::cache_t::compute_basic_elements(nrows, ncols);
+    }
+    static void compute_cache_for_states(int nrows, int ncols) {
+        dai::cache_t::compute_cache_for_states(nrows, ncols);
+    }
+
+  public:
+    cache_t() { }
+    ~cache_t() { }
+
+    static void finalize() {
+        dai::cache_t::finalize();
+    }
+
+    static int get_slabels(int loc, const dai::VarSet &varset, int value, int var_offset(int, int)) {
+        assert((loc >= 0) && (loc < num_locs_));
+        assert((value >= 0) && (value < int(varset.nrStates())));
+
+        // allocate cache if this is first call
+        if( slabels_.empty() )
+            slabels_ = std::vector<std::vector<int> >(num_locs_, std::vector<int>(512, -1));
+        assert(loc < int(slabels_.size()));
+        if( slabels_[loc].empty() )
+            slabels_[loc] = std::vector<int>(varset.nrStates(), -1);
+        assert(value < int(slabels_[loc].size()));
+
+        // check whether there is a valid entry in cache
+        const std::vector<int> &slabels_for_loc = slabels_[loc];
+        if( slabels_for_loc[value] != -1 )
+            return slabels_for_loc[value];
+
+#ifdef DEBUG
+        std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
+#endif
+
+        // this is the first time that we access (beam,value)
+        // compute the correct value and cache it for later use
+        int slabels = 0;
+        const std::map<dai::Var, size_t> &state = cache_t::state(loc, value);
+        for( dai::VarSet::const_iterator it = varset.begin(); it != varset.end(); ++it ) {
+            const dai::Var &var = *it;
+            std::map<dai::Var, size_t>::const_iterator jt = state.find(var);
+            assert(jt != state.end());
+            size_t var_value = jt->second;
+            assert(var_value < 2); // because it is a binary variable
+            if( var_value ) {
+                int var_id = it->label();
+                int var_off = var_offset(loc, var_id);
+#ifdef DEBUG
+                std::cout << "    [var_id=" << var_id << ":" << coord_t(var_id)
+                          << ", var_value=1, off=" << var_off << "]"
+                          << std::endl;
+#endif
+                slabels += (1 << var_off);
+            }
+        }
+#ifdef DEBUG
+        std::cout << "    bits=|";
+        print_bits(std::cout, slabels, 9);
+        std::cout << "| (" << slabels << ")" << std::endl;
+#endif
+
+        // cache it and return
+        slabels_[loc][value] = slabels;
+        return slabels;
+    }
+};
+
+#if 0 // REMOVE
 class cache_t {
   protected:
     static int num_locs_;
@@ -183,6 +258,7 @@ class cache_t {
         os << "}";
     }
 };
+#endif
 
 }; // namespace SLAM
 

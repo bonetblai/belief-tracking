@@ -55,11 +55,13 @@ string Inference::inference_t::edbp_evid_fn_;
 string Inference::inference_t::edbp_output_fn_;
 vector<vector<int> > Inference::edbp_t::edbp_factor_indices_;
 
+// static member for dai cache
+int dai::cache_t::num_locs_ = 0;
+vector<dai::Var> dai::cache_t::variables_;
+vector<dai::VarSet> dai::cache_t::varsets_;
+vector<vector<map<dai::Var, size_t>*> > dai::cache_t::state_cache_;
+
 // static member for SLAM cache
-int SLAM::cache_t::num_locs_ = 0;
-vector<dai::Var> SLAM::cache_t::variables_;
-vector<dai::VarSet> SLAM::cache_t::varsets_;
-vector<vector<map<dai::Var, size_t>*> > SLAM::cache_t::state_cache_;
 vector<vector<int> > SLAM::cache_t::slabels_;
 
 // static members for kappa handling
