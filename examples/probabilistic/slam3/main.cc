@@ -214,6 +214,7 @@ int main(int argc, const char **argv) {
 
     bool R_plot = false;
 
+#if 0
     // inference algorithm
     string inference_algorithm = "bp(updates=SEQRND,logdomain=false,tol=1e-5,maxtime=3)";
     //string inference_algorithm = "edbp(maxiter=2)";
@@ -222,6 +223,7 @@ int main(int argc, const char **argv) {
     //string inference_algorithm = "lc(updates=SEQRND,cavity=FULL,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
     //string inference_algorithm = "mr(updates=LINEAR,inits=RESPPROP,logdomain=false,tol=1e-3,maxiter=100,maxtime=1,damping=.2)";
     //string inference_algorithm = "hak(doubleloop=true,clusters=MIN,init=UNIFORM,tol=1e-3,maxiter=100,maxtime=1)";
+#endif
 
     // start global timer
     float start_time = Utils::read_time_in_seconds();
@@ -261,11 +263,7 @@ int main(int argc, const char **argv) {
 
     // parse arguments
     for( --argc, ++argv; (argc > 0) && (**argv == '-'); --argc, ++argv ) {
-        if( !strcmp(argv[0], "-i") || !strcmp(argv[0], "--inference") ) {
-            inference_algorithm = argv[1];
-            --argc;
-            ++argv;
-        } else if( !strcmp(argv[0], "--tmp-path") ) {
+        if( !strcmp(argv[0], "--tmp-path") ) {
             tmp_path = argv[1];
             --argc;
             ++argv;
@@ -397,12 +395,8 @@ int main(int argc, const char **argv) {
     }
 
     // tracking algorithms
-    vector<tracking_t<cellmap_t>*> trackers;
-    dai::PropertySet opts;
     int nparticles = 100;
-    //int memory = 0;
-
-    //tracker_strings.push_back("mm-rbpf(nparticles=1,force-resampling=true,sus=false)");
+    vector<tracking_t<cellmap_t>*> trackers;
     for( size_t i = 0; i < tracker_strings.size(); ++i ) {
         tracking_t<cellmap_t> *tracker = 0;
 
@@ -545,7 +539,7 @@ int main(int argc, const char **argv) {
                                 tracker,
                                 repos[i],
                                 cellmap,
-                                inference_algorithm,
+                                string("dummy"),
                                 map_epsilon,
                                 map_threshold);
 
