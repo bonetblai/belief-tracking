@@ -373,7 +373,7 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
 
     bool kappa_ac3() {
         std::vector<int> revised_vars;
-        bool something_removed = CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>::weighted_ac3(iterated_level_, revised_vars, true, inverse_check_);
+        bool something_removed = CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>::iterated_weighted_ac3(iterated_level_, revised_vars, true, inverse_check_);
         normalize_kappas(revised_vars);
         calculate_normalization_constant(revised_vars);
         assert(normalized_kappas());
@@ -503,7 +503,7 @@ struct rbpf_particle_t : public base_particle_t {
     }
     virtual ~rbpf_particle_t() {
         kappa_csp_.delete_domains_and_clear();
-        if( use_ac3_) inference_.destroy_inference_algorithm(); // CHECK: if this ok, should it be !use_ac3_?
+        if( !use_ac3_) inference_.destroy_inference_algorithm();
     }
 
     const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
