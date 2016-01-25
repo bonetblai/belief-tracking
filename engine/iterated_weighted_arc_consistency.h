@@ -206,17 +206,18 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
         return change;
     }
 
-    bool iterated_weighted_ac3(int max_level, std::vector<bool> &revised_vars, bool propagate = true) {
+    bool iterated_weighted_ac3(int max_level, std::vector<bool> &revised_vars, bool propagate = true, bool inverse_check = false) {
         bool change = false;
         revised_vars = std::vector<bool>(nvars_, false);
         for( int level = 0; level <= max_level; ++level ) {
-            change = weighted_ac3(level, revised_vars, propagate) || change;
+            if( weighted_ac3(level, revised_vars, propagate, inverse_check) )
+                change = true;
         }
         return change;
     }
-    bool iterated_weighted_ac3(int max_level, std::vector<int> &revised_vars, bool propagate = true) {
+    bool iterated_weighted_ac3(int max_level, std::vector<int> &revised_vars, bool propagate = true, bool inverse_check = false) {
         std::vector<bool> revised_vars_tmp(nvars_, false);
-        bool change = iterated_weighted_ac3(max_level, revised_vars_tmp, propagate);
+        bool change = iterated_weighted_ac3(max_level, revised_vars_tmp, propagate, inverse_check);
         revised_vars.clear();
         for( int var = 0; var < nvars_; ++var ) {
             if( revised_vars_tmp[var] )
