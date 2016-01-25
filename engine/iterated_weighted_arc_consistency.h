@@ -209,7 +209,7 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
     bool iterated_weighted_ac3(int max_level, std::vector<bool> &revised_vars, bool propagate = true) {
         bool change = false;
         revised_vars = std::vector<bool>(nvars_, false);
-        for( int level = 0; level < max_level; ++level ) {
+        for( int level = 0; level <= max_level; ++level ) {
             change = weighted_ac3(level, revised_vars, propagate) || change;
         }
         return change;
