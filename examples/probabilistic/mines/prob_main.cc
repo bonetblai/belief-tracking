@@ -35,9 +35,11 @@
 #include "kappa.h"
 #include "libdai_cache.h"
 #include "weighted_var_beam.h"
-#include "iterated_weighted_arc_consistency.h"
+#include "weighted_arc_consistency.h"
 
 using namespace std;
+
+//#define DEBUG
 
 // static members for inference algorithms
 string Inference::inference_t::edbp_factors_fn_;
@@ -58,6 +60,7 @@ vector<vector<map<dai::Var, size_t>*> > dai::cache_t::state_cache_;
 class cache_t : public dai::cache_t {
   protected:
     static vector<unsigned*> compatible_values_;
+    static vector<int> popcount_;
 
     static void compute_cache_for_compatible_values(int nrows, int ncols) {
         float start_time = Utils::read_time_in_seconds();
@@ -138,6 +141,21 @@ class cache_t : public dai::cache_t {
              << endl;
     }
 
+    static void compute_cache_for_popcount() {
+        popcount_ = vector<int>(num_locs_ * 512);
+        for( int loc = 0; loc < num_locs_; ++loc ) {
+            const dai::VarSet &varset = dai::cache_t::varset(loc);
+            for( int value = 0; value < int(varset.nrStates()); ++value ) {
+                int popcount = 0;
+                const map<dai::Var, size_t> state = dai::cache_t::state(loc, value);
+                assert(state.size() <= 9);
+                for( map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
+                    popcount += it->second;
+                popcount_[value * num_locs_ + loc] = popcount;
+            }
+        }
+    }
+
   public:
     cache_t() { }
     ~cache_t() { }
@@ -147,6 +165,7 @@ class cache_t : public dai::cache_t {
         dai::cache_t::compute_basic_elements(nrows, ncols);
         dai::cache_t::compute_cache_for_states(nrows, ncols);
         compute_cache_for_compatible_values(nrows, ncols);
+        compute_cache_for_popcount();
     }
     static void finalize() {
         set<unsigned*> erased;
@@ -163,10 +182,15 @@ class cache_t : public dai::cache_t {
     static const unsigned* compatible_values(int val_y, int var_y, int var_x) {
         return compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x];
     }
+    static int popcount(int var, int value) {
+        assert(value * num_locs_ + var < int(popcount_.size()));
+        return popcount_[value * num_locs_ + var];
+    }
 };
 
 // static members for cache
 vector<unsigned*> cache_t::compatible_values_;
+vector<int> cache_t::popcount_;
 
 class kappa_varset_beam_t : public weighted_var_beam_t {
   protected:
@@ -256,19 +280,12 @@ class kappa_varset_beam_t : public weighted_var_beam_t {
     }
 };
 
-class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t> {
+class kappa_arc_consistency_t : public CSP::weighted_arc_consistency_t<kappa_varset_beam_t> {
     static CSP::constraint_digraph_t cg_;
 
-    int iterated_level_;
-    bool inverse_check_;
-
-    mutable int level_;
     //mutable const map<dai::Var, size_t> *state_x_;
-    mutable vector<unsigned*> bitmask_;
-    //mutable int bitmask_size_;
 
     static void construct_constraint_graph(int nrows, int ncols) {
-        assert(0);
         int num_locs = nrows * ncols;
         cg_.create_empty_graph(num_locs);
         for( int loc = 0; loc < num_locs; ++loc ) {
@@ -307,71 +324,24 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
 #endif
     }
 
-    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int level) const {
-        assert(1 + level <= int(bitmask_.size()));
-        level_ = level;
-        //bitmask_size_ = cache_t::varset(var_x).nrStates() >> 5;
-        //bitmask_size_ = bitmask_size_ == 0 ? 1 : bitmask_size_;
-        for( int i = 0; i <= level_; ++i )
-            bzero(bitmask_[i], 64);
-    }
-    virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y, int kappa) const {
-        if( kappa <= level_ ) {
-            assert(1 + kappa <= int(bitmask_.size()));
-            const unsigned *bitmask = cache_t::compatible_values(val_y, var_y, var_x);
-            for( int i = 0; i < 16; ++i ) bitmask_[kappa][i] |= bitmask[i];
-        }
-    }
-    virtual bool arc_reduce_inverse_check(int val_x, int kappa) const {
-        if( kappa <= level_ ) {
-            assert(1 + level_ - kappa <= int(bitmask_.size()));
-            int index = val_x / 32, offset = val_x % 32;
-            //assert(index < bitmask_size_);
-            for( int i = 0; i <= level_ - kappa; ++i ) {
-                if( ((bitmask_[i][index] >> offset) & 0x1) == 1 )
-                    return true;
-            }
-            return false;
-        } else {
-            return true;
-        }
-    }
-
   public:
-    kappa_arc_consistency_t()
-      : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(cg_),
-        iterated_level_(0),
-        inverse_check_(false) {
-        set_iterated_level(iterated_level_);
+    kappa_arc_consistency_t() : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(cg_) {
     }
-    kappa_arc_consistency_t(const kappa_arc_consistency_t &ac)
-      : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(ac.cg_),
-        iterated_level_(ac.iterated_level_),
-        inverse_check_(ac.inverse_check_) {
-        set_iterated_level(iterated_level_);
+    kappa_arc_consistency_t(const kappa_arc_consistency_t &ac) : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(ac.cg_) {
     }
-    kappa_arc_consistency_t(kappa_arc_consistency_t &&ac)
-      : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(move(ac)),
-        iterated_level_(ac.iterated_level_),
-        inverse_check_(ac.inverse_check_),
-        bitmask_(move(ac.bitmask_)) {
-        ac.bitmask_.clear();
+    kappa_arc_consistency_t(kappa_arc_consistency_t &&ac) : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(move(ac)) {
     }
-    virtual ~kappa_arc_consistency_t() {
-        clean_bitmask();
-    }
+    virtual ~kappa_arc_consistency_t() { }
 
     const kappa_arc_consistency_t& operator=(const kappa_arc_consistency_t &ac) {
         nvars_ = ac.nvars_;
-        set_iterated_level(ac.iterated_level_);
-        inverse_check_ = ac.inverse_check_;
         assert(domain_.size() == ac.domain_.size());
         for( int loc = 0; loc < int(ac.domain_.size()); ++loc )
             set_domain(loc, new kappa_varset_beam_t(*ac.domain(loc)));
         return *this;
     }
     bool operator==(const kappa_arc_consistency_t &ac) const {
-        if( (nvars_ == ac.nvars_) && (iterated_level_ == ac.iterated_level_) && (inverse_check_ == ac.inverse_check_) && (domain_.size() == ac.domain_.size()) ) {
+        if( (nvars_ == ac.nvars_) && (domain_.size() == ac.domain_.size()) ) {
             for( int loc = 0; loc < int(domain_.size()); ++loc ) {
                 if( !(*domain_[loc] == *ac.domain_[loc]) )
                     return false;
@@ -386,25 +356,9 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
         construct_constraint_graph(nrows, ncols);
     }
 
-    void clean_bitmask() {
-        for( int i = 0; i < int(bitmask_.size()); ++i )
-            delete[] bitmask_[i];
-        bitmask_.clear();
-    }
-    void set_iterated_level(int iterated_level) {
-        iterated_level_ = iterated_level;
-        clean_bitmask();
-        bitmask_ = vector<unsigned*>(iterated_level_ + 1);
-        for( int i = 0; i <= iterated_level_; ++i )
-            bitmask_[i] = new unsigned[16];
-    }
-    void set_inverse_check(bool inverse_check) {
-        inverse_check_ = inverse_check;
-    }
-
     bool kappa_ac3() {
         vector<int> revised_vars;
-        bool something_removed = CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>::weighted_ac3(iterated_level_, revised_vars, true, inverse_check_);
+        bool something_removed = CSP::weighted_arc_consistency_t<kappa_varset_beam_t>::weighted_ac3(revised_vars, true);
         normalize_kappas(revised_vars);
         calculate_normalization_constant(revised_vars);
         assert(normalized_kappas());
@@ -439,7 +393,12 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
 
     void print_factor(ostream &os, int loc) const {
         const kappa_varset_beam_t &beam = *domain_[loc];
-        os << "loc=" << loc << ",sz=" << beam.size() << ",domain=" << beam;
+        os << "loc=" << loc << ",sz=" << beam.size() << ",domain={";
+        for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+            if( it.weight() < numeric_limits<int>::max() )
+                os << "[" << it.index() << ":" << *it << ":" << it.weight() << "],";
+        }
+        os << "}";
     }
     void print(ostream &os) const {
         for( int loc = 0; loc < int(domain_.size()); ++loc ) {
@@ -492,7 +451,8 @@ class tracking_t {
         elapsed_time_ = 0;
     }
     void print_stats(ostream &os) const {
-          os << "stats: #games=" << ngames_
+          os << "# stats: tracker=" << id()
+             << ", #games=" << ngames_
              << ", #wins=" << nwins_
              << ", %win=" << float(nwins_) / float(ngames_)
              << ", #guesses=" << nguesses_
@@ -530,6 +490,7 @@ class pbt_t : public tracking_t {
     mutable vector<dai::Factor> marginals_;
 
     // inference algorithm and parameters
+    string inference_algorithm_;
     Inference::inference_t inference_;
 
     // variables for game play
@@ -576,13 +537,14 @@ class pbt_t : public tracking_t {
             marginals_[loc] = dai::Factor(variables_[loc]);
             //cout << "Factor[row=" << row << ",col=" << col << "]=" << p << endl;
         }
-        cout << "pbt: factor graph:"
+        cout << "# pbt: factor graph:"
              << " #variables=" << variables_.size()
              << ", #factors=" << factors_.size()
              << endl;
 
         multimap<string, string>::const_iterator it = parameters.find("inference");
         if( it != parameters.end() ) {
+            inference_algorithm_ = it->second;
             inference_.set_inference_algorithm(it->second, "MAR", true);
             inference_.create_and_initialize_algorithm(factors_);
         }
@@ -594,7 +556,9 @@ class pbt_t : public tracking_t {
 
     virtual string id() const {
         string id_str;
-        id_str = string("pbt()");
+        id_str = string("pbt(")
+          + string("inference=") + inference_algorithm_
+          + string(")");
         return id_str;
     }
 
@@ -731,6 +695,7 @@ class pbt_t : public tracking_t {
                 }
             }
 
+#ifdef DEBUG
             cout << "best for open: p=" << best_prob_for_open_ << ", sz=" << best_for_open_.size() << ", loc=";
             for( int i = 0; i < int(best_for_open_.size()); ++i )
                 cout << best_for_open_[i] << ",";
@@ -738,6 +703,7 @@ class pbt_t : public tracking_t {
             for( int i = 0; i < int(best_for_flag_.size()); ++i )
                 cout << best_for_flag_[i] << ",";
             cout << endl;
+#endif
 
             // prioritize open over flag actions
             if( !best_for_open_.empty() && (best_prob_for_open_ >= best_prob_for_flag_) ) {
@@ -774,23 +740,7 @@ class pbt_t : public tracking_t {
 };
 
 class pbt_ac3_t : public tracking_t {
-    int iterated_level_;
-    bool inverse_check_;
     kappa_arc_consistency_t kappa_csp_;
-
-#if 0
-    // variables, factors and centers for each beam
-    vector<dai::Var> variables_;
-    vector<dai::Factor> factors_;
-    vector<int> centers_;
-
-    // computation of marginals in factor model
-    mutable vector<int> indices_for_updated_factors_;
-    mutable vector<dai::Factor> marginals_;
-
-    // inference algorithm and parameters
-    Inference::inference_t inference_;
-#endif
 
     // variables for game play
     set<int> plays_;
@@ -804,33 +754,17 @@ class pbt_ac3_t : public tracking_t {
 
   public:
     pbt_ac3_t(int nrows, int ncols, int nmines, bool noisy, const multimap<string, string> parameters)
-      : tracking_t(nrows, ncols, nmines, noisy), iterated_level_(0), inverse_check_(true) {
-        // set beams
+      : tracking_t(nrows, ncols, nmines, noisy) {
         for( int loc = 0; loc < nrows * ncols; ++loc ) {
             kappa_csp_.set_domain(loc, new kappa_varset_beam_t(loc, cache_t::variable(loc), cache_t::varset(loc)));
         }
-
-        // parse parameters
-        multimap<string, string>::const_iterator it = parameters.find("level");
-        if( it != parameters.end() )
-            iterated_level_ = strtoul(it->second.c_str(), 0, 0);
-        it = parameters.find("inverse-check");
-        if( it != parameters.end() )
-            inverse_check_ = it->second == "true";
-        kappa_csp_.set_iterated_level(iterated_level_);
-        kappa_csp_.set_inverse_check(inverse_check_);
     }
     virtual ~pbt_ac3_t() {
         kappa_csp_.delete_domains_and_clear();
     }
 
     virtual string id() const {
-        string id_str;
-        id_str = string("pbt-ac3(")
-          + string("level=") + to_string(iterated_level_)
-          + string(",inverse-check=") + (inverse_check_ ? "true" : "false")
-          + string(")");
-        return id_str;
+        return string("pbt-ac3()");
     }
 
     // reset all factors and game-play variables
@@ -841,70 +775,10 @@ class pbt_ac3_t : public tracking_t {
         best_for_open_.clear();
         best_for_flag_.clear();
         ++ngames_;
-#if 0 // REMOVE
-        indices_for_updated_factors_.clear();
-        indices_for_updated_factors_.reserve(nrows_ * ncols_);
-        for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
-            dai::Factor &factor = factors_[loc];
-            float p = 1.0 / (1 << factor.vars().size());
-            for( int j = 0; j < (1 << factor.vars().size()); ++j )
-                factor.set(j, p);
-            indices_for_updated_factors_.push_back(loc);
-        }
-#endif
     }
 
     // update for obtained obs for cell
     void update(bool flag_action, int cell, int obs) {
-#if 0
-        int current_loc = loc_history_.back();
-#ifdef DEBUG
-        std::cout << "factor before update: loc=" << current_loc << ", obs=" << obs << std::endl;
-        std::cout << "  kappa-csp: ";
-        kappa_csp_.print_factor(std::cout, current_loc);
-        std::cout << std::endl;
-#endif
-        assert(current_loc < int(kappa_csp_.nvars()));
-        std::vector<std::pair<int, int> > kappa_increases;
-        kappa_varset_beam_t &beam = *kappa_csp_.domain(current_loc);
-        for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
-            int value = *it;
-            int index = it.index();
-            int slabels = get_slabels(beam, value);
-            float p = base_->probability_obs(obs, current_loc, slabels, last_action);
-            int k_obs = kappa_t::kappa(p);
-            kappa_increases.push_back(std::make_pair(index, k_obs));
-        }
-#ifdef DEBUG
-        std::cout << "  increases:";
-        for( int i = 0; i < int(kappa_increases.size()); ++i ) {
-            std::pair<int, int> &p = kappa_increases[i];
-            int valuation = beam[p.first].first;
-            int kappa = beam[p.first].second;
-            std::cout << " " << p.second;
-        }
-        std::cout << std::endl;
-#endif
-
-        assert(!beam.empty());
-        for( int i = 0; i < int(kappa_increases.size()); ++i )
-            kappa_csp_.domain(current_loc)->increase_kappa(kappa_increases[i]);
-        assert(kappa_csp_.worklist().empty());
-        kappa_csp_.add_to_worklist(current_loc);
-        kappa_csp_.normalize_kappas(current_loc);
-        kappa_csp_.kappa_ac3();
-        kappa_csp_.normalize_kappas(current_loc);
-        kappa_csp_.calculate_normalization_constant(current_loc);
-
-#ifdef DEBUG
-        std::cout << "factor after update: loc=" << current_loc << ", obs=" << obs << std::endl;
-        std::cout << "  kappa-csp: ";
-        kappa_csp_.print_factor(std::cout, current_loc);
-        std::cout << std::endl;
-#endif
-        return kappa_csp_.is_consistent(0);
-#endif
-
         assert(plays_.find(cell) == plays_.end());
         plays_.insert(cell);
 
@@ -916,29 +790,67 @@ class pbt_ac3_t : public tracking_t {
 #endif
 
         if( !flag_action ) {
-            assert(0);
-#if 0
-            int center = centers_[cell];
-            //cout << "center=" << center << ", var=" << factors_[cell].vars().var(center) << endl;
-            dai::Factor &factor = factors_[cell];
-            for( int j = 0; j < int(factor.nrStates()); ++j ) {
-                int popcount = __builtin_popcount(j);
-                if( !noisy_ ) {
-                    if( popcount != obs ) factor.set(j, 0);
+            assert(cell < int(kappa_csp_.nvars()));
+            const dai::Var &var = cache_t::variable(cell);
+            kappa_varset_beam_t &beam = *kappa_csp_.domain(cell);
+            vector<pair<int, int> > kappa_increases;
+            for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+                int value = *it;
+                int index = it.index();
+                const map<dai::Var, size_t> &state = cache_t::state(cell, value);
+                assert(state.find(var) != state.end());
+                if( state.find(var)->second != 0 ) {
+                    kappa_increases.push_back(make_pair(index, numeric_limits<int>::max()));
                 } else {
-                    // noisy update
-                    if( popcount == obs ) {
-                        factor.set(j, factor[j] * .95);
-                    } else if( (popcount == obs - 1) || (popcount == obs + 1) ) {
-                        factor.set(j, factor[j] * .05);
-                    } else {
-                        factor.set(j, 0);
+                    int popcount = cache_t::popcount(cell, value);
+                    if( !noisy_ ) {
+                        if( popcount != obs ) {
+                            kappa_increases.push_back(make_pair(index, numeric_limits<int>::max()));
+                        }
+                    } else { // noisy update
+                        if( popcount == obs ) {
+                            int k_obs = kappa_t::kappa(0.95);
+                            kappa_increases.push_back(make_pair(index, k_obs));
+                        } else if( (popcount == obs - 1) || (popcount == obs + 1) ) {
+                            int k_obs = kappa_t::kappa(0.05);
+                            kappa_increases.push_back(make_pair(index, k_obs));
+                        } else {
+                            kappa_increases.push_back(make_pair(index, numeric_limits<int>::max()));
+                        }
                     }
                 }
-                if( (j & (1 << center)) != 0 ) factor.set(j, 0);
             }
-            indices_for_updated_factors_.push_back(cell);
+
+#ifdef DEBUG
+            cout << "  increases:";
+            for( int i = 0; i < int(kappa_increases.size()); ++i ) {
+                pair<int, int> &p = kappa_increases[i];
+                int valuation = beam[p.first].first;
+                int kappa = beam[p.first].second;
+                cout << " " << valuation << "[" << kappa << "+=" << p.second << "]";
+            }
+            cout << endl;
 #endif
+
+            assert(!beam.empty());
+            for( int i = 0; i < int(kappa_increases.size()); ++i )
+                kappa_csp_.domain(cell)->increase_kappa(kappa_increases[i]);
+            assert(kappa_csp_.worklist().empty());
+            kappa_csp_.add_to_worklist(cell);
+            kappa_csp_.normalize_kappas(cell);
+            kappa_csp_.kappa_ac3();
+            kappa_csp_.normalize_kappas(cell);
+            kappa_csp_.calculate_normalization_constant(cell);
+            ++ninferences_;
+
+#ifdef DEBUG
+            cout << "factor after update: loc=" << cell << ", obs=" << obs << endl;
+            cout << "  kappa-csp: ";
+            kappa_csp_.print_factor(cout, cell);
+            cout << endl;
+#endif
+
+            assert(kappa_csp_.is_consistent(0));
 
             // if obs is 0 and not noisy, neighboring cells don't have mines
             if( !noisy_ && (obs == 0) ) {
@@ -996,38 +908,31 @@ class pbt_ac3_t : public tracking_t {
         }
 
         if( action == -1 ) {
-            assert(0);
-#if 0
-            calculate_marginals();
-#endif
             best_for_open_.clear();
             best_for_flag_.clear();
             best_prob_for_open_ = 0;
             best_prob_for_flag_ = 0;
             for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
                 if( plays_.find(loc) != plays_.end() ) continue; // cell had been already played
-#if 0
-                const dai::Factor &marginal = marginals_[loc];
-                assert(marginal.nrStates() == 2);
-                if( best_for_open_.empty() || (marginal[0] >= best_prob_for_open_) ) {
-                    if( best_for_open_.empty() || (marginal[0] > best_prob_for_open_) ) {
-                        best_prob_for_open_ = marginal[0];
+                const kappa_varset_beam_t &beam = *kappa_csp_.domain(loc);
+                float marginal = beam.marginal(0);
+                if( best_for_open_.empty() || (marginal >= best_prob_for_open_) ) {
+                    if( best_for_open_.empty() || (marginal > best_prob_for_open_) ) {
+                        best_prob_for_open_ = marginal;
                         best_for_open_.clear();
                     }
                     best_for_open_.push_back(loc);
                 }
-#endif
-#if 0
-                if( (nflags_ < nmines_) && (best_for_flag_.empty() || (marginal[1] >= best_prob_for_flag_)) ) {
-                    if( best_for_flag_.empty() || (marginal[1] > best_prob_for_flag_) ) {
-                        best_prob_for_flag_ = marginal[1];
+                if( (nflags_ < nmines_) && (best_for_flag_.empty() || (1 - marginal >= best_prob_for_flag_)) ) {
+                    if( best_for_flag_.empty() || (1 - marginal > best_prob_for_flag_) ) {
+                        best_prob_for_flag_ = 1 - marginal;
                         best_for_flag_.clear();
                     }
                     best_for_flag_.push_back(loc);
                 }
-#endif
             }
 
+#ifdef DEBUG
             cout << "best for open: p=" << best_prob_for_open_ << ", sz=" << best_for_open_.size() << ", loc=";
             for( int i = 0; i < int(best_for_open_.size()); ++i )
                 cout << best_for_open_[i] << ",";
@@ -1035,6 +940,7 @@ class pbt_ac3_t : public tracking_t {
             for( int i = 0; i < int(best_for_flag_.size()); ++i )
                 cout << best_for_flag_[i] << ",";
             cout << endl;
+#endif
 
             // prioritize open over flag actions
             if( !best_for_open_.empty() && (best_prob_for_open_ >= best_prob_for_flag_) ) {
@@ -1065,6 +971,13 @@ class pbt_ac3_t : public tracking_t {
             kappa_csp_.calculate_normalization_constant(loc);
         }
         assert(kappa_csp_.normalized_kappas());
+    }
+    void print_marginals() const {
+        for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
+            const kappa_varset_beam_t &beam = *kappa_csp_.domain(loc);
+            cout << "marginal[" << loc << "][0]=" << beam.marginal(0) << endl;
+            assert(fabs(beam.marginal(0) + beam.marginal(1) - 1) <= 1e-5);
+        }
     }
 };
 
@@ -1248,6 +1161,11 @@ void finalize() {
 }
 
 int main(int argc, const char **argv) {
+    cout << "# args:";
+    for( int i = 0; i < argc; ++i )
+        cout << " " << argv[i];
+    cout << endl;
+
     int ntrials = 1;
     int nrows = 16;
     int ncols = 16;
@@ -1257,6 +1175,9 @@ int main(int argc, const char **argv) {
     float epsilon_for_kappa = 0.1;
     string tmp_path = "";
     vector<string> tracker_strings;
+
+    // start global timer
+    float start_time = Utils::read_time_in_seconds();
 
     // parse arguments
     for( --argc, ++argv; (argc > 0) && (**argv == '-'); --argc, ++argv ) {
@@ -1306,6 +1227,8 @@ int main(int argc, const char **argv) {
     //Inference::edbp_t::initialize();
     //Inference::inference_t::initialize_edbp(tmp_path);
     kappa_t::initialize(epsilon_for_kappa, 10);
+    cache_t::initialize(nrows, ncols);
+    kappa_arc_consistency_t::initialize(nrows, ncols);
 
     // tracking algorithms
     vector<tracking_t*> trackers;
@@ -1343,7 +1266,7 @@ int main(int argc, const char **argv) {
         trackers[i]->initialize_stats();
 
     // run for the specified number of trials
-    for( int trial = 0; trial < ntrials; ) {
+    for( int trial = 0; trial < ntrials; ++trial ) {
         for( int i = 0; i < int(trackers.size()); ++i ) {
             minefield_t minefield(nrows, ncols, nmines);
             tracking_t &tracker = *trackers[i];
@@ -1354,12 +1277,13 @@ int main(int argc, const char **argv) {
             vector<pair<int,int> > execution(nrows * ncols);
             for( int play = 0; play < nrows * ncols; ++play ) {
                 int action = tracker.get_action();
-                bool is_flag_action = tracker.is_flag_action(action);
-                int cell = tracker.get_cell(action);
+
+#ifdef DEBUG
                 cout << "Play: n=" << play
-                     << ", type=" << (is_flag_action ? "FLAG" : "OPEN")
-                     << ", cell=" << cell << ":(" << cell % ncols << "," << cell / ncols << ")"
+                     << ", type=" << (tracker.is_flag_action(action) ? "FLAG" : "OPEN")
+                     << ", cell=" << tracker.get_cell(action) << ":(" << tracker.get_cell(action) % ncols << "," << tracker.get_cell(action) / ncols << ")"
                      << flush;
+#endif
 
                 // if this is first play, then it must be an open action. The minefield
                 // gets sampled using the action's cell.
@@ -1368,18 +1292,22 @@ int main(int argc, const char **argv) {
                     int cell = tracker.get_cell(action);
                     minefield.sample(cell);
                     assert(!minefield.is_mine(cell));
+#ifdef DEBUG
                     cout << ", obs=0" << endl << endl;
                     minefield.print(cout, true);
                     cout << endl;
+#endif
                 }
 
                 // obtain observation for this action. If first play, observation
                 // must be zero.
                 int obs = minefield.apply_action(tracker, action, verbose);
                 assert((obs == 0) || (play > 0));
+#ifdef DEBUG
                 if( play > 0 ) cout << ", obs=" << obs << endl;
+                if( obs == 9 ) cout << "**** BOOM!!! ****" << endl;
+#endif
                 if( obs == 9 ) {
-                    cout << "**** BOOM!!! ****" << endl;
                     win = false;
                     break;
                 }
@@ -1394,9 +1322,12 @@ int main(int argc, const char **argv) {
 
             if( win ) tracker.increase_wins();
             tracker.print_stats(cout);
-            ++trial;
         }
     }
+
+    // stop timer
+    float elapsed_time = Utils::read_time_in_seconds() - start_time;
+    cout << "# total time = " << setprecision(5) << elapsed_time << endl;
     return 0;
 }
 
