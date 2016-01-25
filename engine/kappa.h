@@ -41,7 +41,10 @@ class kappa_t {
 
     static float epsilon() { return epsilon_; }
     static float power(int i) {
-        return i < int(powers_.size()) ? powers_[i] : powf(epsilon_, i);
+        if( i == std::numeric_limits<int>::max() )
+            return 0;
+        else
+            return i < int(powers_.size()) ? powers_[i] : powf(epsilon_, i);
     }
     static int kappa(float p) {
         if( p <= powers_.back() ) {
