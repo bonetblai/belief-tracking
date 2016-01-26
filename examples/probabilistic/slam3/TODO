@@ -1,5 +1,7 @@
 - implement variable-size bitmasks for slam/csp
 - merge ore slam with aisle slam into single program
-- implement weighted ac3 on minesweeper?
+[done] - implement weighted ac3 on minesweeper?
 - simplify main: it still has stuff from old versions
-- remove slam3_particles.h
+[done] - remove slam3_particles.h
+[done] - save/read executions from file so we perform evaluations fairly
+- generated executions for testing
