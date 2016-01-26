@@ -524,7 +524,7 @@ int main(int argc, const char **argv) {
         *ifs_execution >> ntrials;
     } else if( save_execution_and_exit ) {
         ofs_execution = new ofstream(filename_execution);
-        *ofs_execution << ntrials << " ";
+        *ofs_execution << ntrials;
     }
 
     // run for the specified number of trials and collect statistics
@@ -535,6 +535,7 @@ int main(int argc, const char **argv) {
     vector<Utils::stat_t> stats_error(trackers.size());
     for( int trial = 0; trial < ntrials; ++trial ) {
         cout << "# trial = " << trial << " / " << ntrials << endl;
+        if( save_execution_and_exit ) *ofs_execution << " ";
 
         // reading/saving executions
         if( read_execution ) {

@@ -187,6 +187,7 @@ struct cellmap_t {
                 is >> cells_[loc].label_;
             return true;
         } else {
+            std::cout << "MISMATCH: " << nloc_ << " " << nloc << std::endl;
             return false;
         }
     }
@@ -853,10 +854,10 @@ struct cellmap_t {
             reserve(nsteps);
             for( int i = 0; i < nsteps; ++i ) {
                 execution_step_t step;
-                if( !step.read(is) ) return false;
+                if( !step.read(is) ) break;
                 push_back(step);
             }
-            return true;
+            return nsteps == int(size());
         }
     };
 
