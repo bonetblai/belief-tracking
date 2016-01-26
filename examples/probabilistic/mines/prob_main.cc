@@ -283,6 +283,8 @@ class kappa_varset_beam_t : public weighted_var_beam_t {
 class kappa_arc_consistency_t : public CSP::weighted_arc_consistency_t<kappa_varset_beam_t> {
     static CSP::constraint_digraph_t cg_;
 
+    int pruned_ac3_;
+
     //mutable const map<dai::Var, size_t> *state_x_;
 
     static void construct_constraint_graph(int nrows, int ncols) {
@@ -325,23 +327,30 @@ class kappa_arc_consistency_t : public CSP::weighted_arc_consistency_t<kappa_var
     }
 
   public:
-    kappa_arc_consistency_t() : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(cg_) {
+    kappa_arc_consistency_t()
+      : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(cg_),
+        pruned_ac3_(false) {
     }
-    kappa_arc_consistency_t(const kappa_arc_consistency_t &ac) : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(ac.cg_) {
+    kappa_arc_consistency_t(const kappa_arc_consistency_t &ac)
+      : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(ac.cg_),
+        pruned_ac3_(false) {
     }
-    kappa_arc_consistency_t(kappa_arc_consistency_t &&ac) : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(move(ac)) {
+    kappa_arc_consistency_t(kappa_arc_consistency_t &&ac)
+      : CSP::weighted_arc_consistency_t<kappa_varset_beam_t>(move(ac)),
+        pruned_ac3_(ac.pruned_ac3_) {
     }
     virtual ~kappa_arc_consistency_t() { }
 
     const kappa_arc_consistency_t& operator=(const kappa_arc_consistency_t &ac) {
         nvars_ = ac.nvars_;
         assert(domain_.size() == ac.domain_.size());
+        pruned_ac3_ = ac.pruned_ac3_;
         for( int loc = 0; loc < int(ac.domain_.size()); ++loc )
             set_domain(loc, new kappa_varset_beam_t(*ac.domain(loc)));
         return *this;
     }
     bool operator==(const kappa_arc_consistency_t &ac) const {
-        if( (nvars_ == ac.nvars_) && (domain_.size() == ac.domain_.size()) ) {
+        if( (nvars_ == ac.nvars_) && (domain_.size() == ac.domain_.size()) && (pruned_ac3_ == ac.pruned_ac3_) ) {
             for( int loc = 0; loc < int(domain_.size()); ++loc ) {
                 if( !(*domain_[loc] == *ac.domain_[loc]) )
                     return false;
@@ -356,12 +365,19 @@ class kappa_arc_consistency_t : public CSP::weighted_arc_consistency_t<kappa_var
         construct_constraint_graph(nrows, ncols);
     }
 
-    bool kappa_ac3() {
+    void set_pruned_ac3(bool pruned_ac3) {
+        pruned_ac3_ = pruned_ac3;
+    }
+
+    bool kappa_ac3(int var) {
         vector<int> revised_vars;
+        assert(worklist().empty());
+        add_to_worklist(var);
+        normalize_kappas(var);
         bool something_removed = CSP::weighted_arc_consistency_t<kappa_varset_beam_t>::weighted_ac3(revised_vars, true);
+        revised_vars.push_back(var);
         normalize_kappas(revised_vars);
         calculate_normalization_constant(revised_vars);
-        assert(normalized_kappas());
         return something_removed;
     }
 
@@ -741,6 +757,7 @@ class pbt_t : public tracking_t {
 
 class pbt_ac3_t : public tracking_t {
     kappa_arc_consistency_t kappa_csp_;
+    bool pruned_ac3_;
 
     // variables for game play
     set<int> plays_;
@@ -754,9 +771,15 @@ class pbt_ac3_t : public tracking_t {
 
   public:
     pbt_ac3_t(int nrows, int ncols, int nmines, bool noisy, const multimap<string, string> parameters)
-      : tracking_t(nrows, ncols, nmines, noisy) {
+      : tracking_t(nrows, ncols, nmines, noisy), pruned_ac3_(false) {
         for( int loc = 0; loc < nrows * ncols; ++loc ) {
             kappa_csp_.set_domain(loc, new kappa_varset_beam_t(loc, cache_t::variable(loc), cache_t::varset(loc)));
+        }
+
+        multimap<string, string>::const_iterator it = parameters.find("pruned");
+        if( it != parameters.end() ) {
+            pruned_ac3_ = it->second == "true";
+            kappa_csp_.set_pruned_ac3(pruned_ac3_);
         }
     }
     virtual ~pbt_ac3_t() {
@@ -764,7 +787,11 @@ class pbt_ac3_t : public tracking_t {
     }
 
     virtual string id() const {
-        return string("pbt-ac3()");
+        string id_str;
+        id_str = string("pbt-ac3(")
+          + string("pruned=") + (pruned_ac3_ ? "true" : "false")
+          + string(")");
+        return id_str;
     }
 
     // reset all factors and game-play variables
@@ -794,35 +821,43 @@ class pbt_ac3_t : public tracking_t {
             const dai::Var &var = cache_t::variable(cell);
             kappa_varset_beam_t &beam = *kappa_csp_.domain(cell);
             vector<pair<int, int> > kappa_increases;
+            vector<int> indices_to_erase;
             for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
                 int value = *it;
                 int index = it.index();
                 const map<dai::Var, size_t> &state = cache_t::state(cell, value);
                 assert(state.find(var) != state.end());
                 if( state.find(var)->second != 0 ) {
-                    kappa_increases.push_back(make_pair(index, numeric_limits<int>::max()));
+                    indices_to_erase.push_back(index);
                 } else {
                     int popcount = cache_t::popcount(cell, value);
                     if( !noisy_ ) {
                         if( popcount != obs ) {
-                            kappa_increases.push_back(make_pair(index, numeric_limits<int>::max()));
+                            indices_to_erase.push_back(index);
                         }
                     } else { // noisy update
                         if( popcount == obs ) {
                             int k_obs = kappa_t::kappa(0.95);
-                            kappa_increases.push_back(make_pair(index, k_obs));
+                            if( k_obs > 0 ) kappa_increases.push_back(make_pair(index, k_obs));
                         } else if( (popcount == obs - 1) || (popcount == obs + 1) ) {
                             int k_obs = kappa_t::kappa(0.05);
-                            kappa_increases.push_back(make_pair(index, k_obs));
+                            if( k_obs > 0 ) kappa_increases.push_back(make_pair(index, k_obs));
                         } else {
-                            kappa_increases.push_back(make_pair(index, numeric_limits<int>::max()));
+                            indices_to_erase.push_back(index);
                         }
                     }
                 }
             }
 
 #ifdef DEBUG
-            cout << "  increases:";
+            cout << "  erase[sz=" << indices_to_erase.size() << "]:";
+            for( int i = 0; i < int(indices_to_erase.size()); ++i ) {
+                int index = indices_to_erase[i];
+                int valuation = beam.value_by_index(index);
+                cout << " " << valuation << "@" << index;
+            }
+            cout << endl;
+            cout << "  increase[sz=" << kappa_increases.size() << "]:";
             for( int i = 0; i < int(kappa_increases.size()); ++i ) {
                 pair<int, int> &p = kappa_increases[i];
                 int valuation = beam[p.first].first;
@@ -832,16 +867,17 @@ class pbt_ac3_t : public tracking_t {
             cout << endl;
 #endif
 
+            // increase kappas of selected indices and erase others (in this order)
             assert(!beam.empty());
             for( int i = 0; i < int(kappa_increases.size()); ++i )
-                kappa_csp_.domain(cell)->increase_kappa(kappa_increases[i]);
-            assert(kappa_csp_.worklist().empty());
-            kappa_csp_.add_to_worklist(cell);
-            kappa_csp_.normalize_kappas(cell);
-            kappa_csp_.kappa_ac3();
-            kappa_csp_.normalize_kappas(cell);
-            kappa_csp_.calculate_normalization_constant(cell);
-            ++ninferences_;
+                beam.increase_kappa(kappa_increases[i]);
+            beam.erase_ordered_indices(indices_to_erase);
+
+            // restore consistency (if needed)
+            if( !kappa_increases.empty() || !indices_to_erase.empty() ) {
+                kappa_csp_.kappa_ac3(cell);
+                ++ninferences_;
+            }
 
 #ifdef DEBUG
             cout << "factor after update: loc=" << cell << ", obs=" << obs << endl;
@@ -972,10 +1008,10 @@ class pbt_ac3_t : public tracking_t {
         }
         assert(kappa_csp_.normalized_kappas());
     }
-    void print_marginals() const {
+    void print_marginals(ostream &os) const {
         for( int loc = 0; loc < nrows_ * ncols_; ++loc ) {
             const kappa_varset_beam_t &beam = *kappa_csp_.domain(loc);
-            cout << "marginal[" << loc << "][0]=" << beam.marginal(0) << endl;
+            os << "marginal[" << loc << "][0]=" << beam.marginal(0) << endl;
             assert(fabs(beam.marginal(0) + beam.marginal(1) - 1) <= 1e-5);
         }
     }
@@ -1266,7 +1302,9 @@ int main(int argc, const char **argv) {
         trackers[i]->initialize_stats();
 
     // run for the specified number of trials
+    cout << "# trials:" << flush;
     for( int trial = 0; trial < ntrials; ++trial ) {
+        cout << " " << trial << flush;
         for( int i = 0; i < int(trackers.size()); ++i ) {
             minefield_t minefield(nrows, ncols, nmines);
             tracking_t &tracker = *trackers[i];
@@ -1321,8 +1359,14 @@ int main(int argc, const char **argv) {
             tracker.increase_elapsed_time(Utils::read_time_in_seconds() - start_time);
 
             if( win ) tracker.increase_wins();
-            tracker.print_stats(cout);
         }
+    }
+    cout << endl;
+
+    // print stats for each tracker
+    for( int i = 0; i < int(trackers.size()); ++i ) {
+        tracking_t &tracker = *trackers[i];
+        tracker.print_stats(cout);
     }
 
     // stop timer
