@@ -117,6 +117,9 @@ class weighted_var_beam_t {
     int weight(int value) const { return beam_.weight(value); }
     bool consistent() const { return !beam_.empty(); }
 
+    int value_by_index(int index) const { return beam_.value_by_index(index); }
+    int weight_by_index(int index) const { return beam_.weight_by_index(index); }
+
     void reserve(int capacity) { beam_.reserve(capacity); }
     void clear() { beam_.clear(); }
 

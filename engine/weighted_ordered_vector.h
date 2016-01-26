@@ -145,6 +145,13 @@ class weighted_ordered_vector_t {
             return weight_[m];
     }
 
+    int value_by_index(int index) const {
+        return vector_[index];
+    }
+    int weight_by_index(int index) const {
+        return weight_[index];
+    }
+
     void insert(int e, int w = 1) {
         if( size_ == 0 ) {
             reserve(1);
@@ -215,8 +222,10 @@ class weighted_ordered_vector_t {
             for( int i = 0, j = k; j < size_; ) {
                 while( (i < indices_sz) && (j == indices[i]) ) { ++j; ++i; }
                 while( (j < size_) && ((i >= indices_sz) || (j < indices[i])) ) {
-                    vector_[k++] = vector_[j++];
-                    weight_[k++] = weight_[j++];
+                    vector_[k] = vector_[j];
+                    weight_[k] = weight_[j];
+                    ++k;
+                    ++j;
                 }
                 assert((j == size_) || (i < indices_sz));
                 assert((j == size_) || (j == indices[i]));

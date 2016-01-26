@@ -38,9 +38,6 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
     typedef constraint_digraph_t::edge_t edge_t;
 
   protected:
-    mutable int max_allowed_weight_;
-    mutable int cutoff_threshold_;
-
     using arc_consistency_t<T>::nvars_;
     using arc_consistency_t<T>::domain_;
     using arc_consistency_t<T>::digraph_;
@@ -48,6 +45,7 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
 
   public:
     using arc_consistency_t<T>::clear;
+    using arc_consistency_t<T>::clear_domains;
     using arc_consistency_t<T>::consistent;
     using arc_consistency_t<T>::add_to_worklist;
     using arc_consistency_t<T>::arc_reduce_preprocessing_0;
@@ -55,28 +53,17 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
     using arc_consistency_t<T>::arc_reduce_postprocessing;
 
   public:
-    weighted_arc_consistency_t(const constraint_digraph_t &digraph)
-      : arc_consistency_t<T>(digraph),
-        max_allowed_weight_(std::numeric_limits<int>::max()),
-        cutoff_threshold_(std::numeric_limits<int>::max()) {
+    weighted_arc_consistency_t(const constraint_digraph_t &digraph) : arc_consistency_t<T>(digraph) {
     }
-    explicit weighted_arc_consistency_t(const weighted_arc_consistency_t &ac)
-      : arc_consistency_t<T>(ac),
-        max_allowed_weight_(ac.max_allowed_weight_),
-        cutoff_threshold_(ac.cutoff_threshold_) {
+    explicit weighted_arc_consistency_t(const weighted_arc_consistency_t &ac) : arc_consistency_t<T>(ac) {
     }
     weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
-    ~weighted_arc_consistency_t() { clear(); }
+    ~weighted_arc_consistency_t() {
+        clear();
+    }
 
     virtual bool is_consistent(int var) const {
         return domain_[var]->min_weight() != std::numeric_limits<int>::max();
-    }
-
-    int max_allowed_weight() const {
-        return max_allowed_weight_;
-    }
-    int cutoff_threshold() const {
-        return cutoff_threshold_;
     }
 
     int max_weight(int var) const {
@@ -96,22 +83,23 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
     // compatible value for var_y. If such value is not found, the value of
     // var_x is removed from the domain of var_x. The method returns whether
     // some element of var_x is removed or not.
-    bool weighted_arc_reduce(int var_x, int var_y) {
+    bool weighted_arc_reduce(std::vector<bool> &revised_vars, int var_x, int var_y) {
         assert(var_x != var_y);
-        bool change = false;
+        std::vector<int> indices_to_erase;
+        indices_to_erase.reserve(domain_[var_x]->size());
+
         arc_reduce_preprocessing_0(var_x, var_y);
         for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
-            if( it.weight() >= cutoff_threshold_ ) continue;
             arc_reduce_preprocessing_1(var_x, *it);
             bool found_compatible_value = false;
-            int min_weight = max_allowed_weight_;
+            int min_weight = std::numeric_limits<int>::max();
             for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
-                if( (jt.weight() < cutoff_threshold_) && consistent(var_x, var_y, *it, *jt) ) {
+                if( consistent(var_x, var_y, *it, *jt) ) {
                     min_weight = std::min(min_weight, jt.weight());
                     found_compatible_value = true;
+                    if( min_weight == 0 ) break;
                 }
             }
-            assert(min_weight <= max_allowed_weight_);
 
             // set weight of val_x to max of current weight and min_weight
             if( found_compatible_value && (min_weight > it.weight()) ) {
@@ -124,23 +112,21 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
                           << std::endl;
 #endif
                 domain_[var_x]->set_weight(it.index(), min_weight);
-                assert(it.weight() == min_weight);
-                change = true;
+                revised_vars[var_x] = true;
             } else if( !found_compatible_value ) {
 #ifdef DEBUG
-                std::cout << "weighted-ac3: increasing weight of valuation " << *it
-                          << " in domain of var_x=" << var_x
-                          << " to " << cutoff_threshold_
-                          << " [old_weight=" << it.weight()
-                          << ", var_y=" << var_y << "]"
+                std::cout << "weighted-ac3: removing " << *it
+                          << " from domain of var_x=" << var_x
+                          << " [var_y=" << var_y << "]"
                           << std::endl;
 #endif
-                domain_[var_x]->set_weight(it.index(), cutoff_threshold_);
-                change = true;
+                indices_to_erase.push_back(it.index());
+                revised_vars[var_x] = true;
             }
         }
+        domain_[var_x]->erase_ordered_indices(indices_to_erase);
         arc_reduce_postprocessing(var_x, var_y);
-        return change;
+        return !indices_to_erase.empty();
     }
 
     // revise arc var_x -> var_y. This method is called after the reduction of
@@ -160,12 +146,8 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
 
     // Weighed AC3: Weighted Arc Consistency.
     // Returns true iff some weight changed
-    bool weighted_ac3(std::vector<int> &revised_vars, bool propagate = true) {
-
-        // allocate space for revised vars
-        std::vector<bool> inserted(nvars_, false);
-        revised_vars.reserve(nvars_);
-        revised_vars.clear();
+    bool weighted_ac3(std::vector<bool> &revised_vars, bool propagate = true) {
+        assert(int(revised_vars.size()) >= nvars_);
 
         // revise arcs until worklist becomes empty
         bool weight_change = false;
@@ -175,29 +157,40 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
             int var_x = edge.first;
             int var_y = edge.second;
 
-            // keep record of revised vars
-            if( !inserted[var_y] ) {
-                inserted[var_y] = true;
-                revised_vars.push_back(var_y);
-            }
-
 #ifdef DEBUG
-            std::cout << "weighed-ac3: revise arc " << var_x << " --> " << var_y << std::endl;
+            std::cout << "weighted-ac3: revise arc " << var_x << " --> " << var_y << std::endl;
 #endif
 
             // try to reduce arc var_x -> var_y
-            if( weighted_arc_reduce(var_x, var_y) ) {
+            if( weighted_arc_reduce(revised_vars, var_x, var_y) ) {
                 weight_change = true;
-
-                // some weight in var_x changed, schedule revision
-                // of all arcs pointing to var_x different from the
-                // arc var_y -> var_x
-                if( propagate ) {
-                    weighted_arc_revise(var_x, var_y);
+                if( domain_[var_x]->empty() ) {
+                    // domain of var_x became empty. This means that the
+                    // CSP is inconsistent. Clear all other domains.
+                    clear_domains();
+                    worklist_.clear();
+                    return true;
                 } else {
-                    assert(0); // delayed propagation (not yet implemented)
+                    // some weight in var_x changed, schedule revision
+                    // of all arcs pointing to var_x different from the
+                    // arc var_y -> var_x
+                    if( propagate ) {
+                        weighted_arc_revise(var_x, var_y);
+                    } else {
+                        assert(0); // delayed propagation (not yet implemented)
+                    }
                 }
             }
+        }
+        return weight_change;
+    }
+    bool weighted_ac3(std::vector<int> &revised_vars, bool propagate = true) {
+        std::vector<bool> revised_vars_tmp(nvars_, false);
+        bool weight_change = weighted_ac3(revised_vars_tmp, propagate);
+        revised_vars.clear();
+        for( int var = 0; var < nvars_; ++var ) {
+            if( revised_vars_tmp[var] )
+                revised_vars.push_back(var);
         }
         return weight_change;
     }

@@ -188,9 +188,8 @@ template<typename T> class arc_consistency_t {
     // some element of var_x is removed or not.
     bool arc_reduce(std::vector<bool> &revised_vars, int var_x, int var_y, bool inverse_check = false) {
         assert(var_x != var_y);
-        static std::vector<int> indices_to_erase;
+        std::vector<int> indices_to_erase;
         indices_to_erase.reserve(domain_[var_x]->size());
-        indices_to_erase.clear();
 
         if( !inverse_check ) {
             arc_reduce_preprocessing_0(var_x, var_y);

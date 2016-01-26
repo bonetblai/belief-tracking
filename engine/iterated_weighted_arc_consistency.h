@@ -82,7 +82,7 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
 
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int level) const { }
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y, int weight) const {
-        std::cout << "error: must implement 'arc_reduce_inverse_check_preprocessing()' for inverse-check in arc consistency" << std::endl;
+        std::cout << "error: must implement 'arc_reduce_inverse_check_preprocessing()' for inverse-check in iterated weighted arc consistency" << std::endl;
         assert(0);
     }
     virtual bool arc_reduce_inverse_check(int val_x, int weight) const { return false; }
