@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# -ne 8 ]; then
-  echo "usage: experiment.sh [ore-slam-peaked|ore-slam-non-peaked|aisle-slam] [mm|opt] <ncols> <nrows> <ntrials> <policy-parameter> <po> <kappa>"
+  echo "usage: experiment2.sh [ore-slam-peaked|ore-slam-non-peaked|aisle-slam] [mm|opt] <ncols> <nrows> <ntrials> <policy-parameter> <po> <kappa>"
   exit 1
 fi
 
