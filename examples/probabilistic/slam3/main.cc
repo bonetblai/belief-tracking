@@ -673,7 +673,10 @@ int main(int argc, const char **argv) {
 
     // input/output streams for saving/reading executions
     if( ifs_execution != 0 ) ifs_execution->close();
-    if( ofs_execution != 0 ) ofs_execution->close();
+    if( ofs_execution != 0 ) {
+        *ofs_execution << endl;
+        ofs_execution->close();
+    }
     delete ifs_execution;
     delete ofs_execution;
 
