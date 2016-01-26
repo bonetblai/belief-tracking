@@ -20,6 +20,7 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+#include <fstream>
 #include <sstream>
 #include <string.h>
 #include <set>
@@ -85,6 +86,18 @@ template <typename PTYPE, typename BASE> vector<vector<int> > SIR_t<PTYPE, BASE>
 #endif
 
 
+bool read_labels_and_execution(ifstream &ifs, cellmap_t &cellmap, cellmap_t::execution_t &execution) {
+    bool rv = cellmap.read_labels(ifs) && execution.read(ifs);
+    cout << "# read_labels_and_execution: execution-size=" << execution.size() << endl;
+    return rv;
+}
+
+void write_labels_and_execution(ofstream &ofs, const cellmap_t &cellmap, const cellmap_t::execution_t &execution) {
+    cellmap.dump_labels(ofs);
+    ofs << " ";
+    execution.dump(ofs);
+}
+
 void set_labels_and_execution(cellmap_t &cellmap, int ptype, int num_covering_loops, cellmap_t::execution_t &execution) {
     // set labels
     vector<int> labels;
@@ -142,8 +155,8 @@ void set_labels_and_execution(cellmap_t &cellmap, int ptype, int num_covering_lo
 #endif
     if( ptype == 1 )
         cellmap.compute_covering_execution(0, execution, num_covering_loops);
-    cout << "# fixed-execution: size=" << execution.size() << endl;
-    //cout << "# fixed-execution[sz=" << execution.size() << "]=" << execution << endl;
+    cout << "# set_labels_and_execution: execution-size=" << execution.size() << endl;
+    //cout << "# set_labels_and_execution: execution[sz=" << execution.size() << "]=" << execution << endl;
 }
 
 void finalize() {
@@ -215,6 +228,13 @@ int main(int argc, const char **argv) {
     float discount = .95;
 
     bool R_plot = false;
+
+    // input/output streams for saving/reading executions
+    string filename_execution;
+    bool read_execution = false;
+    bool save_execution_and_exit = false;
+    ifstream *ifs_execution = 0;
+    ofstream *ofs_execution = 0;
 
 #if 0
     // inference algorithm
@@ -325,6 +345,16 @@ int main(int argc, const char **argv) {
             }
             argc -= 2;
             argv += 2;
+        } else if( !strcmp(argv[0], "--read-execution") ) {
+            read_execution = true;
+            filename_execution = string(argv[1]);
+            --argc;
+            ++argv;
+        } else if( !strcmp(argv[0], "--save-execution-and-exit") ) {
+            save_execution_and_exit = true;
+            filename_execution = string(argv[1]);
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "-s") || !strcmp(argv[0], "--seed") ) {
             seed = atoi(argv[1]);
             --argc;
@@ -459,7 +489,7 @@ int main(int argc, const char **argv) {
     }
 
     // check that there is something to do
-    if( trackers.empty() ) {
+    if( !save_execution_and_exit && trackers.empty() ) {
         cout << "warning: no tracker specified. Terminating..." << endl;
         finalize();
         return 0;
@@ -488,6 +518,15 @@ int main(int argc, const char **argv) {
     if( R_plot )
         generate_R_plot_commons();
 
+    // input/output streams for saving/reading executions
+    if( read_execution ) {
+        ifs_execution = new ifstream(filename_execution);
+        *ifs_execution >> ntrials;
+    } else if( save_execution_and_exit ) {
+        ofs_execution = new ofstream(filename_execution);
+        *ofs_execution << ntrials << " ";
+    }
+
     // run for the specified number of trials and collect statistics
     cout << fixed;
     int total_execution_length = 0;
@@ -497,8 +536,19 @@ int main(int argc, const char **argv) {
     for( int trial = 0; trial < ntrials; ++trial ) {
         cout << "# trial = " << trial << " / " << ntrials << endl;
 
-        // set labels and fixed execution (if appropriate)
-        set_labels_and_execution(cellmap, ptype, num_covering_loops, fixed_execution);
+        // reading/saving executions
+        if( read_execution ) {
+            if( !read_labels_and_execution(*ifs_execution, cellmap, fixed_execution) )
+                break;
+        } else {
+            // set labels and fixed execution (if appropriate)
+            set_labels_and_execution(cellmap, ptype, num_covering_loops, fixed_execution);
+            if( save_execution_and_exit ) {
+                write_labels_and_execution(*ofs_execution, cellmap, fixed_execution);
+                total_execution_length += fixed_execution.size();
+                continue;
+            }
+        }
 
         // run execution
         vector<repository_t> repos;
@@ -606,18 +656,26 @@ int main(int argc, const char **argv) {
     }
 
     // print average statistics
-    for( size_t i = 0; i < trackers.size(); ++i ) {
-        const tracking_t<cellmap_t> &tracker = *trackers[i];
-        cout << "# stats(" << setw(size_longest_name) << tracker.name_ << "):"
-             << " trials=" << int(stats_unknown[i].n())
-             << ", total-elapsed-time=" << setprecision(5) << tracker.total_elapsed_time()
-             << ", avg-unknowns-per-trial=" << setprecision(3) << stats_unknown[i].mean() << " (" << stats_unknown[i].confidence(.95) << ")"
-             << ", avg-errors-per-trial=" << setprecision(3) << stats_error[i].mean() << " (" << stats_error[i].confidence(.95) << ")"
-             << ", avg-elapsed-time-per-trial=" << setprecision(5) << tracker.total_elapsed_time() / ntrials
-             << ", avg-elapsed-time-per-step=" << setprecision(5) << tracker.total_elapsed_time() / tracker.total_num_steps()
-             << endl;
+    if( !save_execution_and_exit ) {
+        for( size_t i = 0; i < trackers.size(); ++i ) {
+            const tracking_t<cellmap_t> &tracker = *trackers[i];
+            cout << "# stats(" << setw(size_longest_name) << tracker.name_ << "):"
+                 << " trials=" << int(stats_unknown[i].n())
+                 << ", total-elapsed-time=" << setprecision(5) << tracker.total_elapsed_time()
+                 << ", avg-unknowns-per-trial=" << setprecision(3) << stats_unknown[i].mean() << " (" << stats_unknown[i].confidence(.95) << ")"
+                 << ", avg-errors-per-trial=" << setprecision(3) << stats_error[i].mean() << " (" << stats_error[i].confidence(.95) << ")"
+                 << ", avg-elapsed-time-per-trial=" << setprecision(5) << tracker.total_elapsed_time() / ntrials
+                 << ", avg-elapsed-time-per-step=" << setprecision(5) << tracker.total_elapsed_time() / tracker.total_num_steps()
+                 << endl;
+        }
     }
     cout << "# avg execution length = " << float(total_execution_length) / float(ntrials) << endl;
+
+    // input/output streams for saving/reading executions
+    if( ifs_execution != 0 ) ifs_execution->close();
+    if( ofs_execution != 0 ) ofs_execution->close();
+    delete ifs_execution;
+    delete ofs_execution;
 
     // stop timer
     float elapsed_time = Utils::read_time_in_seconds() - start_time;

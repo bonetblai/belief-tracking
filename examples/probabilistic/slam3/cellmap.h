@@ -174,6 +174,22 @@ struct cellmap_t {
     void set_labels(const std::vector<int> &labels) {
         set_labels(&labels[0], labels.size());
     }
+    void dump_labels(std::ostream &os) const {
+        os << nloc_;
+        for( int loc = 0; loc < nloc_; ++loc )
+            os << " " << cells_[loc].label_;
+    }
+    bool read_labels(std::istream &is) {
+        int nloc;
+        is >> nloc;
+        if( nloc == nloc_ ) {
+            for( int loc = 0; loc < nloc_; ++loc )
+                is >> cells_[loc].label_;
+            return true;
+        } else {
+            return false;
+        }
+    }
 
     void sample_labels(std::vector<int> &labels) const {
         labels = std::vector<int>(cells_.size(), 0);
@@ -803,6 +819,13 @@ struct cellmap_t {
         void print(std::ostream &os) const {
             os << "[" << coord_t(loc_) << "," << obs_ << "," << last_action_ << "]";
         }
+        void dump(std::ostream &os) const {
+            os << loc_ << " " << obs_ << " " << last_action_;
+        }
+        bool read(std::istream &is) {
+            is >> loc_ >> obs_ >> last_action_;
+            return true;
+        }
     };
     struct execution_t : public std::vector<execution_step_t> {
         execution_t() { }
@@ -815,6 +838,25 @@ struct cellmap_t {
                 if( i < int(size()) - 1 ) os << ",";
             }
             os << ">";
+        }
+        void dump(std::ostream &os) const {
+            os << int(size());
+            for( int i = 0; i < int(size()); ++i ) {
+                os << " ";
+                (*this)[i].dump(os);
+            }
+        }
+        bool read(std::istream &is) {
+            int nsteps = 0;
+            is >> nsteps;
+            clear();
+            reserve(nsteps);
+            for( int i = 0; i < nsteps; ++i ) {
+                execution_step_t step;
+                if( !step.read(is) ) return false;
+                push_back(step);
+            }
+            return true;
         }
     };
 
