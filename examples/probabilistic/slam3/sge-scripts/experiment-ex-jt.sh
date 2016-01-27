@@ -20,7 +20,7 @@ $root/slam --${slam_type} --seed $RANDOM -c $nc -r $nr --pa .9 --po $po --kappa 
     --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=jt(updates=HUGIN))" \
     --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=bp(updates=SEQRND,logdomain=false,tol=1e-5,maxtime=.5))" \
     --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=iterated-ac3(level=0,inverse-check=true))" \
-    --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=iterated-ac3(level=1,inverse-check=true))"
-#    --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=iterated-ac3(level=2,inverse-check=true))"
-#    --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=hak(doubleloop=true,clusters=MIN,init=UNIFORM,tol=1e-3,maxiter=100,maxtime=1))" \
+    --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=iterated-ac3(level=1,inverse-check=true))" \
+    --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=iterated-ac3(level=2,inverse-check=true))" \
+    --tracker="${type}-rbpf(nparticles=$np,force-resampling=true,sus=false,inference=iterated-ac3(level=3,inverse-check=true))"
 
