@@ -29,5 +29,5 @@ output_path=$root/sge-results/$rdir
 mkdir -p $output_path
 
 export LD_LIBRARY_PATH=~/lib
-./experiment-ex.sh $slam_type $sir_type $dim $dim $np .9 $kappa $executions > $output_path/output.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
+./experiment-ex-bp.sh $slam_type $sir_type $dim $dim $np .9 $kappa $executions > $output_path/output.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
 
