@@ -10,6 +10,8 @@ for slam_type in ore-slam-peaked ore-slam-non-peaked; do
           ./generate_stats_csv.sh SEQRND $dir/raw_data.type=${slam_type}.sir=${sir}.dim=${dim}.np=${np}.kappa=.1.txt $slam_type "bp,${sir},${dim},${np}"
           ./generate_stats_csv.sh "level=0" $dir/raw_data.type=${slam_type}.sir=${sir}.dim=${dim}.np=${np}.kappa=.1.txt $slam_type "ac(level=0),${sir},${dim},${np}"
           ./generate_stats_csv.sh "level=1" $dir/raw_data.type=${slam_type}.sir=${sir}.dim=${dim}.np=${np}.kappa=.1.txt $slam_type "ac(level=1),${sir},${dim},${np}"
+          ./generate_stats_csv.sh "level=2" $dir/raw_data.type=${slam_type}.sir=${sir}.dim=${dim}.np=${np}.kappa=.1.txt $slam_type "ac(level=2),${sir},${dim},${np}"
+          ./generate_stats_csv.sh "level=3" $dir/raw_data.type=${slam_type}.sir=${sir}.dim=${dim}.np=${np}.kappa=.1.txt $slam_type "ac(level=3),${sir},${dim},${np}"
         done
       done
     done
