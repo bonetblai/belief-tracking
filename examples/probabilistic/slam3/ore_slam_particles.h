@@ -210,6 +210,9 @@ class kappa_varset_beam_t : public weighted_var_beam_t {
     int loc() const { return loc_; }
     const dai::VarSet& varset() const { return varset_; }
 
+    void set_kappa(int index, int kappa) {
+        weighted_var_beam_t::set_weight(index, kappa);
+    }
     void increase_kappa(const std::pair<int, int> &p) {
         weighted_var_beam_t::increase_weight(p);
     }
@@ -465,22 +468,25 @@ struct rbpf_particle_t : public base_particle_t {
       : use_ac3_(use_ac3), iterated_level_(iterated_level), inverse_check_(inverse_check)  {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
+
         if( use_ac3_ ) {
             kappa_csp_.set_iterated_level(iterated_level_);
             kappa_csp_.set_inverse_check(inverse_check_);
         } else {
-            factors_ = std::vector<dai::Factor>(base_->nloc_);
-            marginals_ = std::vector<dai::Factor>(base_->nloc_);
             kappa_csp_.delete_domains_and_clear();
         }
+
+        factors_ = std::vector<dai::Factor>(base_->nloc_);
+        marginals_ = std::vector<dai::Factor>(base_->nloc_);
+
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
             if( use_ac3_ ) {
                 kappa_csp_.set_domain(loc, new kappa_varset_beam_t(loc, cache_t::variable(loc), cache_t::varset(loc)));
-            } else {
-                factors_[loc] = dai::Factor(cache_t::varset(loc));
-                marginals_[loc] = dai::Factor(cache_t::varset(loc));
             }
+            factors_[loc] = dai::Factor(cache_t::varset(loc));
+            marginals_[loc] = dai::Factor(cache_t::varset(loc));
         }
+
         if( !use_ac3_ && (i != 0) ) inference_ = *i;
     }
     rbpf_particle_t(const std::multimap<std::string, std::string> &parameters)
@@ -575,23 +581,27 @@ struct rbpf_particle_t : public base_particle_t {
 
     void initial_sampling_in_place(mpi_slam_t *mpi, int wid) {
         assert(base_->nlabels_ == 2);
+
+        if( !use_ac3_ ) {
+            indices_for_updated_factors_.clear();
+            indices_for_updated_factors_.reserve(base_->nloc_);
+        }
+
+        // set initial history and reset factors for locations
         loc_history_.push_back(base_->initial_loc_);
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            dai::Factor &factor = factors_[loc];
+            float p = 1.0 / (1 << factor.vars().size());
+            for( int i = 0; i < (1 << factor.vars().size()); ++i )
+                factor.set(i, p);
+            if( !use_ac3_ ) indices_for_updated_factors_.push_back(loc);
+        }
+
         if( use_ac3_ ) {
             reset_csp();
         } else {
-            // set initial history and reset factors for locations
-            indices_for_updated_factors_.clear();
-            indices_for_updated_factors_.reserve(base_->nloc_);
-            for( int loc = 0; loc < base_->nloc_; ++loc ) {
-                dai::Factor &factor = factors_[loc];
-                float p = 1.0 / (1 << factor.vars().size());
-                for( int i = 0; i < (1 << factor.vars().size()); ++i )
-                    factor.set(i, p);
-                indices_for_updated_factors_.push_back(loc);
-            }
             calculate_marginals(mpi, wid, false);
         }
-        assert(!use_ac3_ || kappa_csp_.is_consistent());
     }
 
     static int var_offset(int loc, int var_id) { return base_->var_offset(loc, var_id); }
@@ -605,51 +615,43 @@ struct rbpf_particle_t : public base_particle_t {
     bool update_factors_ac3(int last_action, int obs) {
         assert(use_ac3_);
         int current_loc = loc_history_.back();
+        assert(current_loc < int(kappa_csp_.nvars()));
+        assert(current_loc < int(factors_.size()));
+
+        // first update factors in standard manner
+        update_factors_gm(last_action, obs);
+
 #ifdef DEBUG
         std::cout << "factor before update: loc=" << current_loc << ", obs=" << obs << std::endl;
         std::cout << "  kappa-csp: ";
         kappa_csp_.print_factor(std::cout, current_loc);
         std::cout << std::endl;
 #endif
-        assert(current_loc < int(kappa_csp_.nvars()));
-        std::vector<std::pair<int, int> > kappa_increases;
+
+        // second, translate new factor into kappa table
+        bool change_in_kappa_values = false;
+        const dai::Factor &factor = factors_[current_loc];
         kappa_varset_beam_t &beam = *kappa_csp_.domain(current_loc);
         for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
             int value = *it;
-            int index = it.index();
-            int slabels = get_slabels(beam, value);
-            float p = base_->probability_obs(obs, current_loc, slabels, last_action);
-            int k_obs = kappa_t::kappa(p);
-            kappa_increases.push_back(std::make_pair(index, k_obs));
+            int kappa = it.weight();
+            float p = factor[value];
+            int new_kappa = kappa_t::kappa(p);
+            if( new_kappa != kappa ) {
+                change_in_kappa_values = true;
+                beam.set_kappa(it.index(), new_kappa);
+            }
         }
-#ifdef DEBUG
-        std::cout << "  increases:";
-        for( int i = 0; i < int(kappa_increases.size()); ++i ) {
-            std::pair<int, int> &p = kappa_increases[i];
-            int valuation = beam[p.first].first;
-            int kappa = beam[p.first].second;
-#if 0
-            std::cout << " {" << p.first << ":" << valuation << ":";
-            std::map<dai::Var, size_t> state = dai::calcState(beam.varset(), valuation);
-            for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
-                std::cout << it->first << "=" << it->second << ",";
-            std::cout << "kappa=" << kappa << ",amount=" << p.second << "},";
-#else
-            std::cout << " " << p.second;
-#endif
-        }
-        std::cout << std::endl;
-#endif
 
-        assert(!beam.empty());
-        for( int i = 0; i < int(kappa_increases.size()); ++i )
-            kappa_csp_.domain(current_loc)->increase_kappa(kappa_increases[i]);
-        assert(kappa_csp_.worklist().empty());
-        kappa_csp_.add_to_worklist(current_loc);
-        kappa_csp_.normalize_kappas(current_loc);
-        kappa_csp_.kappa_ac3();
-        kappa_csp_.normalize_kappas(current_loc);
-        kappa_csp_.calculate_normalization_constant(current_loc);
+        // propagate change in kappa value to other tables (factors)
+        if( change_in_kappa_values ) {
+            assert(kappa_csp_.worklist().empty());
+            kappa_csp_.add_to_worklist(current_loc);
+            kappa_csp_.normalize_kappas(current_loc);
+            kappa_csp_.kappa_ac3();
+            kappa_csp_.normalize_kappas(current_loc);
+            kappa_csp_.calculate_normalization_constant(current_loc);
+        }
 
 #ifdef DEBUG
         std::cout << "factor after update: loc=" << current_loc << ", obs=" << obs << std::endl;
@@ -657,31 +659,35 @@ struct rbpf_particle_t : public base_particle_t {
         kappa_csp_.print_factor(std::cout, current_loc);
         std::cout << std::endl;
 #endif
+
         return kappa_csp_.is_consistent(0);
     }
     bool update_factors_gm(int last_action, int obs) {
-        assert(!use_ac3_);
         int current_loc = loc_history_.back();
+        assert(current_loc < int(factors_.size()));
+
 #ifdef DEBUG
         std::cout << "factor before update: loc=" << current_loc << ", obs=" << obs << std::endl;
         std::cout << "  factor: ";
         inference_.print_factor(std::cout, current_loc, factors_, "factors");
         std::cout << std::endl;
 #endif
-        assert(current_loc < int(factors_.size()));
+
         dai::Factor &factor = factors_[current_loc];
         for( int value = 0; value < int(factor.nrStates()); ++value ) {
             int slabels = get_slabels(current_loc, factor.vars(), value);
             factor.set(value, factor[value] * base_->probability_obs(obs, current_loc, slabels, last_action));
         }
         factor.normalize();
-        indices_for_updated_factors_.push_back(current_loc);
+        if( !use_ac3_ ) indices_for_updated_factors_.push_back(current_loc);
+
 #ifdef DEBUG
         std::cout << "factor after update: loc=" << current_loc << ", obs=" << obs << std::endl;
         std::cout << "  factor: ";
         inference_.print_factor(std::cout, current_loc, factors_, "factors");
         std::cout << std::endl;
 #endif
+
         return true;
     }
     bool update_factors(int last_action, int obs) {
