@@ -413,17 +413,18 @@ int main(int argc, const char **argv) {
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
 
-    //Inference::edbp_t::initialize();
-    //Inference::inference_t::initialize_edbp(tmp_path);
-    kappa_t::initialize(epsilon_for_kappa, 10);
-
-    if( (slam_type == cellmap_t::ORE_SLAM_PEAKED) || (slam_type == cellmap_t::ORE_SLAM_NON_PEAKED) ) {
-        OreSLAM::cache_t::initialize(nrows, ncols);
-        OreSLAM::kappa_arc_consistency_t::initialize(nrows, ncols);
-    }
-    if( slam_type == cellmap_t::AISLE_SLAM ) {
-        AisleSLAM::cache_t::initialize(nrows, ncols);
-        AisleSLAM::kappa_arc_consistency_t::initialize(nrows, ncols);
+    if( !save_execution_and_exit ) {
+        //Inference::edbp_t::initialize();
+        //Inference::inference_t::initialize_edbp(tmp_path);
+        kappa_t::initialize(epsilon_for_kappa, 10);
+        if( (slam_type == cellmap_t::ORE_SLAM_PEAKED) || (slam_type == cellmap_t::ORE_SLAM_NON_PEAKED) ) {
+            OreSLAM::cache_t::initialize(nrows, ncols);
+            OreSLAM::kappa_arc_consistency_t::initialize(nrows, ncols);
+        }
+        if( slam_type == cellmap_t::AISLE_SLAM ) {
+            AisleSLAM::cache_t::initialize(nrows, ncols);
+            AisleSLAM::kappa_arc_consistency_t::initialize(nrows, ncols);
+        }
     }
 
     // tracking algorithms
