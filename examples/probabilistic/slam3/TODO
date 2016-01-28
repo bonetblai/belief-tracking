@@ -5,3 +5,4 @@
 [done] - remove slam3_particles.h
 [done] - save/read executions from file so we perform evaluations fairly
 - generated executions for testing
+- fix update_factors_ac3(int last_action, int obs) in aisle-slam

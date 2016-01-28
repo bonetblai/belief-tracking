@@ -410,6 +410,10 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
         for( int i = 0; i < int(revised_vars.size()); ++i )
             calculate_normalization_constant(revised_vars[i]);
     }
+    void calculate_normalization_constant() {
+        for( int loc = 0; loc < nvars_; ++loc )
+            calculate_normalization_constant(loc);
+    }
 
     void normalize_kappas(int loc) {
         domain_[loc]->normalize();
@@ -418,6 +422,11 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
         for( int i = 0; i < int(revised_vars.size()); ++i )
             normalize_kappas(revised_vars[i]);
     }
+    void normalize_kappas() {
+        for( int loc = 0; loc < nvars_; ++loc )
+            normalize_kappas(loc);
+    }
+
     bool normalized_kappas(int loc) {
         return domain_[loc]->normalized();
     }
@@ -628,29 +637,28 @@ struct rbpf_particle_t : public base_particle_t {
         std::cout << std::endl;
 #endif
 
-        // second, translate new factor into kappa table
-        bool change_in_kappa_values = false;
-        const dai::Factor &factor = factors_[current_loc];
-        kappa_varset_beam_t &beam = *kappa_csp_.domain(current_loc);
-        for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
-            int value = *it;
-            int kappa = it.weight();
-            float p = factor[value];
-            int new_kappa = kappa_t::kappa(p);
-            if( new_kappa != kappa ) {
-                change_in_kappa_values = true;
-                beam.set_kappa(it.index(), new_kappa);
+        // second, translate factors into kappa tables, keeping track of changes
+        for( int loc = 0; loc < int(factors_.size()); ++loc ) {
+            const dai::Factor &factor = factors_[loc];
+            kappa_varset_beam_t &beam = *kappa_csp_.domain(loc);
+            for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
+                int value = *it;
+                int kappa = it.weight();
+                float p = factor[value];
+                int new_kappa = kappa_t::kappa(p);
+                if( new_kappa != kappa ) {
+                    kappa_csp_.add_to_worklist(loc);
+                    beam.set_kappa(it.index(), new_kappa);
+                }
             }
+            kappa_csp_.normalize_kappas(loc);
         }
 
         // propagate change in kappa value to other tables (factors)
-        if( change_in_kappa_values ) {
-            assert(kappa_csp_.worklist().empty());
-            kappa_csp_.add_to_worklist(current_loc);
-            kappa_csp_.normalize_kappas(current_loc);
+        if( !kappa_csp_.worklist().empty() ) {
             kappa_csp_.kappa_ac3();
-            kappa_csp_.normalize_kappas(current_loc);
-            kappa_csp_.calculate_normalization_constant(current_loc);
+            kappa_csp_.normalize_kappas();
+            kappa_csp_.calculate_normalization_constant();
         }
 
 #ifdef DEBUG
