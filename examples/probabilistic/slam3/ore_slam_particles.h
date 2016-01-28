@@ -397,9 +397,9 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
     bool kappa_ac3() {
         std::vector<int> revised_vars;
         bool something_removed = CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>::iterated_weighted_ac3(iterated_level_, revised_vars, true, inverse_check_);
-        normalize_kappas(revised_vars);
-        calculate_normalization_constant(revised_vars);
-        assert(normalized_kappas());
+        //normalize_kappas(revised_vars);
+        //calculate_normalization_constant(revised_vars);
+        //assert(normalized_kappas());
         return something_removed;
     }
 
@@ -641,17 +641,21 @@ struct rbpf_particle_t : public base_particle_t {
         for( int loc = 0; loc < int(factors_.size()); ++loc ) {
             const dai::Factor &factor = factors_[loc];
             kappa_varset_beam_t &beam = *kappa_csp_.domain(loc);
+            bool change = false;
             for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
                 int value = *it;
                 int kappa = it.weight();
                 float p = factor[value];
                 int new_kappa = kappa_t::kappa(p);
                 if( new_kappa != kappa ) {
-                    kappa_csp_.add_to_worklist(loc);
+                    change = true;
                     beam.set_kappa(it.index(), new_kappa);
                 }
             }
-            kappa_csp_.normalize_kappas(loc);
+            if( change ) {
+                kappa_csp_.normalize_kappas(loc);
+                kappa_csp_.add_to_worklist(loc);
+            }
         }
 
         // propagate change in kappa value to other tables (factors)
