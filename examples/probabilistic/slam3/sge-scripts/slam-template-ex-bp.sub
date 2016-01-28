@@ -16,6 +16,7 @@ root=$HOME/software/github/belief-tracking/examples/probabilistic/slam3
 
 problems=$1
 rdir=$2
+maxtime=$3
 
 record=`awk "NR==$SGE_TASK_ID" $problems`
 slam_type=`echo $record | awk '{print $1;}'`
@@ -29,5 +30,5 @@ output_path=$root/sge-results/$rdir
 mkdir -p $output_path
 
 export LD_LIBRARY_PATH=~/lib
-./experiment-ex-bp.sh $slam_type $sir_type $dim $dim $np .9 $kappa $executions > $output_path/output.bp.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
+./experiment-ex-bp.sh $slam_type $sir_type $dim $dim $np .9 $kappa $maxtime $root/sge-scripts/$executions > $output_path/output.bp.maxtime=${maxtime}.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
 
