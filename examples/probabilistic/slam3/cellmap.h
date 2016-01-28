@@ -469,7 +469,8 @@ struct cellmap_t {
                     int new_loc = nrow * ncols_ + ncol;
                     int label = cells_[new_loc].label_;
                     assert((label == 0) || (label == 1));
-                    float p = base_obs_noise_ * (dr != 0 ? q : 1) * (dc != 0 ? q : 1);
+                    //float p = base_obs_noise_ * (dr != 0 ? q : 1) * (dc != 0 ? q : 1); // this model is too complex
+                    float p = base_obs_noise_;
                     obs += Utils::uniform() < p ? label : 1 - label;
                 }
             }
@@ -633,7 +634,8 @@ struct cellmap_t {
                                     p *= bit(valuation, rloc) == 0 ? 0.99 : 0.01;
                                 } else {
                                     // loc=4 refers to the center of the 3x3 window
-                                    float q = base_obs_noise_ * (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_);
+                                    //float q = base_obs_noise_ * (same_column(rloc, 4, 3) ? 1 : po_) * (same_row(rloc, 4, 3) ? 1 : po_); // this model is too complex
+                                    float q = base_obs_noise_;
                                     p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
                                 }
                             }
