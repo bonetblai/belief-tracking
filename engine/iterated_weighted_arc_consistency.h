@@ -117,7 +117,8 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
                               << " [var_y=" << var_y << "]"
                               << std::endl;
 #endif
-                    domain_[var_x]->set_weight(it.index(), 1 + it.weight());
+                    //domain_[var_x]->set_weight(it.index(), 1 + it.weight());
+                    domain_[var_x]->set_weight(it.index(), 1 + level);
                     revised_vars[var_x] = true;
                     change = true;
                 }
@@ -137,7 +138,8 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
                               << " [var_y=" << var_y << "]"
                               << std::endl;
 #endif
-                    domain_[var_x]->set_weight(it.index(), 1 + it.weight());
+                    //domain_[var_x]->set_weight(it.index(), 1 + it.weight());
+                    domain_[var_x]->set_weight(it.index(), 1 + level);
                     revised_vars[var_x] = true;
                     change = true;
                 }
