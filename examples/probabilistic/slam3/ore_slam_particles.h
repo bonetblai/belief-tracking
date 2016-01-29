@@ -457,7 +457,7 @@ struct rbpf_particle_t : public base_particle_t {
 
     // arc consistency
     bool use_ac3_;
-    bool strong_ac_;
+    bool lazy_ac_;
     int iterated_level_;
     bool inverse_check_;
     kappa_arc_consistency_t kappa_csp_;
@@ -470,8 +470,8 @@ struct rbpf_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     Inference::inference_t inference_;
 
-    rbpf_particle_t(bool use_ac3, bool strong_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
-      : use_ac3_(use_ac3), strong_ac_(strong_ac), iterated_level_(iterated_level), inverse_check_(inverse_check)  {
+    rbpf_particle_t(bool use_ac3, bool lazy_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : use_ac3_(use_ac3), lazy_ac_(lazy_ac), iterated_level_(iterated_level), inverse_check_(inverse_check)  {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
 
@@ -482,7 +482,7 @@ struct rbpf_particle_t : public base_particle_t {
             kappa_csp_.delete_domains_and_clear();
         }
 
-        if( !use_ac3_ || strong_ac_ ) {
+        if( !use_ac3_ || !lazy_ac_ ) {
             factors_ = std::vector<dai::Factor>(base_->nloc_);
             marginals_ = std::vector<dai::Factor>(base_->nloc_);
         }
@@ -491,7 +491,7 @@ struct rbpf_particle_t : public base_particle_t {
             if( use_ac3_ ) {
                 kappa_csp_.set_domain(loc, new kappa_varset_beam_t(loc, cache_t::variable(loc), cache_t::varset(loc)));
             }
-            if( !use_ac3_ || strong_ac_ ) {
+            if( !use_ac3_ || !lazy_ac_ ) {
                 factors_[loc] = dai::Factor(cache_t::varset(loc));
                 marginals_[loc] = dai::Factor(cache_t::varset(loc));
             }
@@ -511,8 +511,8 @@ struct rbpf_particle_t : public base_particle_t {
                     iterated_level_ = int(options.getStringAs<size_t>("level"));
                 if( options.hasKey("inverse-check") )
                     inverse_check_ = options.getStringAs<bool>("inverse-check");
-                if( options.hasKey("strong") )
-                    strong_ac_ = options.getStringAs<bool>("strong");
+                if( options.hasKey("lazy") )
+                    lazy_ac_ = options.getStringAs<bool>("lazy");
                 kappa_csp_.set_iterated_level(iterated_level_);
                 kappa_csp_.set_inverse_check(inverse_check_);
             } else {
@@ -531,7 +531,7 @@ struct rbpf_particle_t : public base_particle_t {
     rbpf_particle_t(rbpf_particle_t &&p)
       : loc_history_(std::move(p.loc_history_)),
         use_ac3_(p.use_ac3_),
-        strong_ac_(p.strong_ac_),
+        lazy_ac_(p.lazy_ac_),
         iterated_level_(p.iterated_level_),
         inverse_check_(p.inverse_check_),
         kappa_csp_(std::move(p.kappa_csp_)),
@@ -548,7 +548,7 @@ struct rbpf_particle_t : public base_particle_t {
     const rbpf_particle_t& operator=(const rbpf_particle_t &p) {
         loc_history_ = p.loc_history_;
         use_ac3_ = p.use_ac3_;
-        strong_ac_ = p.strong_ac_;
+        lazy_ac_ = p.lazy_ac_;
         iterated_level_ = p.iterated_level_;
         inverse_check_ = p.inverse_check_;
         kappa_csp_ = p.kappa_csp_;
@@ -562,7 +562,7 @@ struct rbpf_particle_t : public base_particle_t {
     bool operator==(const rbpf_particle_t &p) const {
         return (loc_history_ == p.loc_history_) &&
                (use_ac3_ == p.use_ac3_) &&
-               (strong_ac_ == p.strong_ac_) &&
+               (lazy_ac_ == p.lazy_ac_) &&
                (iterated_level_ == p.iterated_level_) &&
                (inverse_check_ == p.inverse_check_) &&
                (kappa_csp_ == p.kappa_csp_) &&
@@ -604,7 +604,7 @@ struct rbpf_particle_t : public base_particle_t {
 
         // set initial history and reset factors for locations
         loc_history_.push_back(base_->initial_loc_);
-        if( !use_ac3_ || strong_ac_ ) {
+        if( !use_ac3_ || !lazy_ac_ ) {
             for( int loc = 0; loc < base_->nloc_; ++loc ) {
                 dai::Factor &factor = factors_[loc];
                 float p = 1.0 / (1 << factor.vars().size());
@@ -636,7 +636,7 @@ struct rbpf_particle_t : public base_particle_t {
         assert(current_loc < int(factors_.size()));
 
         // first update factors in standard manner
-        if( strong_ac_ ) {
+        if( !lazy_ac_ ) {
             update_factors_gm(last_action, obs);
         }
 
@@ -647,10 +647,10 @@ struct rbpf_particle_t : public base_particle_t {
         std::cout << std::endl;
 #endif
 
-        // second, increase kappas (if !strong) or translate factors into kappa tables,
+        // second, increase kappas (if lazy) or translate factors into kappa tables,
         // keeping track of changes
         assert(kappa_csp_.worklist().empty());
-        if( !strong_ac_ ) {
+        if( !lazy_ac_ ) {
             std::vector<std::pair<int, int> > kappa_increases;
             kappa_varset_beam_t &beam = *kappa_csp_.domain(current_loc);
             for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
@@ -804,8 +804,8 @@ struct rbpf_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter
 struct motion_model_rbpf_particle_t : public rbpf_particle_t {
-    motion_model_rbpf_particle_t(bool use_ac3, bool strong_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
-      : rbpf_particle_t(use_ac3, strong_ac, iterated_level, inverse_check, i) { }
+    motion_model_rbpf_particle_t(bool use_ac3, bool lazy_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : rbpf_particle_t(use_ac3, lazy_ac, iterated_level, inverse_check, i) { }
     motion_model_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -864,7 +864,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
     }
 
     motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, strong_ac_, iterated_level_, inverse_check_, &inference_);
+        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, lazy_ac_, iterated_level_, inverse_check_, &inference_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
@@ -874,8 +874,8 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
-    optimal_rbpf_particle_t(bool use_ac3, bool strong_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
-      : rbpf_particle_t(use_ac3, strong_ac, iterated_level, inverse_check, i) { }
+    optimal_rbpf_particle_t(bool use_ac3, bool lazy_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : rbpf_particle_t(use_ac3, lazy_ac, iterated_level, inverse_check, i) { }
     optimal_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -977,7 +977,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 
     optimal_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, strong_ac_, iterated_level_, inverse_check_, &inference_);
+        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, lazy_ac_, iterated_level_, inverse_check_, &inference_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
