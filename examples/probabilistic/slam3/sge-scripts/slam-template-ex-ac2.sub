@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#$ -N slam3-array-task 
+#$ -N slam-ac2
 #$ -q default.q
 #$ -cwd 
 #$ -o output/out 
@@ -16,18 +16,19 @@ root=$HOME/software/github/belief-tracking/examples/probabilistic/slam3
 
 problems=$1
 rdir=$2
+kappa=$3
 
 record=`awk "NR==$SGE_TASK_ID" $problems`
 slam_type=`echo $record | awk '{print $1;}'`
 sir_type=`echo $record | awk '{print $2;}'`
 dim=`echo $record | awk '{print $3;}'`
 np=`echo $record | awk '{print $4;}'`
-kappa=`echo $record | awk '{print $5;}'`
+#kappa=`echo $record | awk '{print $5;}'`
 executions=`echo $record | awk '{print $6;}'`
 
 output_path=$root/sge-results/$rdir
 mkdir -p $output_path
 
 export LD_LIBRARY_PATH=~/lib
-./experiment-ex-ac2.sh $slam_type $sir_type $dim $dim $np .9 $kappa $executions > $output_path/output.ac2.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
+./experiment-ex-ac2.sh $slam_type $sir_type $dim $dim $np .9 $kappa $root/sge-scripts/$executions > $output_path/output.ac2.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
 

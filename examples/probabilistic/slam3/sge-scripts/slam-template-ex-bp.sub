@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#$ -N slam3-array-task 
+#$ -N slam-bp
 #$ -q default.q
 #$ -cwd 
 #$ -o output/out 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#$ -N slam3-array-task 
+#$ -N slam-jt
 #$ -q default.q
 #$ -cwd 
 #$ -o output/out 
@@ -29,5 +29,5 @@ output_path=$root/sge-results/$rdir
 mkdir -p $output_path
 
 export LD_LIBRARY_PATH=~/lib
-./experiment-ex-jt.sh $slam_type $sir_type $dim $dim $np .9 $kappa $executions > $output_path/output.jt.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
+./experiment-ex-jt.sh $slam_type $sir_type $dim $dim $np .9 $kappa $root/sge-scripts/$executions > $output_path/output.jt.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
 
