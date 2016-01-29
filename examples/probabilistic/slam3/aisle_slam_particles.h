@@ -629,6 +629,7 @@ struct rbpf_particle_t : public base_particle_t {
 
         // second, increase kappas (if !strong) or translate factors into kappa tables,
         // keeping track of changes
+        assert(kappa_csp_.worklist().empty());
         if( !strong_ac_ ) {
             std::vector<std::pair<int, int> > kappa_increases;
             kappa_varset_beam_t &beam = *kappa_csp_.domain(current_loc);

@@ -141,6 +141,7 @@ struct inference_t {
         // parameters for iterated-ac3
         parameter_type["level"] = "size_t";
         parameter_type["inverse-check"] = "boolean";
+        parameter_type["strong"] = "boolean";
 
         // set parameters
         std::vector<std::string> tokens = dai::tokenizeString(options_, false, ", ");

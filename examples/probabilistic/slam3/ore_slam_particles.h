@@ -634,7 +634,6 @@ struct rbpf_particle_t : public base_particle_t {
         int current_loc = loc_history_.back();
         assert(current_loc < int(kappa_csp_.nvars()));
         assert(current_loc < int(factors_.size()));
-        std::cout << "strong=" << strong_ac_ << std::endl;
 
         // first update factors in standard manner
         if( strong_ac_ ) {
