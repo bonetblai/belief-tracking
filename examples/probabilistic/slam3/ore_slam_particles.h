@@ -650,7 +650,7 @@ struct rbpf_particle_t : public base_particle_t {
         // second, increase kappas (if lazy) or translate factors into kappa tables,
         // keeping track of changes
         assert(kappa_csp_.worklist().empty());
-        if( !lazy_ac_ ) {
+        if( lazy_ac_ ) {
             std::vector<std::pair<int, int> > kappa_increases;
             kappa_varset_beam_t &beam = *kappa_csp_.domain(current_loc);
             for( kappa_varset_beam_t::const_iterator it = beam.begin(); it != beam.end(); ++it ) {
@@ -676,7 +676,7 @@ struct rbpf_particle_t : public base_particle_t {
 
             // do increases
             for( int i = 0; i < int(kappa_increases.size()); ++i )
-                kappa_csp_.domain(current_loc)->increase_kappa(kappa_increases[i]);
+                beam.increase_kappa(kappa_increases[i]);
 
             if( !kappa_increases.empty() ) {
                 kappa_csp_.normalize_kappas(current_loc);
