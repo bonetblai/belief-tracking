@@ -142,6 +142,7 @@ struct inference_t {
         parameter_type["level"] = "size_t";
         parameter_type["inverse-check"] = "boolean";
         parameter_type["lazy"] = "boolean";
+        parameter_type["simple"] = "boolean";
 
         // set parameters
         std::vector<std::string> tokens = dai::tokenizeString(options_, false, ", ");

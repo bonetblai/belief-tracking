@@ -94,7 +94,7 @@ class cache_t : public SLAM::cache_t {
                             assert(val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x < int(compatible_values_.size()));
                             compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x] = cache_it->second;
                         } else {
-                            unsigned values = 0;
+                            unsigned bitmask = 0;
                             int ncompatible = 0;
                             for( int val_x = 0; val_x < int(varsets_[var_x].nrStates()); ++val_x ) {
                                 bool compatible = true;
@@ -109,14 +109,14 @@ class cache_t : public SLAM::cache_t {
                                 if( compatible ) {
                                     int index = val_x / 32, offset = val_x % 32;
                                     assert(index == 0);
-                                    values |= 1 << offset;
+                                    bitmask |= 1 << offset;
                                     ++ncompatible;
                                 }
                             }
                             assert((ncompatible > 0) && (ncompatible < int(varsets_[var_x].nrStates())));
                             assert(val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x < int(compatible_values_.size()));
-                            compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x] = values;
-                            cache.insert(std::make_pair(cache_key, values));
+                            compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x] = bitmask;
+                            cache.insert(std::make_pair(cache_key, bitmask));
                         }
                     }
                 }
@@ -247,7 +247,7 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
 
     mutable int level_;
     //mutable const std::map<dai::Var, size_t> *state_x_;
-    mutable std::vector<unsigned> bitmask_;
+    mutable unsigned bitmask_;
 
     static void construct_constraint_graph(int nrows, int ncols) {
         int num_locs = nrows * ncols;
@@ -282,35 +282,23 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
         }
         return true;
 #else
-        unsigned values = cache_t::compatible_values(val_y, var_y, var_x);
-        return (values & (1 << val_x)) != 0;
+        unsigned bitmask = cache_t::compatible_values(val_y, var_y, var_x);
+        return (bitmask & (1 << val_x)) != 0;
 #endif
     }
 
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int level) const {
-        assert(1 + level <= int(bitmask_.size()));
         level_ = level;
-        for( int i = 0; i <= level_; ++i )
-            bitmask_[i] = 0;
+        bitmask_ = 0;
     }
     virtual void arc_reduce_inverse_check_preprocessing(int var_x, int var_y, int val_y, int kappa) const {
         if( kappa <= level_ ) {
-            assert(1 + kappa <= int(bitmask_.size()));
-            bitmask_[kappa] |= cache_t::compatible_values(val_y, var_y, var_x);
+            bitmask_ |= cache_t::compatible_values(val_y, var_y, var_x);
         }
     }
     virtual bool arc_reduce_inverse_check(int val_x, int kappa) const {
-        if( kappa <= level_ ) {
-            assert(1 + level_ - kappa <= int(bitmask_.size()));
-            int offset = val_x % 8;
-            for( int i = 0; i <= level_ - kappa; ++i ) {
-                if( ((bitmask_[i] >> offset) & 0x1) == 1 )
-                    return true;
-            }
-            return false;
-        } else {
-            return true;
-        }
+        int offset = val_x % 8;
+        return ((bitmask_ >> offset) & 0x1) == 1;
     }
 
   public:
@@ -318,27 +306,22 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
       : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(cg_),
         iterated_level_(0),
         inverse_check_(false) {
-        set_iterated_level(iterated_level_);
     }
     kappa_arc_consistency_t(const kappa_arc_consistency_t &ac)
       : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(ac.cg_),
         iterated_level_(ac.iterated_level_),
         inverse_check_(ac.inverse_check_) {
-        set_iterated_level(iterated_level_);
     }
     kappa_arc_consistency_t(kappa_arc_consistency_t &&ac)
       : CSP::iterated_weighted_arc_consistency_t<kappa_varset_beam_t>(std::move(ac)),
         iterated_level_(ac.iterated_level_),
-        inverse_check_(ac.inverse_check_),
-        bitmask_(std::move(ac.bitmask_)) {
+        inverse_check_(ac.inverse_check_) {
     }
-    virtual ~kappa_arc_consistency_t() {
-        clean_bitmask();
-    }
+    virtual ~kappa_arc_consistency_t() { }
 
     const kappa_arc_consistency_t& operator=(const kappa_arc_consistency_t &ac) {
         nvars_ = ac.nvars_;
-        set_iterated_level(ac.iterated_level_);
+        iterated_level_ = ac.iterated_level_;
         inverse_check_ = ac.inverse_check_;
         assert(domain_.size() == ac.domain_.size());
         for( int loc = 0; loc < int(ac.domain_.size()); ++loc )
@@ -361,14 +344,8 @@ class kappa_arc_consistency_t : public CSP::iterated_weighted_arc_consistency_t<
         construct_constraint_graph(nrows, ncols);
     }
 
-    void clean_bitmask() {
-        for( int i = 0; i < int(bitmask_.size()); ++i )
-            bitmask_[i] = 0;
-    }
     void set_iterated_level(int iterated_level) {
         iterated_level_ = iterated_level;
-        clean_bitmask();
-        bitmask_ = std::vector<unsigned>(iterated_level_ + 1);
     }
     void set_inverse_check(bool inverse_check) {
         inverse_check_ = inverse_check;
@@ -438,6 +415,7 @@ struct rbpf_particle_t : public base_particle_t {
     // arc consistency
     bool use_ac3_;
     bool lazy_ac_;
+    bool simple_ac_;
     int iterated_level_;
     bool inverse_check_;
     kappa_arc_consistency_t kappa_csp_;
@@ -450,8 +428,8 @@ struct rbpf_particle_t : public base_particle_t {
     mutable std::vector<dai::Factor> marginals_;
     Inference::inference_t inference_;
 
-    rbpf_particle_t(bool use_ac3, bool lazy_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
-      : use_ac3_(use_ac3), lazy_ac_(lazy_ac), iterated_level_(iterated_level), inverse_check_(inverse_check)  {
+    rbpf_particle_t(bool use_ac3, bool lazy_ac, bool simple_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : use_ac3_(use_ac3), lazy_ac_(lazy_ac), simple_ac_(simple_ac), iterated_level_(iterated_level), inverse_check_(inverse_check)  {
         assert(base_ != 0);
         assert(base_->nlabels_ == 2);
 
@@ -480,7 +458,7 @@ struct rbpf_particle_t : public base_particle_t {
         if( !use_ac3_ && (i != 0) ) inference_ = *i;
     }
     rbpf_particle_t(const std::multimap<std::string, std::string> &parameters)
-      : rbpf_particle_t(false, false, 0, false, 0) {
+      : rbpf_particle_t(false, false, false, 0, false, 0) {
         std::multimap<std::string, std::string>::const_iterator it = parameters.find("inference");
         if( it != parameters.end() ) {
             inference_.set_inference_algorithm(it->second, "BEL", false);
@@ -493,6 +471,8 @@ struct rbpf_particle_t : public base_particle_t {
                     inverse_check_ = options.getStringAs<bool>("inverse-check");
                 if( options.hasKey("lazy") )
                     lazy_ac_ = options.getStringAs<bool>("lazy");
+                if( options.hasKey("simple") )
+                    simple_ac_ = options.getStringAs<bool>("simple");
                 kappa_csp_.set_iterated_level(iterated_level_);
                 kappa_csp_.set_inverse_check(inverse_check_);
             } else {
@@ -512,6 +492,7 @@ struct rbpf_particle_t : public base_particle_t {
       : loc_history_(std::move(p.loc_history_)),
         use_ac3_(p.use_ac3_),
         lazy_ac_(p.lazy_ac_),
+        simple_ac_(p.simple_ac_),
         iterated_level_(p.iterated_level_),
         inverse_check_(p.inverse_check_),
         kappa_csp_(std::move(p.kappa_csp_)),
@@ -529,6 +510,7 @@ struct rbpf_particle_t : public base_particle_t {
         loc_history_ = p.loc_history_;
         use_ac3_ = p.use_ac3_;
         lazy_ac_ = p.lazy_ac_;
+        simple_ac_ = p.simple_ac_;
         iterated_level_ = p.iterated_level_;
         inverse_check_ = p.inverse_check_;
         kappa_csp_ = p.kappa_csp_;
@@ -543,6 +525,7 @@ struct rbpf_particle_t : public base_particle_t {
         return (loc_history_ == p.loc_history_) &&
                (use_ac3_ == p.use_ac3_) &&
                (lazy_ac_ == p.lazy_ac_) &&
+               (simple_ac_ == p.simple_ac_) &&
                (iterated_level_ == p.iterated_level_) &&
                (inverse_check_ == p.inverse_check_) &&
                (kappa_csp_ == p.kappa_csp_) &&
@@ -613,7 +596,7 @@ struct rbpf_particle_t : public base_particle_t {
         assert(use_ac3_);
         int current_loc = loc_history_.back();
         assert(current_loc < int(kappa_csp_.nvars()));
-        assert(current_loc < int(factors_.size()));
+        assert(lazy_ac_ || (current_loc < int(factors_.size())));
 
         // first update factors in standard manner
         if( !lazy_ac_ ) {
@@ -679,7 +662,8 @@ struct rbpf_particle_t : public base_particle_t {
                 }
                 if( change ) {
                     kappa_csp_.normalize_kappas(loc);
-                    kappa_csp_.add_to_worklist(loc);
+                    if( !simple_ac_ || (simple_ac_ && (loc == current_loc)) )
+                        kappa_csp_.add_to_worklist(loc);
                 }
             }
         }
@@ -688,9 +672,9 @@ struct rbpf_particle_t : public base_particle_t {
         if( !kappa_csp_.worklist().empty() ) {
             std::vector<int> revised_vars;
             kappa_csp_.kappa_ac3(revised_vars);
-            kappa_csp_.normalize_kappas();
-            kappa_csp_.calculate_normalization_constant();
         }
+        kappa_csp_.normalize_kappas();
+        kappa_csp_.calculate_normalization_constant();
 
 #ifdef DEBUG
         std::cout << "factor after update: loc=" << current_loc << ", obs=" << obs << std::endl;
@@ -784,8 +768,8 @@ struct rbpf_particle_t : public base_particle_t {
 
 // Particle for the motion model RBPF filter
 struct motion_model_rbpf_particle_t : public rbpf_particle_t {
-    motion_model_rbpf_particle_t(bool use_ac3, bool lazy_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
-      : rbpf_particle_t(use_ac3, lazy_ac, iterated_level, inverse_check, i) { }
+    motion_model_rbpf_particle_t(bool use_ac3, bool lazy_ac, bool simple_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : rbpf_particle_t(use_ac3, lazy_ac, simple_ac, iterated_level, inverse_check, i) { }
     motion_model_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     motion_model_rbpf_particle_t(const motion_model_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     motion_model_rbpf_particle_t(motion_model_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -844,7 +828,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
     }
 
     motion_model_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, lazy_ac_, iterated_level_, inverse_check_, &inference_);
+        motion_model_rbpf_particle_t *p = new motion_model_rbpf_particle_t(use_ac3_, lazy_ac_, simple_ac_, iterated_level_, inverse_check_, &inference_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
@@ -854,8 +838,8 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 struct optimal_rbpf_particle_t : public rbpf_particle_t {
     mutable std::vector<float> cdf_;
 
-    optimal_rbpf_particle_t(bool use_ac3, bool lazy_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
-      : rbpf_particle_t(use_ac3, lazy_ac, iterated_level, inverse_check, i) { }
+    optimal_rbpf_particle_t(bool use_ac3, bool lazy_ac, bool simple_ac, int iterated_level, bool inverse_check, const Inference::inference_t *i)
+      : rbpf_particle_t(use_ac3, lazy_ac, simple_ac, iterated_level, inverse_check, i) { }
     optimal_rbpf_particle_t(const std::multimap<std::string, std::string> &parameters) : rbpf_particle_t(parameters) { }
     optimal_rbpf_particle_t(const optimal_rbpf_particle_t &p) : rbpf_particle_t(p) { }
     optimal_rbpf_particle_t(optimal_rbpf_particle_t &&p) : rbpf_particle_t(std::move(p)) { }
@@ -957,7 +941,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 
     optimal_rbpf_particle_t* initial_sampling(mpi_slam_t *mpi, int wid) {
-        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, lazy_ac_, iterated_level_, inverse_check_, &inference_);
+        optimal_rbpf_particle_t *p = new optimal_rbpf_particle_t(use_ac3_, lazy_ac_, simple_ac_, iterated_level_, inverse_check_, &inference_);
         p->initial_sampling_in_place(mpi, wid);
         return p;
     }
