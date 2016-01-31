@@ -23,12 +23,11 @@ slam_type=`echo $record | awk '{print $1;}'`
 sir_type=`echo $record | awk '{print $2;}'`
 dim=`echo $record | awk '{print $3;}'`
 np=`echo $record | awk '{print $4;}'`
-kappa=`echo $record | awk '{print $5;}'`
-executions=`echo $record | awk '{print $6;}'`
+executions=`echo $record | awk '{print $5;}'`
 
 output_path=$root/sge-results/$rdir
 mkdir -p $output_path
 
 export LD_LIBRARY_PATH=~/lib
-./experiment-ex-bp.sh $slam_type $sir_type $dim $dim $np .9 $kappa $maxtime $root/sge-scripts/$executions > $output_path/output.bp.maxtime=${maxtime}.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.kappa=${kappa}.id=${SGE_TASK_ID}.txt
+./experiment-ex-bp.sh $slam_type $sir_type $dim $dim $np $root/sge-scripts/$executions $maxtime > $output_path/output.bp.type=${slam_type}.sir=${sir_type}.dim=${dim}x${dim}.np=${np}.maxtime=${maxtime}.id=${SGE_TASK_ID}.txt
 
