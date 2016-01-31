@@ -103,7 +103,7 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
                 arc_reduce_preprocessing_1(var_x, *it);
                 bool found_compatible_value = false;
                 for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
-                    if( jt.weight() > level - it.weight() ) continue;
+                    if( jt.weight() > level ) continue;
                     if( consistent(var_x, var_y, *it, *jt) ) {
                         found_compatible_value = true;
                         break;
@@ -114,11 +114,10 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
                     std::cout << "weighted-ac3: increasing weight of valuation " << *it
                               << " in domain of var_x=" << var_x
                               << " to " << it.weight() + 1
-                              << " [var_y=" << var_y << "]"
+                              << " [level=" << level << ", var_y=" << var_y << "]"
                               << std::endl;
 #endif
-                    //domain_[var_x]->set_weight(it.index(), 1 + it.weight());
-                    domain_[var_x]->set_weight(it.index(), 1 + level);
+                    domain_[var_x]->set_weight(it.index(), 1 + it.weight());
                     revised_vars[var_x] = true;
                     change = true;
                 }
@@ -130,16 +129,15 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
                 arc_reduce_inverse_check_preprocessing(var_x, var_y, *it, it.weight());
 
             for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
-                if( !arc_reduce_inverse_check(*it, it.weight()) ) {
+                if( (it.weight() <= level) && !arc_reduce_inverse_check(*it, it.weight()) ) {
 #ifdef DEBUG
                     std::cout << "weighted-ac3: increasing weight of valuation " << *it
                               << " in domain of var_x=" << var_x
                               << " to " << it.weight() + 1
-                              << " [var_y=" << var_y << "]"
+                              << " [level=" << level << ", var_y=" << var_y << "]"
                               << std::endl;
 #endif
-                    //domain_[var_x]->set_weight(it.index(), 1 + it.weight());
-                    domain_[var_x]->set_weight(it.index(), 1 + level);
+                    domain_[var_x]->set_weight(it.index(), 1 + it.weight());
                     revised_vars[var_x] = true;
                     change = true;
                 }
