@@ -1,9 +1,9 @@
 options(width = 300)
-data = read.csv('data_new.csv')
+data = read.csv('data_new_aisle.csv')
 attach(data)
 
 data$time.step = data$time / data$steps;
-data$ncells = data$dim * data$dim;
+data$ncells = data$dim;
 data$errors = data$errors / (data$ncells - data$unknowns);
 data$good = 100 * (1.0 - data$errors);
 data$unknowns = 100 * (data$unknowns / data$ncells);
@@ -17,6 +17,8 @@ data.stats = ddply(data, .(type, sir, ncells, dim, np, inference), summarize,
                    unknowns.mean = round(mean(unknowns), 2), unknowns.ci = round(qt(0.975, df = n-1) * sd(unknowns) / sqrt(n), 2),
                    time.step.mean = round(mean(time.step), 2), time.step.ci = round(qt(0.975, df = n-1) * sd(time.step) / sqrt(n), 2),
                    time.mean = round(mean(time), 2), time.ci = round(qt(0.975, df = n-1) * sd(time) / sqrt(n), 2))
+
+#print(data.stats[1:10,])
 
 # sort table
 inference.order <- c("jt", "bp(maxtime=.5)", "bp(maxtime=.1)",
@@ -37,14 +39,14 @@ x <- transform(data.stats)
 x.sorted <- x[order(x$type,x$sir,x$dim,x$np,match(x$inference, inference.order)),]
 data.stats.sorted <- data.frame(x.sorted)
 
-#print(data.stats.sorted[, 4:12])
+#print(data.stats.sorted[1:10,])
 
 library(xtable)
 #xt.peaked = xtable(data.stats[data.stats$type == "ore-slam-peaked", ])
-xt.non.peaked.6 = xtable(data.stats.sorted[data.stats.sorted$type == "ore-slam-non-peaked" & data.stats.sorted$dim == 6, 4:14])
-xt.non.peaked.10 = xtable(data.stats.sorted[data.stats.sorted$type == "ore-slam-non-peaked" & data.stats.sorted$dim == 10, 4:14])
+xt.non.peaked.64 = xtable(data.stats.sorted[data.stats.sorted$type == "aisle-slam" & data.stats.sorted$dim == 64, 4:14])
+xt.non.peaked.512 = xtable(data.stats.sorted[data.stats.sorted$type == "aisle-slam" & data.stats.sorted$dim == 512, 4:14])
 
 #print(xt.peaked, include.rownames = FALSE)
-print(xt.non.peaked.6, include.rownames = FALSE)
-print(xt.non.peaked.10, include.rownames = FALSE)
+print(xt.non.peaked.64, include.rownames = FALSE)
+print(xt.non.peaked.512, include.rownames = FALSE)
 

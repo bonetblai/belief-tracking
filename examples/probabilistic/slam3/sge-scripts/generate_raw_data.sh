@@ -4,7 +4,7 @@ parameters=$1
 dir=$2
 
 benchmark=tmp.benchmark
-sort -u < $parameters > $benchmark
+cat $parameters | cut -f1-4 -d' ' | sort -u > $benchmark
 nb=`wc -l $benchmark | awk '{ print $1; }'`
 
 root=$HOME/software/github/belief-tracking/examples/probabilistic/slam3

@@ -3,7 +3,7 @@ BELIEF_TRACKING_HOME=	$(ROOT)/belief-tracking
 MDP_ENGINE_HOME=	$(ROOT)/mdp-engine
 LIBDAI=			~/software/libdai
 
-INCLUDES=		-I $(LIBDAI)/include -I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine -I ~/include
+INCLUDES=		-I $(LIBDAI)/include -I $(BELIEF_TRACKING_HOME)/engine -I $(BELIEF_TRACKING_HOME)/probabilistic_engine -I ~/include -I /usr/local/include
 LIBS=			-L $(LIBDAI)/lib -L ~/lib -ldai
 
 CXX=			g++
