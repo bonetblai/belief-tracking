@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# -ne 6 ]; then
-  echo "usage: experiment-ex-jt.sh [ore-slam-peaked|ore-slam-non-peaked|aisle-slam] [mm|opt] <ncols> <nrows> <nparticles> <executions>"
+  echo "usage: experiment-ex-jt.sh [mine-mapping-peaked|mine-mapping-non-peaked|aisle-slam] [mm|opt] <ncols> <nrows> <nparticles> <executions>"
   exit 1
 fi
 

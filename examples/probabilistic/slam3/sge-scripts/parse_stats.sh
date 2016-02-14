@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "type,file,inference,sir,dim,np,steps,errors,unknowns,time"
-for slam_type in ore-slam-non-peaked; do
+for slam_type in mine-mapping-non-peaked; do
   for sir in opt mm; do
     for dim in 4x4 6x6 8x8 10x10 12x12 14x14; do
       for np in 32 64 128 256; do

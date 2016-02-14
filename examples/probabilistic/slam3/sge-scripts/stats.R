@@ -40,9 +40,9 @@ data.stats.sorted <- data.frame(x.sorted)
 #print(data.stats.sorted[, 4:12])
 
 library(xtable)
-#xt.peaked = xtable(data.stats[data.stats$type == "ore-slam-peaked", ])
-xt.non.peaked.6 = xtable(data.stats.sorted[data.stats.sorted$type == "ore-slam-non-peaked" & data.stats.sorted$dim == 6, 4:14])
-xt.non.peaked.10 = xtable(data.stats.sorted[data.stats.sorted$type == "ore-slam-non-peaked" & data.stats.sorted$dim == 10, 4:14])
+#xt.peaked = xtable(data.stats[data.stats$type == "mine-mapping-peaked", ])
+xt.non.peaked.6 = xtable(data.stats.sorted[data.stats.sorted$type == "mine-mapping-non-peaked" & data.stats.sorted$dim == 6, 4:14])
+xt.non.peaked.10 = xtable(data.stats.sorted[data.stats.sorted$type == "mine-mapping-non-peaked" & data.stats.sorted$dim == 10, 4:14])
 
 #print(xt.peaked, include.rownames = FALSE)
 print(xt.non.peaked.6, include.rownames = FALSE)

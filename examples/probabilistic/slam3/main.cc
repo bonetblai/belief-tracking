@@ -40,7 +40,7 @@
 #include "rbpf.h"
 
 #include "slam_particles.h"
-#include "ore_slam_particles.h"
+#include "mine_mapping_particles.h"
 #include "aisle_slam_particles.h"
 
 using namespace std;
@@ -69,9 +69,9 @@ vector<vector<int> > SLAM::cache_t::slabels_;
 float kappa_t::epsilon_ = 0;
 vector<float> kappa_t::powers_;
 
-// static members for ore-slam particles
-vector<unsigned*> OreSLAM::cache_t::compatible_values_;
-CSP::constraint_digraph_t OreSLAM::kappa_arc_consistency_t::cg_;
+// static members for mine-mapping particles
+vector<unsigned*> MineMapping::cache_t::compatible_values_;
+CSP::constraint_digraph_t MineMapping::kappa_arc_consistency_t::cg_;
 
 // static members for aisle-slam particles
 vector<unsigned> AisleSLAM::cache_t::compatible_values_;
@@ -268,8 +268,8 @@ int main(int argc, const char **argv) {
     SIR_t<optimal_sir_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<motion_model_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<MineMapping::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<MineMapping::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
 
@@ -277,8 +277,8 @@ int main(int argc, const char **argv) {
     SIR_t<optimal_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<motion_model_rbpf_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
-    SIR_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
-    SIR_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<MineMapping::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<MineMapping::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
 #endif
@@ -361,10 +361,10 @@ int main(int argc, const char **argv) {
             ++argv;
         } else if( !strcmp(argv[0], "--color-slam") ) {
             slam_type = cellmap_t::COLOR_SLAM;
-        } else if( !strcmp(argv[0], "--ore-slam-peaked") ) {
-            slam_type = cellmap_t::ORE_SLAM_PEAKED;
-        } else if( !strcmp(argv[0], "--ore-slam-non-peaked") ) {
-            slam_type = cellmap_t::ORE_SLAM_NON_PEAKED;
+        } else if( !strcmp(argv[0], "--mine-mapping-peaked") ) {
+            slam_type = cellmap_t::MINE_MAPPING_PEAKED;
+        } else if( !strcmp(argv[0], "--mine-mapping-non-peaked") ) {
+            slam_type = cellmap_t::MINE_MAPPING_NON_PEAKED;
         } else if( !strcmp(argv[0], "--aisle-slam") ) {
             slam_type = cellmap_t::AISLE_SLAM;
         } else if( !strncmp(argv[0], "--tracker=", 10) ) {
@@ -417,9 +417,9 @@ int main(int argc, const char **argv) {
         //Inference::edbp_t::initialize();
         //Inference::inference_t::initialize_edbp(tmp_path);
         kappa_t::initialize(epsilon_for_kappa, 10);
-        if( (slam_type == cellmap_t::ORE_SLAM_PEAKED) || (slam_type == cellmap_t::ORE_SLAM_NON_PEAKED) ) {
-            OreSLAM::cache_t::initialize(nrows, ncols);
-            OreSLAM::kappa_arc_consistency_t::initialize(nrows, ncols);
+        if( (slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED) ) {
+            MineMapping::cache_t::initialize(nrows, ncols);
+            MineMapping::kappa_arc_consistency_t::initialize(nrows, ncols);
         }
         if( slam_type == cellmap_t::AISLE_SLAM ) {
             AisleSLAM::cache_t::initialize(nrows, ncols);
@@ -468,8 +468,8 @@ int main(int argc, const char **argv) {
         } else if( short_name == "mm-rbpf" ) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
-            } else if( (slam_type == cellmap_t::ORE_SLAM_PEAKED) || (slam_type == cellmap_t::ORE_SLAM_NON_PEAKED) ) {
-                tracker = new RBPF_t<OreSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
+            } else if( (slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED) ) {
+                tracker = new RBPF_t<MineMapping::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
                 tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
@@ -477,8 +477,8 @@ int main(int argc, const char **argv) {
         } else if( short_name == "opt-rbpf" ) {
             if( slam_type == cellmap_t::COLOR_SLAM ) {
                 tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
-            } else if( (slam_type == cellmap_t::ORE_SLAM_PEAKED) || (slam_type == cellmap_t::ORE_SLAM_NON_PEAKED) ) {
-                tracker = new RBPF_t<OreSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
+            } else if( (slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED) ) {
+                tracker = new RBPF_t<MineMapping::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
                 assert(slam_type == cellmap_t::AISLE_SLAM);
                 tracker = new RBPF_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);

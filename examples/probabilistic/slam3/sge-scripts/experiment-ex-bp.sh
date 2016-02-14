@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# -ne 7 ]; then
-  echo "usage: experiment-ex-bp.sh [ore-slam-peaked|ore-slam-non-peaked|aisle-slam] [mm|opt] <ncols> <nrows> <nparticles> <executions> <maxtime>"
+  echo "usage: experiment-ex-bp.sh [mine-mapping-peaked|mine-mapping-non-peaked|aisle-slam] [mm|opt] <ncols> <nrows> <nparticles> <executions> <maxtime>"
   exit 1
 fi
 

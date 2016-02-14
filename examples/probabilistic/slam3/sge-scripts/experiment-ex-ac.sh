@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# -ne 8 ]; then
-  echo "usage: experiment-ex-ac0.sh [ore-slam-peaked|ore-slam-non-peaked|aisle-slam] [mm|opt] <ncols> <nrows> <nparticles> <kappa> <executions> <level>"
+  echo "usage: experiment-ex-ac0.sh [mine-mapping-peaked|mine-mapping-non-peaked|aisle-slam] [mm|opt] <ncols> <nrows> <nparticles> <kappa> <executions> <level>"
   exit 1
 fi
 

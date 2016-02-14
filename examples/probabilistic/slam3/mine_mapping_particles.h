@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef ORE_SLAM_PARTICLES_H
-#define ORE_SLAM_PARTICLES_H
+#ifndef MINE_MAPPING_PARTICLES_H
+#define MINE_MAPPING_PARTICLES_H
 
 #include <cassert>
 #include <cstdlib>
@@ -46,7 +46,7 @@
 
 //#define DEBUG
 
-namespace OreSLAM {
+namespace MineMapping {
 
 class cache_t : public SLAM::cache_t {
   protected:
@@ -959,7 +959,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 };
 
-}; // namespace OreSLAM
+}; // namespace MineMapping
 
 #undef DEBUG
 

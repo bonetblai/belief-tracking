@@ -42,7 +42,7 @@ data.stats.sorted <- data.frame(x.sorted)
 #print(data.stats.sorted[1:10,])
 
 library(xtable)
-#xt.peaked = xtable(data.stats[data.stats$type == "ore-slam-peaked", ])
+#xt.peaked = xtable(data.stats[data.stats$type == "mine-mapping-peaked", ])
 xt.non.peaked.64 = xtable(data.stats.sorted[data.stats.sorted$type == "aisle-slam" & data.stats.sorted$dim == 64, 4:14])
 xt.non.peaked.512 = xtable(data.stats.sorted[data.stats.sorted$type == "aisle-slam" & data.stats.sorted$dim == 512, 4:14])
 

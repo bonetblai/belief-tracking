@@ -60,7 +60,7 @@ inline bool same_row(int i, int j, int ncols) {
     return (i / ncols) == (j / ncols);
 }
 
-inline int calculate_index_ore_slam(int slabels, int obs, int loc_type) {
+inline int calculate_index_mine_mapping(int slabels, int obs, int loc_type) {
     assert((slabels >= 0) && (slabels < 512));
     assert((obs >= 0) && (obs < 10));
     assert((loc_type >= 0) && (loc_type < 9));
@@ -122,7 +122,7 @@ struct cellmap_t {
     int marginals_size_;
 
     // type of slam problem
-    typedef enum { COLOR_SLAM, ORE_SLAM_PEAKED, ORE_SLAM_NON_PEAKED, AISLE_SLAM } slam_type_t;
+    typedef enum { COLOR_SLAM, MINE_MAPPING_PEAKED, MINE_MAPPING_NON_PEAKED, AISLE_SLAM } slam_type_t;
     slam_type_t slam_type_;
 
     float pa_;
@@ -131,7 +131,7 @@ struct cellmap_t {
 
     std::vector<int> loc_type_;
     std::vector<std::set<int> > inactive_locs_;
-    std::vector<float> probability_obs_ore_slam_;
+    std::vector<float> probability_obs_mine_mapping_;
     std::vector<float> probability_obs_aisle_slam_;
     std::vector<int> var_offset_;
 
@@ -146,7 +146,7 @@ struct cellmap_t {
         pa_(pa), po_(po), base_obs_noise_(base_obs_noise) {
         cells_ = std::vector<cell_t>(nloc_);
         marginals_size_ = 2 * nloc_ + nloc_;
-        if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) ) precompute_stored_information_ore_slam();
+        if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) ) precompute_stored_information_mine_mapping();
         if( slam_type_ == AISLE_SLAM ) precompute_stored_information_aisle_slam();
     }
     ~cellmap_t() { }
@@ -265,7 +265,7 @@ struct cellmap_t {
         }
         return p;
     }
-    float probability_tr_loc_ore_slam(int action, int old_loc, int new_loc, float q) const {
+    float probability_tr_loc_mine_mapping(int action, int old_loc, int new_loc, float q) const {
         return probability_tr_loc_standard(action, old_loc, new_loc, q);
     }
     float probability_tr_loc_aisle_slam(int action, int old_loc, int new_loc, float q) const {
@@ -277,8 +277,8 @@ struct cellmap_t {
         float q = pa == -1 ? pa_ : pa;
         if( slam_type_ == COLOR_SLAM )
             return probability_tr_loc_standard(action, old_loc, new_loc, q);
-        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
-            return probability_tr_loc_ore_slam(action, old_loc, new_loc, q);
+        else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
+            return probability_tr_loc_mine_mapping(action, old_loc, new_loc, q);
         else
             return probability_tr_loc_aisle_slam(action, old_loc, new_loc, q);
     }
@@ -308,7 +308,7 @@ struct cellmap_t {
             return new_coord.as_index();
         }
     }
-    int sample_loc_ore_slam(int loc, int action, float q) const {
+    int sample_loc_mine_mapping(int loc, int action, float q) const {
         return sample_loc_standard(loc, action, q);
     }
     int sample_loc_aisle_slam(int loc, int action, float q) const {
@@ -320,8 +320,8 @@ struct cellmap_t {
         float q = pa == -1 ? pa_ : pa;
         if( slam_type_ == COLOR_SLAM )
             return sample_loc_standard(loc, action, q);
-        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
-            return sample_loc_ore_slam(loc, action, q);
+        else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
+            return sample_loc_mine_mapping(loc, action, q);
         else
             return sample_loc_aisle_slam(loc, action, q);
     }
@@ -341,10 +341,10 @@ struct cellmap_t {
         return probability_obs_standard(obs, loc, labels[loc], last_action);
     }
 
-    float probability_obs_ore_slam(int obs, int loc, int slabels, int /*last_action*/) const {
-        assert((slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED));
-        if( slam_type_ == ORE_SLAM_NON_PEAKED ) {
-            return probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type_[loc])];
+    float probability_obs_mine_mapping(int obs, int loc, int slabels, int /*last_action*/) const {
+        assert((slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED));
+        if( slam_type_ == MINE_MAPPING_NON_PEAKED ) {
+            return probability_obs_mine_mapping_[calculate_index_mine_mapping(slabels, obs, loc_type_[loc])];
         } else {
             int label = (slabels >> 4) & 0x1;
             int noise = popcount(slabels);
@@ -353,9 +353,9 @@ struct cellmap_t {
             return obs == label ? p : 1 - p;
         }
     }
-    float probability_obs_ore_slam(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        assert((slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED));
-        if( slam_type_ == ORE_SLAM_NON_PEAKED ) {
+    float probability_obs_mine_mapping(int obs, int loc, const std::vector<int> &labels, int last_action) const {
+        assert((slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED));
+        if( slam_type_ == MINE_MAPPING_NON_PEAKED ) {
             int slabels = 0;
             int row = loc / ncols_, col = loc % ncols_;
             for( int dr = -1; dr < 2; ++dr ) {
@@ -371,7 +371,7 @@ struct cellmap_t {
                 }
             }
             assert((slabels >= 0) && (slabels < 512));
-            return probability_obs_ore_slam(obs, loc, slabels, last_action);
+            return probability_obs_mine_mapping(obs, loc, slabels, last_action);
         } else {
             int noise = 0;
             int row = loc / ncols_, col = loc % ncols_;
@@ -413,16 +413,16 @@ struct cellmap_t {
     float probability_obs(int obs, int loc, int label_or_slabels, int last_action) const {
         if( slam_type_ == COLOR_SLAM )
             return probability_obs_standard(obs, loc, label_or_slabels, last_action);
-        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
-            return probability_obs_ore_slam(obs, loc, label_or_slabels, last_action);
+        else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
+            return probability_obs_mine_mapping(obs, loc, label_or_slabels, last_action);
         else
             return probability_obs_aisle_slam(obs, loc, label_or_slabels, last_action);
     }
     float probability_obs(int obs, int loc, const std::vector<int> &labels, int last_action) const {
         if( slam_type_ == COLOR_SLAM )
             return probability_obs_standard(obs, loc, labels, last_action);
-        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
-            return probability_obs_ore_slam(obs, loc, labels, last_action);
+        else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
+            return probability_obs_mine_mapping(obs, loc, labels, last_action);
         else
             return probability_obs_aisle_slam(obs, loc, labels, last_action);
     }
@@ -451,15 +451,15 @@ struct cellmap_t {
         return sample_label(cells_[loc].label_, q);
     }
 
-    int sample_obs_ore_slam(int loc, int /*last_action*/, float q) const {
-        assert((slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED));
+    int sample_obs_mine_mapping(int loc, int /*last_action*/, float q) const {
+        assert((slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED));
         assert((q >= 0) && (q <= 1));
         assert((loc >= 0) && (loc < nloc_));
 
         int obs = 0;
         int row = loc / ncols_, col = loc % ncols_;
 
-        if( slam_type_ == ORE_SLAM_NON_PEAKED ) {
+        if( slam_type_ == MINE_MAPPING_NON_PEAKED ) {
             for( int dr = -1; dr < 2; ++dr ) {
                 int nrow = row + dr;
                 if( (nrow < 0) || (nrow >= nrows_) ) continue; // for outside-of-the-grid cell, sampled value = 0
@@ -511,8 +511,8 @@ struct cellmap_t {
         float q = po == -1 ? po_ : po;
         if( slam_type_ == COLOR_SLAM )
             return sample_obs_standard(loc, last_action, q);
-        else if( (slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED) )
-            return sample_obs_ore_slam(loc, last_action, q);
+        else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
+            return sample_obs_mine_mapping(loc, last_action, q);
         else
             return sample_obs_aisle_slam(loc, last_action, q);
     }
@@ -540,8 +540,8 @@ struct cellmap_t {
         return false;
     }
 
-    void precompute_stored_information_ore_slam() {
-        assert((slam_type_ == ORE_SLAM_PEAKED) || (slam_type_ == ORE_SLAM_NON_PEAKED));
+    void precompute_stored_information_mine_mapping() {
+        assert((slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED));
 
         // location types for each cell: bits for corner and side
         loc_type_ = std::vector<int>(nloc_, 0);
@@ -616,14 +616,14 @@ struct cellmap_t {
         //                      = \sum_{val} P( obs | val ) \prod_{loc} P( val[loc] | slabels[loc] )
         //                      = \sum_{val} [[ obs = #{ loc : val[loc] = 1 } ]] \prod_{loc} P( val[loc] | slabels[loc] )
 
-        if( slam_type_ == ORE_SLAM_NON_PEAKED ) {
+        if( slam_type_ == MINE_MAPPING_NON_PEAKED ) {
             // dimension is product of 512 valuations, 10 obs and 9 loc-types
-            probability_obs_ore_slam_ = std::vector<float>(512 * 10 * 9, 0);
+            probability_obs_mine_mapping_ = std::vector<float>(512 * 10 * 9, 0);
             for( int loc_type = 0; loc_type < 9; ++loc_type ) {
                 for( int obs = 0; obs < 10; ++obs ) {
                     for( int slabels = 0; slabels < 512; ++slabels ) {
                         //if( incompatible_slabels(slabels, loc_type) ) continue;
-                        int index = calculate_index_ore_slam(slabels, obs, loc_type);
+                        int index = calculate_index_mine_mapping(slabels, obs, loc_type);
                         for( int valuation = 0; valuation < 512; ++valuation ) {
                             //if( incompatible_slabels(valuation, loc_type) ) continue;
                             if( int(popcount(valuation)) != obs ) continue;
@@ -639,22 +639,22 @@ struct cellmap_t {
                                     p *= bit(valuation, rloc) == bit(slabels, rloc) ? q : 1 - q;
                                 }
                             }
-                            probability_obs_ore_slam_[index] += p;
+                            probability_obs_mine_mapping_[index] += p;
                         }
-                        assert(probability_obs_ore_slam_[index] <= 1);
-                        if( probability_obs_ore_slam_[index] == 0 ) {
+                        assert(probability_obs_mine_mapping_[index] <= 1);
+                        if( probability_obs_mine_mapping_[index] == 0 ) {
                             std::cout << "error: P(obs=" << obs
                                       << "|slabels=" << slabels
                                       << ", loc-type=" << loc_type
-                                      << ") = " << probability_obs_ore_slam_[index]
+                                      << ") = " << probability_obs_mine_mapping_[index]
                                       << std::endl;
-                            assert(probability_obs_ore_slam_[index] > 0);
+                            assert(probability_obs_mine_mapping_[index] > 0);
                         } else {
 #if 0
                             std::cout << "# P(obs=" << obs
                                       << "|slabels=" << slabels
                                       << ", loc_type=" << loc_type
-                                      << ")=" << probability_obs_ore_slam_[index]
+                                      << ")=" << probability_obs_mine_mapping_[index]
                                       << std::endl;
 #endif
                         }
@@ -663,15 +663,15 @@ struct cellmap_t {
             }
 
             for( int obs = 0; obs < 10; ++obs ) {
-                float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_MIDDLE)];
+                float p = probability_obs_mine_mapping_[calculate_index_mine_mapping(0, obs, LOC_MIDDLE)];
                 std::cout << "# P(obs=" << obs << "|slabels=0,MIDDLE)=" << p << std::endl;
             }
             for( int obs = 0; obs < 10; ++obs ) {
-                float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_CORNER_UP_RI)];
+                float p = probability_obs_mine_mapping_[calculate_index_mine_mapping(0, obs, LOC_CORNER_UP_RI)];
                 std::cout << "# P(obs=" << obs << "|slabels=0,CORNER)=" << p << std::endl;
             }
             for( int obs = 0; obs < 10; ++obs ) {
-                float p = probability_obs_ore_slam_[calculate_index_ore_slam(0, obs, LOC_EDGE_UP)];
+                float p = probability_obs_mine_mapping_[calculate_index_mine_mapping(0, obs, LOC_EDGE_UP)];
                 std::cout << "# P(obs=" << obs << "|slabels=0,EDGE)=" << p << std::endl;
             }
 
@@ -681,7 +681,7 @@ struct cellmap_t {
                     //if( incompatible_slabels(slabels, loc_type) ) continue;
                     float sum = 0;
                     for( int obs = 0; obs < 10; ++obs )
-                        sum += probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type)];
+                        sum += probability_obs_mine_mapping_[calculate_index_mine_mapping(slabels, obs, loc_type)];
                     if( fabs(sum - 1) >= 1e-6 ) std::cout << "warning: |sum - 1| >= 1e-6,  sum=" << sum << std::endl;
                     //assert(fabs(sum - 1) < 1e-5);
 #ifdef DEBUG
@@ -697,7 +697,7 @@ struct cellmap_t {
                     int best_obs = 0;
                     float best_obs_prob = 0;
                     for( int obs = 0; obs < 10; ++obs ) {
-                        float p = probability_obs_ore_slam_[calculate_index_ore_slam(slabels, obs, loc_type)];
+                        float p = probability_obs_mine_mapping_[calculate_index_mine_mapping(slabels, obs, loc_type)];
                         if( p > best_obs_prob ) {
                             best_obs = obs;
                             best_obs_prob = p;
@@ -713,7 +713,7 @@ struct cellmap_t {
                                   << " with p=" << best_obs_prob
                                   << "; correct obs " << correct_obs
                                   << " has p="
-                                  << probability_obs_ore_slam_[calculate_index_ore_slam(slabels, correct_obs, loc_type)]
+                                  << probability_obs_mine_mapping_[calculate_index_mine_mapping(slabels, correct_obs, loc_type)]
                                   << std::endl;
                     }
                 }
