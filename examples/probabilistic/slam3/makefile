@@ -33,7 +33,7 @@ slam:		main.cc \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
-			slam_particles.h mine_mapping_particles.h aisle_slam_particles.h \
+			slam_particles.h mine_mapping_particles.h mine_mapping_particles_v2.h aisle_slam_particles.h \
 			slam_cache.h edbp.h \
 			generate_plot.h stats.h \
 			inference.h
@@ -43,7 +43,7 @@ mpi.master:	main.cc \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
-			slam_particles.h mine_mapping_particles.h aisle_slam_particles.h \
+			slam_particles.h mine_mapping_particles.h mine_mapping_particles_v2.h aisle_slam_particles.h \
 			slam_cache.h edbp.h \
 			generate_plot.h stats.h \
 			inference.h \
