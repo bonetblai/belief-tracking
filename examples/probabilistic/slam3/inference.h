@@ -396,6 +396,16 @@ struct inference_t {
         }
     }
 
+    void print_factor(std::ostream &os, const dai::Factor &factor) const {
+        for( int j = 0; j < int(factor.nrStates()); ++j ) {
+            os << "   ";
+            std::map<dai::Var, size_t> state = dai::calcState(factor.vars(), j);
+            for( dai::VarSet::const_iterator it = factor.vars().begin(); it != factor.vars().end(); ++it )
+                os << " " << std::setw(3) << *it << "=" << state[*it];
+            os << ":  j=" << std::setw(3) << j << ",  nbits=" << "na" << ",  value=" << factor[j] << std::endl;
+        }
+    }
+
     void print_factor(std::ostream &os, int fid, const std::vector<dai::Factor> &factors, const std::string &name) const {
         assert((fid >= 0) && (fid < int(factors.size())));
         const dai::Factor &factor = factors[fid];
@@ -403,13 +413,7 @@ struct inference_t {
         for( dai::VarSet::const_iterator it = factor.vars().begin(); it != factor.vars().end(); ++it )
             os << " " << *it;
         os << std::endl << name << "[fid=" << fid << "]=" << std::endl;
-        for( int j = 0; j < int(factor.nrStates()); ++j ) {
-            os << "   ";
-            std::map<dai::Var, size_t> states = dai::calcState(factor.vars(), j);
-            for( dai::VarSet::const_iterator it = factor.vars().begin(); it != factor.vars().end(); ++it )
-                os << " " << std::setw(3) << *it << "=" << states[*it];
-            os << ":  j=" << std::setw(3) << j << ",  nbits=" << "na" << ",  value=" << factor[j] << std::endl;
-        }
+        print_factor(os, factor);
     }
 
     void print_factor_edbp(std::ostream &os, int fid, const std::vector<dai::Factor> &factors) const {

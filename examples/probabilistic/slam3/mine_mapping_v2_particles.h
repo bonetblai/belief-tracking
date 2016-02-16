@@ -837,20 +837,26 @@ struct rbpf_particle_t : public base_particle_t {
         assert(indices_for_updated_factors.empty());
     }
     void calculate_new_factors_v2(mpi_slam_t *mpi, int wid, bool print_marginals = false) {
+        assert(indices_for_updated_factors_.empty());
         calculate_marginals_v2(mpi, wid, print_marginals);
         for( int loc = 0; loc < base_->nloc_; ++loc ) {
-            std::cout << "dist[loc=" << loc <<"]=" << dai::dist(marginals_v2_[loc], marginals_[loc], dai::DISTL1) << std::endl;
-            //assert(marginals_v2_[loc] == marginals_[loc]); // CHECK: remove
-            assert(dai::dist(marginals_v2_[loc], marginals_[loc], dai::DISTL1) < 1e-6);
-            const dai::Factor marginal_on_external_vars = marginals_v2_[loc].marginal(cache_t::external_vars_v2(loc));
+            const dai::Factor &marginal = marginals_[loc];
+            const dai::Factor &marginal_v2 = marginals_v2_[loc];
+            //std::cout << "dist[loc=" << loc <<"]=" << dai::dist(marginal_v2, marginal, dai::DISTL1) << std::endl;
+            assert(dai::dist(marginal_v2, marginal, dai::DISTL1) < 1e-6);
+            const dai::Factor marginal_on_external_vars = marginal_v2.marginal(cache_t::external_vars_v2(loc));
+            //std::cout << "marginals_ext[loc=" << loc << "]:" << std::endl;
+            //inference_v2_.print_factor(std::cout, marginal_on_external_vars);
             dai::Factor &factor_v2 = factors_v2_[loc];
-            std::cout << "size loc=" << coord_t(loc) << ": factor=" << factor_v2.vars().size() << ", external=" << marginal_on_external_vars.vars().size() << std::endl;
+            assert(factor_v2.vars() == marginal_v2.vars());
+            //std::cout << "size loc=" << coord_t(loc) << ": factor=" << factor_v2.vars().size() << ", external=" << marginal_on_external_vars.vars().size() << std::endl;
             for( int i = 0; i < int(factor_v2.nrStates()); ++i ) {
                 int j = cache_t::factor_map_v2(loc, i);
-                std::cout << "map: loc=" << loc << ", i=" << i << ", j=" << j << ", mar=" << marginal_on_external_vars[j] << std::endl;
-                factor_v2.set(i, factor_v2[i] / marginal_on_external_vars[j]);
+                //std::cout << "map: loc=" << loc << ", i=" << i << ", j=" << j << ", mar=" << marginal_on_external_vars[j] << std::endl;
+                //std::cout << "update: old-factor=" << factor_v2[i] << ", mar=" << marginal_v2[i] << ", mar-ext=" << marginal_on_external_vars[j] << ", i=" << i << ", j=" << j << std::endl;
+                factor_v2.set(i, marginal_v2[i] / marginal_on_external_vars[j]);
             }
-            inference_v2_.print_factor(std::cout, loc, factors_v2_, "xx");
+            //inference_v2_.print_factor(std::cout, loc, factors_v2_, "new-factor");
         }
 
         // verification
