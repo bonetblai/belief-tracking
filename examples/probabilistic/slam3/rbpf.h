@@ -33,7 +33,7 @@ template <typename PTYPE, typename BASE> struct RBPF_t : public SIR_t<PTYPE, BAS
     using PF_t<PTYPE, BASE>::particles_;
     using PF_t<PTYPE, BASE>::multiplicity_;
     using PF_t<PTYPE, BASE>::marginals_on_vars_;
-    using SIR_t<PTYPE, BASE>::force_resampling_;;
+    using SIR_t<PTYPE, BASE>::force_resampling_;
     using SIR_t<PTYPE, BASE>::do_stochastic_universal_sampling_;
 
     RBPF_t(const std::string &name, const BASE &base, const std::multimap<std::string, std::string> &parameters)

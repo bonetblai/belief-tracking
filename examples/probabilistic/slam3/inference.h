@@ -345,7 +345,7 @@ struct inference_t {
                 }
             } else {
                 int nvariables = 0;
-                ifs >> nvariables;;
+                ifs >> nvariables;
                 assert(nvariables == int(variables.size()));
                 assert(nvariables == int(marginals.size()));
                 for( int vid = 0; vid < nvariables; ++vid ) {

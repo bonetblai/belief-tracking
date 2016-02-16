@@ -951,7 +951,7 @@ struct cellmap_t {
         std::cout << std::endl;
 
         // run execution
-        std::cout << "# steps:";
+        std::cout << "# steps:" << std::flush;
         for( size_t t = 1; true; ++t ) {
             std::cout << /*std::endl <<*/ " " << t << std::flush;
             if( (policy == 0) && (t >= input_execution.size()) ) break;
