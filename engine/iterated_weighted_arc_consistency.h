@@ -61,7 +61,9 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
       : arc_consistency_t<T>(ac) {
     }
     iterated_weighted_arc_consistency_t(iterated_weighted_arc_consistency_t &&ac) = default;
-    ~iterated_weighted_arc_consistency_t() { clear(); }
+    ~iterated_weighted_arc_consistency_t() {
+        clear();
+    }
 
     virtual bool is_consistent(int var) const {
         return domain_[var]->min_weight() != std::numeric_limits<int>::max();
@@ -176,7 +178,7 @@ template<typename T> class iterated_weighted_arc_consistency_t : public arc_cons
             int var_y = edge.second;
 
 #ifdef DEBUG
-            std::cout << "weighed-ac3: revise arc " << var_x << " --> " << var_y << std::endl;
+            std::cout << "iterated weighted-ac3: revise arc " << var_x << " --> " << var_y << std::endl;
 #endif
 
             // try to reduce arc var_x -> var_y

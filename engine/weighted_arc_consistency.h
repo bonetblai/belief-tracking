@@ -53,9 +53,11 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
     using arc_consistency_t<T>::arc_reduce_postprocessing;
 
   public:
-    weighted_arc_consistency_t(const constraint_digraph_t &digraph) : arc_consistency_t<T>(digraph) {
+    weighted_arc_consistency_t(const constraint_digraph_t &digraph)
+      : arc_consistency_t<T>(digraph) {
     }
-    explicit weighted_arc_consistency_t(const weighted_arc_consistency_t &ac) : arc_consistency_t<T>(ac) {
+    explicit weighted_arc_consistency_t(const weighted_arc_consistency_t &ac)
+      : arc_consistency_t<T>(ac) {
     }
     weighted_arc_consistency_t(weighted_arc_consistency_t &&ac) = default;
     ~weighted_arc_consistency_t() {
@@ -186,13 +188,13 @@ template<typename T> class weighted_arc_consistency_t : public arc_consistency_t
     }
     bool weighted_ac3(std::vector<int> &revised_vars, bool propagate = true) {
         std::vector<bool> revised_vars_tmp(nvars_, false);
-        bool weight_change = weighted_ac3(revised_vars_tmp, propagate);
+        bool change = weighted_ac3(revised_vars_tmp, propagate);
         revised_vars.clear();
         for( int var = 0; var < nvars_; ++var ) {
             if( revised_vars_tmp[var] )
                 revised_vars.push_back(var);
         }
-        return weight_change;
+        return change;
     }
 };
 
