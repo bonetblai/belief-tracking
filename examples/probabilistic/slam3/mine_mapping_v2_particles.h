@@ -32,6 +32,7 @@
 #include <vector>
 
 #include <dai/alldai.h>
+#include <dai/util.h>
 
 #include "cellmap.h"
 #include "slam_particles.h"
@@ -51,6 +52,8 @@ namespace MineMappingV2 {
 class cache_t : public SLAM::cache_t {
   protected:
     static std::vector<unsigned*> compatible_values_;
+    static std::vector<dai::VarSet> external_vars_v2_;
+    static std::vector<std::vector<int> > external_vars_map_v2_;
 
     static void compute_cache_for_compatible_values(int nrows, int ncols) {
         float start_time = Utils::read_time_in_seconds();
@@ -131,6 +134,29 @@ class cache_t : public SLAM::cache_t {
                   << std::endl;
     }
 
+    static void compute_cache_for_external_vars_v2(int nrows, int ncols) {
+        external_vars_v2_ = std::vector<dai::VarSet>(num_locs_);
+        for( int loc = 0; loc < num_locs_; ++loc ) {
+            dai::VarSet external_vars;
+            for( int ploc = loc + 1; ploc < num_locs_; ++ploc )
+                external_vars |= cache_t::varset(ploc);
+            external_vars &= cache_t::varset(loc);
+            std::cout << "external vars v2 for loc=" << coord_t(loc) << "@" << loc << ": " << external_vars << std::endl;
+            external_vars_v2_[loc] = external_vars;
+        }
+
+        external_vars_map_v2_ = std::vector<std::vector<int> >(num_locs_);
+        for( int loc = 0; loc < num_locs_; ++loc ) {
+            const dai::VarSet &factor_varset = cache_t::varset(loc);
+            external_vars_map_v2_[loc] = std::vector<int>(factor_varset.nrStates(), -1);
+            for( int i = 0; i < int(factor_varset.nrStates()); ++i ) {
+                std::map<dai::Var, size_t> state = dai::calcState(factor_varset, i);
+                int j = dai::calcLinearState(cache_t::external_vars_v2(loc), state);
+                external_vars_map_v2_[loc][i] = j;
+            }
+        }
+    }
+
   public:
     cache_t() { }
     ~cache_t() { }
@@ -140,6 +166,7 @@ class cache_t : public SLAM::cache_t {
         SLAM::cache_t::compute_basic_elements(nrows, ncols);
         SLAM::cache_t::compute_cache_for_states(nrows, ncols);
         compute_cache_for_compatible_values(nrows, ncols);
+        compute_cache_for_external_vars_v2(nrows, ncols);
     }
     static void finalize() {
         std::set<unsigned*> erased;
@@ -155,6 +182,13 @@ class cache_t : public SLAM::cache_t {
 
     static const unsigned* compatible_values(int val_y, int var_y, int var_x) {
         return compatible_values_[val_y * num_locs_ * num_locs_ + var_y * num_locs_ + var_x];
+    }
+
+    static const dai::VarSet& external_vars_v2(int loc) {
+        return external_vars_v2_[loc];
+    }
+    static int factor_map_v2(int loc, int i) {
+        return external_vars_map_v2_[loc][i];
     }
 };
 
@@ -487,6 +521,7 @@ struct rbpf_particle_t : public base_particle_t {
         std::multimap<std::string, std::string>::const_iterator it = parameters.find("inference");
         if( it != parameters.end() ) {
             inference_.set_inference_algorithm(it->second, "BEL", false);
+            inference_v2_.set_inference_algorithm(it->second, "BEL", false);
             if( inference_.algorithm() == "iterated-ac3" ) {
                 const dai::PropertySet &options = inference_.options();
                 use_ac3_ = true;
@@ -524,11 +559,11 @@ struct rbpf_particle_t : public base_particle_t {
         kappa_csp_(std::move(p.kappa_csp_)),
         factors_(std::move(p.factors_)),
         indices_for_updated_factors_(std::move(p.indices_for_updated_factors_)),
+        marginals_(std::move(p.marginals_)),
+        inference_(std::move(p.inference_)),
         factors_v2_(std::move(p.factors_v2_)),
         indices_for_updated_factors_v2_(std::move(p.indices_for_updated_factors_v2_)),
-        marginals_(std::move(p.marginals_)),
         marginals_v2_(std::move(p.marginals_v2_)),
-        inference_(std::move(p.inference_)),
         inference_v2_(std::move(p.inference_v2_)) {
     }
     virtual ~rbpf_particle_t() {
@@ -547,11 +582,11 @@ struct rbpf_particle_t : public base_particle_t {
         kappa_csp_ = p.kappa_csp_;
         factors_ = p.factors_;
         indices_for_updated_factors_ = p.indices_for_updated_factors_;
+        marginals_ = p.marginals_;
+        inference_ = p.inference_;
         factors_v2_ = p.factors_v2_;
         indices_for_updated_factors_v2_ = p.indices_for_updated_factors_v2_;
-        marginals_ = p.marginals_;
         marginals_v2_ = p.marginals_v2_;
-        inference_ = p.inference_;
         inference_v2_ = p.inference_v2_;
         return *this;
     }
@@ -566,11 +601,11 @@ struct rbpf_particle_t : public base_particle_t {
                (kappa_csp_ == p.kappa_csp_) &&
                (factors_ == p.factors_) &&
                (indices_for_updated_factors_ == p.indices_for_updated_factors_) &&
+               (marginals_ == p.marginals_) &&
+               (inference_ == p.inference_) &&
                (factors_v2_ == p.factors_v2_) &&
                (indices_for_updated_factors_v2_ == p.indices_for_updated_factors_v2_) &&
-               (marginals_ == p.marginals_) &&
                (marginals_v2_ == p.marginals_v2_) &&
-               (inference_ == p.inference_) &&
                (inference_v2_ == p.inference_v2_);
     }
 
@@ -599,10 +634,11 @@ struct rbpf_particle_t : public base_particle_t {
     void initial_sampling_in_place(mpi_slam_t *mpi, int wid) {
         assert(base_->nlabels_ == 2);
 
-        // CHECK: not clear how to do it for v2
         if( !use_ac3_ ) {
             indices_for_updated_factors_.clear();
             indices_for_updated_factors_.reserve(base_->nloc_);
+            indices_for_updated_factors_v2_.clear();
+            indices_for_updated_factors_v2_.reserve(base_->nloc_);
         }
 
         // set initial history and reset factors for locations
@@ -610,10 +646,14 @@ struct rbpf_particle_t : public base_particle_t {
         if( !use_ac3_ || !lazy_ac_ ) {
             for( int loc = 0; loc < base_->nloc_; ++loc ) {
                 dai::Factor &factor = factors_[loc];
+                dai::Factor &factor_v2 = factors_v2_[loc];
                 float p = 1.0 / (1 << factor.vars().size());
                 for( int i = 0; i < (1 << factor.vars().size()); ++i )
                     factor.set(i, p);
+                for( int i = 0; i < (1 << factor.vars().size()); ++i )
+                    factor_v2.set(i, p);
                 if( !use_ac3_ ) indices_for_updated_factors_.push_back(loc);
+                if( !use_ac3_ ) indices_for_updated_factors_v2_.push_back(loc);
             }
         }
 
@@ -621,6 +661,7 @@ struct rbpf_particle_t : public base_particle_t {
             reset_csp();
         } else {
             calculate_marginals(mpi, wid, false);
+            calculate_new_factors_v2(mpi, wid, false);
         }
     }
 
@@ -746,6 +787,14 @@ struct rbpf_particle_t : public base_particle_t {
         factor.normalize();
         if( !use_ac3_ ) indices_for_updated_factors_.push_back(current_loc);
 
+        dai::Factor &factor_v2 = factors_v2_[current_loc];
+        for( int value = 0; value < int(factor_v2.nrStates()); ++value ) {
+            int slabels = get_slabels(current_loc, factor_v2.vars(), value);
+            factor_v2.set(value, factor_v2[value] * base_->probability_obs(obs, current_loc, slabels, last_action));
+        }
+        factor_v2.normalize();
+        //if( !use_ac3_ ) indices_for_updated_factors_v2_.push_back(current_loc); // CHECK: all factors should be marked as updated
+
 #ifdef DEBUG
         std::cout << "factor after update: loc=" << current_loc << ", obs=" << obs << std::endl;
         std::cout << "  factor: ";
@@ -773,7 +822,49 @@ struct rbpf_particle_t : public base_particle_t {
         mpi->calculate_marginals(factors_, indices_for_updated_factors_, wid);
 #endif
         assert(indices_for_updated_factors_.empty());
-        assert(indices_for_updated_factors_v2_.empty());
+    }
+
+
+    void calculate_marginals_v2(mpi_slam_t *mpi, int wid, bool print_marginals = false) const {
+        std::vector<int> indices_for_updated_factors = indices_for_updated_factors_v2_;
+        assert(int(indices_for_updated_factors.size()) == base_->nloc_);
+        inference_v2_.calculate_marginals(cache_t::variables(),
+                                          indices_for_updated_factors,
+                                          factors_v2_,
+                                          marginals_v2_,
+                                          Inference::edbp_t::edbp_factor_index,
+                                          print_marginals);
+        assert(indices_for_updated_factors.empty());
+    }
+    void calculate_new_factors_v2(mpi_slam_t *mpi, int wid, bool print_marginals = false) {
+        calculate_marginals_v2(mpi, wid, print_marginals);
+        for( int loc = 0; loc < base_->nloc_; ++loc ) {
+            std::cout << "dist[loc=" << loc <<"]=" << dai::dist(marginals_v2_[loc], marginals_[loc], dai::DISTL1) << std::endl;
+            //assert(marginals_v2_[loc] == marginals_[loc]); // CHECK: remove
+            assert(dai::dist(marginals_v2_[loc], marginals_[loc], dai::DISTL1) < 1e-6);
+            const dai::Factor marginal_on_external_vars = marginals_v2_[loc].marginal(cache_t::external_vars_v2(loc));
+            dai::Factor &factor_v2 = factors_v2_[loc];
+            std::cout << "size loc=" << coord_t(loc) << ": factor=" << factor_v2.vars().size() << ", external=" << marginal_on_external_vars.vars().size() << std::endl;
+            for( int i = 0; i < int(factor_v2.nrStates()); ++i ) {
+                int j = cache_t::factor_map_v2(loc, i);
+                std::cout << "map: loc=" << loc << ", i=" << i << ", j=" << j << ", mar=" << marginal_on_external_vars[j] << std::endl;
+                factor_v2.set(i, factor_v2[i] / marginal_on_external_vars[j]);
+            }
+            inference_v2_.print_factor(std::cout, loc, factors_v2_, "xx");
+        }
+
+        // verification
+        bool status = true;
+        calculate_marginals_v2(mpi, wid, false);
+        for( int loc = 0; status && (loc < base_->nloc_); ++loc ) {
+            float L1d = dai::dist(marginals_v2_[loc], marginals_[loc], dai::DISTL1);
+            if( L1d > 1e-6 ) {
+                std::cout << "****** NOT GOOD: loc=" << coord_t(loc) << ", L1d=" << L1d << " ******" << std::flush;
+                status = false;
+            }
+        }
+        if( status ) std::cout << "****** GOOD ******" << std::flush;
+        assert(status);
     }
 
     void update_marginals(float weight, std::vector<dai::Factor> &marginals_on_vars) const {
@@ -845,7 +936,10 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
         if( !history_container.contains(np.loc_history_) ) {
             // this is a new loc history, perform update
             bool status = np.update_factors(last_action, obs);
-            if( !use_ac3_ && status ) np.calculate_marginals(mpi, wid, false);
+            if( !use_ac3_ && status ) {
+                np.calculate_marginals(mpi, wid, false);
+                np.calculate_new_factors_v2(mpi, wid, false);
+            }
             return status;
         }
         return true;
@@ -853,7 +947,7 @@ struct motion_model_rbpf_particle_t : public rbpf_particle_t {
 
     virtual float importance_weight(const rbpf_particle_t &np, int last_action, int obs) const {
         assert(indices_for_updated_factors_.empty());
-        assert(indices_for_updated_factors_v2_.empty());
+        //assert(indices_for_updated_factors_v2_.empty()); // CHECK
         int np_current_loc = np.loc_history_.back();
         float weight = 0;
         if( use_ac3_ ) {
@@ -905,7 +999,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     void calculate_cdf(int last_action, int obs, std::vector<float> &cdf) const {
         // make sure there is no pending inference on factor model
         assert(indices_for_updated_factors_.empty());
-        assert(indices_for_updated_factors_v2_.empty());
+        //assert(indices_for_updated_factors_v2_.empty()); // CHECK
 
         cdf.clear();
         cdf.reserve(base_->nloc_);
@@ -957,7 +1051,12 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
         if( !history_container.contains(np.loc_history_) ) {
             // this is a new loc history, perform update
             bool status = np.update_factors(last_action, obs);
-            if( !use_ac3_ && status ) np.calculate_marginals(mpi, wid, false);
+            if( !use_ac3_ && status ) {
+                std::cout << "[BEFORE]" << std::endl;
+                np.calculate_marginals(mpi, wid, false);
+                np.calculate_new_factors_v2(mpi, wid, false);
+                std::cout << "[AFTER]" << std::endl;
+            }
             return status;
         }
         return true;
