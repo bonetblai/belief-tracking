@@ -4,10 +4,9 @@ BELIEF_TRACKING_HOME=	../../..
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine #-I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
 
 CXX=			c++
-MPICXX=			/usr/lib64/openmpi/bin/mpic++
-MPICHCXX=		/usr/lib64/mpich/bin/mpic++
+MPICXX=			mpic++
 
-CXXEXT=			-std=c++0x -DMACOSX -I ~/software/libdai/include -Wno-deprecated -Wall -W -Wextra -fPIC -O3 -DDAI_DEBUG -L ~/software/libdai/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter	
+CXXEXT=			-std=c++11 -DMACOSX -I ~/software/libdai/include -I /usr/local/include -Wno-deprecated -Wall -W -Wextra -DDAI_DEBUG -L ~/software/libdai/lib -L /usr/local/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter
 
 CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
 
@@ -20,24 +19,18 @@ mpi.master:
 mpi.worker:
 			$(MPICXX) $(CFLAGS) -DUSE_MPI -o mpi.worker mpi_worker.cc -ldai #-lgmpxx -lgmp
 
-mpich.master:
-			$(MPICHCXX) $(CFLAGS) -DUSE_MPI -o mpich.master main.cc -ldai #-lgmpxx -lgmp
-
-mpich.worker:
-			$(MPICHCXX) $(CFLAGS) -DUSE_MPI -o mpich.worker mpi_worker.cc -ldai #-lgmpxx -lgmp
-
 all:			slam mpi
-mpi:			mpi.master mpi.worker mpich.master mpich.worker
+mpi:			mpi.master mpi.worker
 
 clean:
-			rm -f slam mpi.master mpi.worker mpìch.master mpìch.worker dummy* *~
+			rm -f slam mpi.master mpi.worker dummy* *~
 
 # dependencies
 
 slam:		main.cc \
 			cellmap.h utils.h \
   			action_selection.h slam_action_selection.h \
-			tracking.h particle_filter.h \
+			tracking.h decomposable.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
 			slam_particles.h mine_mapping_particles.h mine_mapping_v2_particles.h corridor_slam_particles.h \
 			slam_cache.h edbp.h \
@@ -47,7 +40,7 @@ slam:		main.cc \
 mpi.master:	main.cc \
 			cellmap.h utils.h \
   			action_selection.h slam_action_selection.h \
-			tracking.h particle_filter.h \
+			tracking.h decomposable.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
 			slam_particles.h mine_mapping_particles.h mine_mapping_v2_particles.h corridor_slam_particles.h \
 			slam_cache.h edbp.h \
@@ -55,16 +48,4 @@ mpi.master:	main.cc \
 			inference.h \
 			mpi_api.h mpi_slam.h
 mpi.worker:	mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
-
-mpich.master:		main.cc \
-			cellmap.h utils.h \
-  			action_selection.h slam_action_selection.h \
-			tracking.h particle_filter.h \
-			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
-			slam_particles.h mine_mapping_particles.h mine_mapping_v2_particles.h corridor_slam_particles.h \
-			slam_cache.h edbp.h kappa.h \
-			generate_plot.h stats.h \
-			inference.h \
-			mpi_api.h mpi_slam.h
-mpich.worker:		mpi_worker.cc mpi_api.h mpi_slam.h inference.h utils.h
 
