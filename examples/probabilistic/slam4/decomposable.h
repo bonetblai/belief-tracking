@@ -128,7 +128,7 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
     virtual void initialize() {
         //std::cout << "initialize(): entry" << std::endl;
         for( int loc = 0; loc < base_.nloc_; ++loc ) {
-            dai::Factor &factor = marginals_[loc];
+            dai::Factor &factor = factors_[loc];
             float p = 1.0 / float(factor.nrStates() / base_.nloc_);
             for( int value = 0; value < int(factor.nrStates()); ++value ) {
                 const std::map<dai::Var, size_t> &state = cache_t::state(loc, value);
@@ -148,7 +148,10 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
     virtual void update(int last_action, int obs) {
         //std::cout << "update: entry: last-action=" << last_action << ", obs=" << obs << std::endl;
 
-        // calculate P(loc(t)|loc(t+1),a(t),h(t))
+        // calculate P(loc(t)|loc(t+1),m(t+1),a(t),h(t)):
+        //   P(loc(t)|loc(t+1),m(t+1),a(t),h(t)) = alpha * P(loc(t+1)|loc(t),m(t+1),a(t),h(t)) * P(loc(t)|m(t+1),a(t),h(t))
+        //                                       = alpha * P(loc(t+1)|loc(t),a(t)) * P(loc(t)|h(t))
+        //                                       = alpha * tr(loc(t+1)|loc(t),a(t)) * P(loc(t)|h(t)) [tr. dyn. * joint marginal]
         assert(int(marginals_on_vars_.size()) == 1 + base_.nloc_);
         assert(int(marginals_on_vars_[base_.nloc_].nrStates()) == base_.nloc_);
         dai::Factor &loc_marginal = marginals_on_vars_[base_.nloc_];
@@ -156,10 +159,10 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
         for( int new_loc = 0; new_loc < base_.nloc_; ++new_loc ) {
             float alpha = 0;
             for( int loc = 0; loc < base_.nloc_; ++loc ) {
-                float p = base_.probability_tr_loc(last_action, loc, new_loc);
-                assert(p * loc_marginal[loc] >= 0);
-                inv_tr_[loc * base_.nloc_ + new_loc] = p * loc_marginal[loc];
-                alpha += p * loc_marginal[loc];
+                float tr = base_.probability_tr_loc(last_action, loc, new_loc);
+                assert(tr * loc_marginal[loc] >= 0);
+                inv_tr_[loc * base_.nloc_ + new_loc] = tr * loc_marginal[loc];
+                alpha += tr * loc_marginal[loc];
             }
             if( alpha != 0 ) {
                 for( int loc = 0; loc < base_.nloc_; ++loc )
@@ -167,7 +170,7 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
             }
         }
 
-        // calculate new factors assuming loc is BD
+        // calculate new factors replacing regression on loc by marginalization
         for( int j = 0; j < base_.nloc_; ++j ) {
             dai::Factor &factor = factors_[j];
             dai::Factor new_factor(cache_t::varset(j));
@@ -176,17 +179,24 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
                 const std::map<dai::Var, size_t> &state = cache_t::state(j, value);
                 assert(state.find(cache_t::variable(base_.nloc_)) != state.end());
                 int new_loc = state.at(cache_t::variable(base_.nloc_));
+
                 float p = 0;
                 for( int loc = 0; loc < base_.nloc_; ++loc ) {
-                    float q = inv_tr_[loc * base_.nloc_ + new_loc];
-                    if( q != 0 ) {
-                        float prob_tr = base_.probability_tr_loc(last_action, loc, new_loc);
+                    float inv_tr = inv_tr_[loc * base_.nloc_ + new_loc];
+                    if( inv_tr != 0 ) {
+                        float tr = base_.probability_tr_loc(last_action, loc, new_loc);
                         int value_with_replaced_loc = cache_t::replace_loc_in_value(j, factor.vars(), value, new_loc, loc);
-                        p += q * prob_tr * factor[value_with_replaced_loc];
+                        p += inv_tr * tr * factor[value_with_replaced_loc];
                     }
                 }
-                int slabels = get_slabels(j, factor.vars(), value);
-                new_factor.set(value, p * base_.probability_obs(obs, new_loc, slabels, last_action));
+
+                if( new_loc == j ) {
+                    int slabels = get_slabels(j, factor.vars(), value);
+                    new_factor.set(value, p * base_.probability_obs(obs, j, slabels, last_action));
+                } else {
+                    assert(base_.nlabels_ == 2);
+                    new_factor.set(value, p / float(base_.nlabels_));
+                }
                 change = change || (factor[value] != new_factor[value]);
             }
 
@@ -197,12 +207,13 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
                     indices_for_updated_factors_.push_back(j);
                 }
             } catch( dai::Exception &e ) {
-                std::cout << "exception: " << e.getMsg() << std::endl;
+                std::cout << "error: dai exception: " << e.getMsg() << std::endl;
+                assert(0);
             }
         }
 
         inference();
-        calculate_marginals();
+        //calculate_marginals();
         //std::cout << "update: exit" << std::endl;
     }
 
