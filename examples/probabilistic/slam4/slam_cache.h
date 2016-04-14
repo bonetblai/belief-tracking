@@ -187,13 +187,12 @@ class cache_with_location_t : public dai::cache_with_location_t {
             patched_values_ = std::vector<std::vector<int> >(num_locs_);
         assert(loc < int(patched_values_.size()));
         if( patched_values_[loc].empty() )
-            patched_values_[loc] = std::vector<int>(varset.nrStates(), -1);
-        assert(value < int(patched_values_[loc].size()));
+            patched_values_[loc] = std::vector<int>(num_locs_ * varset.nrStates(), -1);
 
         // check whether there is a valid entry in cache
         const std::vector<int> &patched_values_for_loc = patched_values_[loc];
-        if( patched_values_for_loc[value] != -1 )
-            return patched_values_for_loc[value];
+        if( patched_values_for_loc[value * num_locs_ + new_loc] != -1 )
+            return patched_values_for_loc[value * num_locs_ + new_loc];
 
 #ifdef DEBUG
         std::cout << "replace_loc_in_value(loc=" << loc << ":" << coord_t(loc)
@@ -213,7 +212,7 @@ class cache_with_location_t : public dai::cache_with_location_t {
 
         // cache new value and return
         assert((new_value >= 0) && (new_value < int(varset.nrStates())));
-        patched_values_[loc][value] = new_value;
+        patched_values_[loc][value * num_locs_ + new_loc] = new_value;
         return new_value;
     }
 };
