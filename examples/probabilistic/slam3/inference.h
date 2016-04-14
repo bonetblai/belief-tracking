@@ -424,6 +424,10 @@ struct inference_t {
             os << " " << factor[j];
         os << std::endl;
     }
+
+    std::string id() const {
+        return algorithm_ == "" ? std::string("null") : algorithm_ + std::string("(") + options_ + std::string(")");
+    }
 };
 
 }; // namespace Inference
