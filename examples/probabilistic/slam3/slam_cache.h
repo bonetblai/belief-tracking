@@ -56,7 +56,7 @@ class cache_t : public dai::cache_t {
 
         // allocate cache if this is first call
         if( slabels_.empty() )
-            slabels_ = std::vector<std::vector<int> >(num_locs_, std::vector<int>(512, -1));
+            slabels_ = std::vector<std::vector<int> >(num_locs_);
         assert(loc < int(slabels_.size()));
         if( slabels_[loc].empty() )
             slabels_[loc] = std::vector<int>(varset.nrStates(), -1);
@@ -74,7 +74,7 @@ class cache_t : public dai::cache_t {
         // this is the first time that we access (beam,value)
         // compute the correct value and cache it for later use
         int slabels = 0;
-        const std::map<dai::Var, size_t> &state = cache_t::state(loc, value);
+        const std::map<dai::Var, size_t> &state = dai::cache_t::state(loc, value);
         for( dai::VarSet::const_iterator it = varset.begin(); it != varset.end(); ++it ) {
             const dai::Var &var = *it;
             std::map<dai::Var, size_t>::const_iterator jt = state.find(var);
@@ -104,98 +104,24 @@ class cache_t : public dai::cache_t {
     }
 };
 
-#if 0 // REMOVE
-class cache_t {
+class cache_with_location_t : public dai::cache_with_location_t {
   protected:
-    static int num_locs_;
-    static std::vector<dai::Var> variables_;
-    static std::vector<dai::VarSet> varsets_;
-    static std::vector<std::vector<std::map<dai::Var, size_t>*> > state_cache_;
     static std::vector<std::vector<int> > slabels_;
+    static std::vector<std::vector<int> > patched_values_;;
 
     static void compute_basic_elements(int nrows, int ncols) {
-        // variables for each location
-        variables_ = std::vector<dai::Var>(num_locs_);
-        for( int loc = 0; loc < num_locs_; ++loc )
-            variables_[loc] = dai::Var(loc, 2);
-
-        // variable sets for each location
-        varsets_ = std::vector<dai::VarSet>(num_locs_);
-        for( int loc = 0; loc < num_locs_; ++loc ) {
-            int row = loc / ncols, col = loc % ncols;
-            std::vector<dai::Var> vars;
-            for( int dr = -1; dr < 2; ++dr ) {
-                int nr = row + dr;
-                if( (nr < 0) || (nr >= nrows) ) continue;
-                for( int dc = -1; dc < 2; ++dc ) {
-                    int nc = col + dc;
-                    if( (nc < 0) || (nc >= ncols) ) continue;
-                    vars.push_back(variables_[nr * ncols + nc]);
-                }
-            }
-            std::sort(vars.begin(), vars.end());
-            varsets_[loc] = dai::VarSet(vars.begin(), vars.end());
-#ifdef DEBUG
-            std::cout << "# compute_basic_elements: loc=" << loc << ", vars=" << varsets_[loc] << std::endl;
-#endif
-        }
+        dai::cache_with_location_t::compute_basic_elements(nrows, ncols);
     }
-
     static void compute_cache_for_states(int nrows, int ncols) {
-        float start_time = Utils::read_time_in_seconds();
-        int size = 0;
-        state_cache_ = std::vector<std::vector<std::map<dai::Var, size_t>*> >(num_locs_);
-        for( int loc = 0; loc < num_locs_; ++loc ) {
-            const dai::VarSet &varset = varsets_[loc];
-            state_cache_[loc] = std::vector<std::map<dai::Var, size_t>*>(varset.nrStates(), static_cast<std::map<dai::Var, size_t>*>(0));
-            for( int value = 0; value < int(varset.nrStates()); ++value ) {
-                std::map<dai::Var, size_t> *state = new std::map<dai::Var, size_t>(dai::calcState(varset, value));
-                state_cache_[loc][value] = state;
-                ++size;
-            }
-        }
-        std::cout << "# cache-for-states:"
-                  << " size=" << size
-                  //<< ", hits=" << cache_hits
-                  << ", time=" << Utils::read_time_in_seconds() - start_time
-                  << std::endl;
-    }
-
-    static void clean_cache_for_states() {
-        for( int i = 0; i < int(state_cache_.size()); ++i ) {
-            for( int j = 0; j < int(state_cache_[i].size()); ++j ) {
-                delete state_cache_[i][j];
-            }
-        }
+        dai::cache_with_location_t::compute_cache_for_states(nrows, ncols);
     }
 
   public:
-    cache_t() { }
-    ~cache_t() { }
+    cache_with_location_t() { }
+    ~cache_with_location_t() { }
 
     static void finalize() {
-        for( int i = 0; i < int(state_cache_.size()); ++i ) {
-            for( int j = 0; j < int(state_cache_[i].size()); ++j ) {
-                std::map<dai::Var, size_t> *state = state_cache_[i][j];
-                delete state;
-            }
-        }
-    }
-
-    static const std::vector<dai::Var>& variables() {
-        return variables_;
-    }
-    static const dai::Var& variable(int loc) {
-        return variables_[loc];
-    }
-    static const std::vector<dai::VarSet>& varsets() {
-        return varsets_;
-    }
-    static const dai::VarSet& varset(int loc) {
-        return varsets_[loc];
-    }
-    static const std::map<dai::Var, size_t>& state(int var, int value) {
-        return *state_cache_[var][value];
+        dai::cache_with_location_t::finalize();
     }
 
     static int get_slabels(int loc, const dai::VarSet &varset, int value, int var_offset(int, int)) {
@@ -204,7 +130,7 @@ class cache_t {
 
         // allocate cache if this is first call
         if( slabels_.empty() )
-            slabels_ = std::vector<std::vector<int> >(num_locs_, std::vector<int>(512, -1));
+            slabels_ = std::vector<std::vector<int> >(num_locs_);
         assert(loc < int(slabels_.size()));
         if( slabels_[loc].empty() )
             slabels_[loc] = std::vector<int>(varset.nrStates(), -1);
@@ -216,20 +142,20 @@ class cache_t {
             return slabels_for_loc[value];
 
 #ifdef DEBUG
-        std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", value=" << value << "):" << std::endl;
+        std::cout << "get_slabels(loc=" << loc << ":" << coord_t(loc) << ", vars=" << varset << ", value=" << value << "):" << std::endl;
 #endif
 
         // this is the first time that we access (beam,value)
         // compute the correct value and cache it for later use
         int slabels = 0;
-        const std::map<dai::Var, size_t> &state = cache_t::state(loc, value);
+        const std::map<dai::Var, size_t> &state = dai::cache_with_location_t::state(loc, value);
         for( dai::VarSet::const_iterator it = varset.begin(); it != varset.end(); ++it ) {
+            if( *it == dai::cache_with_location_t::variable(num_locs_) ) continue; // skip location variable
             const dai::Var &var = *it;
-            std::map<dai::Var, size_t>::const_iterator jt = state.find(var);
-            assert(jt != state.end());
-            size_t var_value = jt->second;
+            assert(state.find(var) != state.end());
+            size_t var_value = state.at(var);
             assert(var_value < 2); // because it is a binary variable
-            if( var_value ) {
+            if( var_value == 1 ) {
                 int var_id = it->label();
                 int var_off = var_offset(loc, var_id);
 #ifdef DEBUG
@@ -251,14 +177,46 @@ class cache_t {
         return slabels;
     }
 
-    static void print_state(std::ostream &os, const std::map<dai::Var, size_t> &state) {
-        os << "{";
-        for( std::map<dai::Var, size_t>::const_iterator it = state.begin(); it != state.end(); ++it )
-            os << it->first << "=" << it->second << ",";
-        os << "}";
+    static int replace_loc_in_value(int loc, const dai::VarSet &varset, int value, int old_loc, int new_loc) {
+        assert((loc >= 0) && (loc < num_locs_));
+        assert((new_loc >= 0) && (new_loc < num_locs_));
+        assert((value >= 0) && (value < int(varset.nrStates())));
+
+        // allocate cache if this is first call
+        if( patched_values_.empty() )
+            patched_values_ = std::vector<std::vector<int> >(num_locs_);
+        assert(loc < int(patched_values_.size()));
+        if( patched_values_[loc].empty() )
+            patched_values_[loc] = std::vector<int>(varset.nrStates(), -1);
+        assert(value < int(patched_values_[loc].size()));
+
+        // check whether there is a valid entry in cache
+        const std::vector<int> &patched_values_for_loc = patched_values_[loc];
+        if( patched_values_for_loc[value] != -1 )
+            return patched_values_for_loc[value];
+
+#ifdef DEBUG
+        std::cout << "replace_loc_in_value(loc=" << loc << ":" << coord_t(loc)
+                  << ", value=" << value
+                  << ", old-loc=" << old_loc << ":" << coord_t(old_loc)
+                  << ", new-loc=" << new_loc << ":" << coord_t(new_loc) << "):"
+                  << std::endl;
+#endif
+
+        // this is the first time that we change loc in this value.
+        // Compute new value and cache it for later use
+        std::map<dai::Var, size_t> new_state = dai::cache_with_location_t::state(loc, value);
+        assert(new_state.find(dai::cache_with_location_t::variable(num_locs_)) != new_state.end());
+        assert(new_state.at(dai::cache_with_location_t::variable(num_locs_)) == size_t(old_loc));
+        new_state.at(dai::cache_with_location_t::variable(num_locs_)) = new_loc;
+        int new_value = dai::calcLinearState(varset, new_state);
+
+        // cache new value and return
+        assert((new_value >= 0) && (new_value < int(varset.nrStates())));
+        patched_values_[loc][value] = new_value;
+        return new_value;
     }
 };
-#endif
 
 }; // namespace SLAM
 
