@@ -1,6 +1,5 @@
-ROOT=			../../../..
-BELIEF_TRACKING_HOME=	$(ROOT)/belief-tracking
-MDP_ENGINE_HOME=	$(ROOT)/mdp-engine
+BELIEF_TRACKING_HOME=	../../..
+#MDP_ENGINE_HOME=	$(ROOT)/mdp-engine
 
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine #-I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
 
@@ -33,7 +32,7 @@ slam:		main.cc \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
-			slam_particles.h mine_mapping_particles.h mine_mapping_v2_particles.h aisle_slam_particles.h \
+			slam_particles.h mine_mapping_particles.h mine_mapping_v2_particles.h corridor_slam_particles.h \
 			slam_cache.h edbp.h \
 			generate_plot.h stats.h \
 			inference.h
@@ -43,7 +42,7 @@ mpi.master:	main.cc \
   			action_selection.h slam_action_selection.h \
 			tracking.h particle_filter.h \
 			sis.h sir.h motion_model_sir.h optimal_sir.h rbpf.h \
-			slam_particles.h mine_mapping_particles.h mine_mapping_v2_particles.h aisle_slam_particles.h \
+			slam_particles.h mine_mapping_particles.h mine_mapping_v2_particles.h corridor_slam_particles.h \
 			slam_cache.h edbp.h \
 			generate_plot.h stats.h \
 			inference.h \

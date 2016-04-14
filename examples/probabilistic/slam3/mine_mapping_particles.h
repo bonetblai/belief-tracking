@@ -32,6 +32,7 @@
 #include <vector>
 
 #include <dai/alldai.h>
+#include <dai/util.h>
 
 #include "cellmap.h"
 #include "slam_particles.h"

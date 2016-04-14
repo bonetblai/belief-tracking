@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef AISLE_SLAM_PARTICLES_H
-#define AISLE_SLAM_PARTICLES_H
+#ifndef CORRIDOR_SLAM_PARTICLES_H
+#define CORRIDOR_SLAM_PARTICLES_H
 
 #include <cassert>
 #include <cstdlib>
@@ -46,7 +46,7 @@
 
 //#define DEBUG
 
-namespace AisleSLAM {
+namespace Corridor {
 
 class cache_t : public SLAM::cache_t {
   protected:
@@ -947,7 +947,7 @@ struct optimal_rbpf_particle_t : public rbpf_particle_t {
     }
 };
 
-}; // namespace AisleSLAM
+}; // namespace Corridor
 
 #undef DEBUG
 

@@ -42,7 +42,7 @@
 #include "slam_particles.h"
 #include "mine_mapping_particles.h"
 #include "mine_mapping_v2_particles.h"
-#include "aisle_slam_particles.h"
+#include "corridor_slam_particles.h"
 
 using namespace std;
 
@@ -63,8 +63,15 @@ vector<dai::Var> dai::cache_t::variables_;
 vector<dai::VarSet> dai::cache_t::varsets_;
 vector<vector<map<dai::Var, size_t>*> > dai::cache_t::state_cache_;
 
+int dai::cache_with_location_t::num_locs_ = 0;
+vector<dai::Var> dai::cache_with_location_t::variables_;
+vector<dai::VarSet> dai::cache_with_location_t::varsets_;
+vector<vector<map<dai::Var, size_t>*> > dai::cache_with_location_t::state_cache_;
+
 // static member for SLAM cache
 vector<vector<int> > SLAM::cache_t::slabels_;
+vector<vector<int> > SLAM::cache_with_location_t::slabels_;
+vector<vector<int> > SLAM::cache_with_location_t::patched_values_;
 
 // static members for kappa handling
 float kappa_t::epsilon_ = 0;
@@ -74,15 +81,17 @@ vector<float> kappa_t::powers_;
 vector<unsigned*> MineMapping::cache_t::compatible_values_;
 CSP::constraint_digraph_t MineMapping::kappa_arc_consistency_t::cg_;
 
+#if 0 // V2
 // static members for mine-mapping v2 particles
 vector<unsigned*> MineMappingV2::cache_t::compatible_values_;
 vector<dai::VarSet> MineMappingV2::cache_t::external_vars_v2_;
 vector<vector<int> > MineMappingV2::cache_t::external_vars_map_v2_;
 CSP::constraint_digraph_t MineMappingV2::kappa_arc_consistency_t::cg_;
+#endif
 
-// static members for aisle-slam particles
-vector<unsigned> AisleSLAM::cache_t::compatible_values_;
-CSP::constraint_digraph_t AisleSLAM::kappa_arc_consistency_t::cg_;
+// static members for 1d-slam particles
+vector<unsigned> Corridor::cache_t::compatible_values_;
+CSP::constraint_digraph_t Corridor::kappa_arc_consistency_t::cg_;
 
 // static members for MPI
 mpi_slam_t *mpi_base_t::mpi_ = 0;
@@ -176,30 +185,26 @@ void finalize() {
 
 void usage(ostream &os) {
     os << endl
-       << "Usage: colorslam [{-t | --ntrials} <ntrials>]" << endl
-       << "                 [{-r | --nrows} <nrows>]" << endl
-       << "                 [{-c | --ncols} <ncols>]" << endl
-       << "                 [{-l | --nlabels} <nlabels>]" << endl
-       << "                 [{-s | --seed} <seed>]" << endl
-       << "                 [{-v | --verbose}]" << endl
-       << "                 [{-p | --policy} <policy>]" << endl
-       << "                 [{-? | --help}]" << endl
-       << endl
-       << "where <ntrials> is a non-negative integer telling the number of games to" << endl
-       << "play (default is 1), <nrows> and <ncols> are positive integers telling" << endl
-       << "the dimensions of the minefield (default is 16x16), <nmines> is a positive" << endl
-       << "integer telling the number of hidden mines in the minefield (default is 40)," << endl
-       << "<seed> is an integer for setting the seed of the random number generator" << endl
-       << "(default is 0), <policy> is a string describing the policy to use (default" << endl
-       << "is \"base-policy:direct\"), and <width> and <depth> are parameters for the" << endl
-       << "policy (the default policy is parameter-free)." << endl
-       << endl
-       << "For example," << endl
-       << endl
-       << "  ./mines -r 16 -c 16 -m 40 -t 100" << endl
-       << endl
-       << "performs an experiment consisting of 100 trials on a 16x16 minefield" << endl
-       << "with 40 mines." << endl
+       << "Usage: slam [--task {color | mine-mapping-peaked | mine-mapping-non-peaked | 1d} (default: color)]" << endl
+       << "            [{-c | --ncols} <int> (default: 1)]" << endl
+       << "            [{-r | --nrows} <int> (default: 1)]" << endl
+       << "            [{-l | --nlabels} <int> (default: 2)]" << endl
+       << "            [{-n | --nsteps} <int> (default: 10)]" << endl
+       << "            [{-t | --ntrials} <int> (default: 1)]" << endl
+       << "            [--pa <p> (default: 0.9)]" << endl
+       << "            [--po <p> (default: 0.8)]" << endl
+       << "            [--kappa <p> (default: 0.1)]" << endl
+       << "            [--map-epsilon <p> (default: 0.05)]" << endl
+       << "            [--map-threshold <p> (default: 0.55)]" << endl
+       << "            [{-p | --policy} <0=null,1=random,2=exploration,3=muprhy> <n> (default: 0 10)]" << endl
+       << "            [--read-executions <file>]" << endl
+       << "            [--save-execution-and-exit <file>]" << endl
+       << "            [--tracker <tracker-spec>]" << endl
+       << "            [{--plot | --generate-plot-R}]" << endl
+       << "            [--tmp-path <path> (default: "")]" << endl
+       << "            [{-s | --seed} <int> (default: 0)]" << endl
+       << "            [{-v | --verbose}]" << endl
+       << "            [{-? | --help}]" << endl
        << endl;
 }
 
@@ -211,9 +216,9 @@ int main(int argc, const char **argv) {
 
     int ntrials = 1;
     int nrows = 1;
-    int ncols = 8;
+    int ncols = 1;
     int nlabels = 2;
-    int nsteps = 0;
+    int nsteps = 10;
     int seed = 0;
     bool verbose = false;
     string tmp_path = "";
@@ -223,9 +228,8 @@ int main(int argc, const char **argv) {
     float po = 0.8; // default value in K. P. Murphy's paper
     float epsilon_for_kappa = 0.1;
 
-    cellmap_t::slam_type_t slam_type = cellmap_t::COLOR_SLAM;
+    cellmap_t::slam_type_t slam_type = cellmap_t::COLOR;
 
-    int gtype = -1;
     int ptype = 0;
     int num_covering_loops = 10;
     float map_threshold = .55;
@@ -277,10 +281,12 @@ int main(int argc, const char **argv) {
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<MineMapping::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<MineMapping::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+#if 0 // V2
     SIR_t<MineMappingV2::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
     SIR_t<MineMappingV2::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
-    SIR_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+#endif
+    SIR_t<Corridor::motion_model_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
+    SIR_t<Corridor::optimal_rbpf_particle_t, cellmap_t>::mpi_machine_for_master_ = mpi_machine_for_master;
 
     SIR_t<motion_model_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<optimal_sir_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
@@ -288,20 +294,18 @@ int main(int argc, const char **argv) {
     SIR_t<optimal_rbpf_slam_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<MineMapping::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<MineMapping::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+#if 0 // V2
     SIR_t<MineMappingV2::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
     SIR_t<MineMappingV2::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
-    SIR_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
-    SIR_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+#endif
+    SIR_t<Corridor::motion_model_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
+    SIR_t<Corridor::optimal_rbpf_particle_t, cellmap_t>::mpi_fixed_budget_ = mpi_fixed_budget;
 #endif
 
     // parse arguments
     for( --argc, ++argv; (argc > 0) && (**argv == '-'); --argc, ++argv ) {
         if( !strcmp(argv[0], "--tmp-path") ) {
             tmp_path = argv[1];
-            --argc;
-            ++argv;
-        } else if( !strcmp(argv[0], "-g") || !strcmp(argv[0], "--gtype") ) {
-            gtype = atoi(argv[1]);
             --argc;
             ++argv;
         } else if( !strcmp(argv[0], "-c") || !strcmp(argv[0], "--ncols") ) {
@@ -370,17 +374,28 @@ int main(int argc, const char **argv) {
             seed = atoi(argv[1]);
             --argc;
             ++argv;
-        } else if( !strcmp(argv[0], "--color-slam") ) {
-            slam_type = cellmap_t::COLOR_SLAM;
-        } else if( !strcmp(argv[0], "--mine-mapping-peaked") ) {
-            slam_type = cellmap_t::MINE_MAPPING_PEAKED;
-        } else if( !strcmp(argv[0], "--mine-mapping-non-peaked") ) {
-            slam_type = cellmap_t::MINE_MAPPING_NON_PEAKED;
-        } else if( !strcmp(argv[0], "--aisle-slam") ) {
-            slam_type = cellmap_t::AISLE_SLAM;
-        } else if( !strncmp(argv[0], "--tracker=", 10) ) {
-            string tracker(&argv[0][10]);
+        } else if( !strcmp(argv[0], "--task") ) {
+            string task = argv[1];
+            if( task == "color" ) {
+                slam_type = cellmap_t::COLOR;
+            } else if( task == "mine-mapping-peaked" ) {
+                slam_type = cellmap_t::MINE_MAPPING_PEAKED;
+            } else if( task == "mine-mapping-non-peaked" ) {
+                slam_type = cellmap_t::MINE_MAPPING_NON_PEAKED;
+            } else if( task == "1d" ) {
+                slam_type = cellmap_t::CORRIDOR;
+                nrows = 1;
+            } else {
+                cerr << "error: undefined task '" << task << "'" << endl;
+                exit(-1);
+            }
+            --argc;
+            ++argv;
+        } else if( !strncmp(argv[0], "--tracker", 10) ) {
+            string tracker = argv[1];
             Utils::tokenize(tracker, tracker_strings);
+            --argc;
+            ++argv;
         } else if( !strcmp(argv[0], "--plot") || !strcmp(argv[0], "--generate-plot-R") ) {
             R_plot = true;
         } else if( !strcmp(argv[0], "-v") || !strcmp(argv[0], "--verbose") ) {
@@ -394,9 +409,9 @@ int main(int argc, const char **argv) {
         }
     }
 
-    // check proper dimension for aisle-slam
-    if( (slam_type == cellmap_t::AISLE_SLAM) && (nrows != 1) ) {
-        cerr << "error: number of rows for aisle-slam must be equal to 1" << endl;
+    // check proper dimension for 1d-slam
+    if( (slam_type == cellmap_t::CORRIDOR) && (nrows != 1) ) {
+        cerr << "error: number of rows for 1d-slam must be equal to 1" << endl;
         exit(-1);
     }
 
@@ -405,19 +420,6 @@ int main(int argc, const char **argv) {
     cout << "# seed=" << seed << endl;
 
     // create cellmap
-    if( (gtype >= 0) && (gtype < 2) ) {
-        nrows = 1;
-        ncols = 8;
-        nlabels = 2;
-        pa = 0.8;
-        po = 0.9;
-    } else if( (gtype >= 0) && (gtype < 3) ) {
-        nrows = 10;
-        ncols = 10;
-        nlabels = 4;
-        pa = 0.9;
-        po = 0.9;
-    }
     cellmap_t cellmap(nrows, ncols, nlabels, slam_type, pa, po);
 
     // set static members
@@ -431,17 +433,19 @@ int main(int argc, const char **argv) {
         if( (slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED) ) {
             MineMapping::cache_t::initialize(nrows, ncols);
             MineMapping::kappa_arc_consistency_t::initialize(nrows, ncols);
+#if 0 // V2
             MineMappingV2::cache_t::initialize(nrows, ncols);
             MineMappingV2::kappa_arc_consistency_t::initialize(nrows, ncols);
+#endif
         }
-        if( slam_type == cellmap_t::AISLE_SLAM ) {
-            AisleSLAM::cache_t::initialize(nrows, ncols);
-            AisleSLAM::kappa_arc_consistency_t::initialize(nrows, ncols);
+        if( slam_type == cellmap_t::CORRIDOR ) {
+            Corridor::cache_t::initialize(nrows, ncols);
+            Corridor::kappa_arc_consistency_t::initialize(nrows, ncols);
         }
     }
 
     // tracking algorithms
-    int nparticles = 100;
+    int nparticles = 10; // default value
     vector<tracking_t<cellmap_t>*> trackers;
     for( size_t i = 0; i < tracker_strings.size(); ++i ) {
         tracking_t<cellmap_t> *tracker = 0;
@@ -479,29 +483,31 @@ int main(int argc, const char **argv) {
               new cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t>(cellmap);
             tracker = new optimal_SIR_t<optimal_sir_slam_particle_t, cellmap_t, cdf_for_optimal_sir_t<optimal_sir_slam_particle_t, cellmap_t> >(name, cellmap, parameters, *cdf);
         } else if( short_name == "mm-rbpf" ) {
-            if( slam_type == cellmap_t::COLOR_SLAM ) {
+            if( slam_type == cellmap_t::COLOR ) {
                 tracker = new RBPF_t<motion_model_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( (slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED) ) {
                 tracker = new RBPF_t<MineMapping::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
-                assert(slam_type == cellmap_t::AISLE_SLAM);
-                tracker = new RBPF_t<AisleSLAM::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
+                assert(slam_type == cellmap_t::CORRIDOR);
+                tracker = new RBPF_t<Corridor::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
         } else if( short_name == "opt-rbpf" ) {
-            if( slam_type == cellmap_t::COLOR_SLAM ) {
+            if( slam_type == cellmap_t::COLOR ) {
                 tracker = new RBPF_t<optimal_rbpf_slam_particle_t, cellmap_t>(name, cellmap, parameters);
             } else if( (slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED) ) {
                 tracker = new RBPF_t<MineMapping::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             } else {
-                assert(slam_type == cellmap_t::AISLE_SLAM);
-                tracker = new RBPF_t<AisleSLAM::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
+                assert(slam_type == cellmap_t::CORRIDOR);
+                tracker = new RBPF_t<Corridor::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
             }
+#if 0 // V2
         } else if( short_name == "mm-rbpf2" ) {
             assert((slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED));
             tracker = new RBPF_t<MineMappingV2::motion_model_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
         } else if( short_name == "opt-rbpf2" ) {
             assert((slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED));
             tracker = new RBPF_t<MineMappingV2::optimal_rbpf_particle_t, cellmap_t>(name, cellmap, parameters);
+#endif
         } else {
             cerr << "warning: unrecognized tracking algorithm '" << name << "'" << endl;
         }
@@ -554,7 +560,7 @@ int main(int argc, const char **argv) {
     vector<Utils::stat_t> stats_unknown(trackers.size());
     vector<Utils::stat_t> stats_error(trackers.size());
     for( int trial = 0; trial < ntrials; ++trial ) {
-        cout << "# trial = " << trial << " / " << ntrials << endl;
+        cout << "# trial = " << 1 + trial << " / " << ntrials << endl;
         if( save_execution_and_exit ) *ofs_execution << " ";
 
         // reading/saving executions

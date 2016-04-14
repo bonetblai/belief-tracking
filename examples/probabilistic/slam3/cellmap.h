@@ -69,7 +69,7 @@ inline int calculate_index_mine_mapping(int slabels, int obs, int loc_type) {
     return index;
 }
 
-inline int calculate_index_aisle_slam(int slabels, int obs, int loc_type) {
+inline int calculate_index_corridor_slam(int slabels, int obs, int loc_type) {
     assert((slabels >= 0) && (slabels < 8));
     assert((obs >= 0) && (obs < 2));
     assert((loc_type >= 0) && (loc_type < 4));
@@ -122,7 +122,7 @@ struct cellmap_t {
     int marginals_size_;
 
     // type of slam problem
-    typedef enum { COLOR_SLAM, MINE_MAPPING_PEAKED, MINE_MAPPING_NON_PEAKED, AISLE_SLAM } slam_type_t;
+    typedef enum { COLOR, MINE_MAPPING_PEAKED, MINE_MAPPING_NON_PEAKED, CORRIDOR } slam_type_t;
     slam_type_t slam_type_;
 
     float pa_;
@@ -132,7 +132,7 @@ struct cellmap_t {
     std::vector<int> loc_type_;
     std::vector<std::set<int> > inactive_locs_;
     std::vector<float> probability_obs_mine_mapping_;
-    std::vector<float> probability_obs_aisle_slam_;
+    std::vector<float> probability_obs_corridor_slam_;
     std::vector<int> var_offset_;
 
     std::vector<cell_t> cells_;
@@ -147,7 +147,7 @@ struct cellmap_t {
         cells_ = std::vector<cell_t>(nloc_);
         marginals_size_ = 2 * nloc_ + nloc_;
         if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) ) precompute_stored_information_mine_mapping();
-        if( slam_type_ == AISLE_SLAM ) precompute_stored_information_aisle_slam();
+        if( slam_type_ == CORRIDOR ) precompute_stored_information_corridor_slam();
     }
     ~cellmap_t() { }
 
@@ -268,19 +268,19 @@ struct cellmap_t {
     float probability_tr_loc_mine_mapping(int action, int old_loc, int new_loc, float q) const {
         return probability_tr_loc_standard(action, old_loc, new_loc, q);
     }
-    float probability_tr_loc_aisle_slam(int action, int old_loc, int new_loc, float q) const {
+    float probability_tr_loc_corridor_slam(int action, int old_loc, int new_loc, float q) const {
         return probability_tr_loc_standard(action, old_loc, new_loc, q);
     }
 
   public:
     float probability_tr_loc(int action, int old_loc, int new_loc, float pa = -1) const {
         float q = pa == -1 ? pa_ : pa;
-        if( slam_type_ == COLOR_SLAM )
+        if( slam_type_ == COLOR )
             return probability_tr_loc_standard(action, old_loc, new_loc, q);
         else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
             return probability_tr_loc_mine_mapping(action, old_loc, new_loc, q);
         else
-            return probability_tr_loc_aisle_slam(action, old_loc, new_loc, q);
+            return probability_tr_loc_corridor_slam(action, old_loc, new_loc, q);
     }
 
     bool is_noop_action(int action, int loc, float pa = -1) const {
@@ -311,19 +311,19 @@ struct cellmap_t {
     int sample_loc_mine_mapping(int loc, int action, float q) const {
         return sample_loc_standard(loc, action, q);
     }
-    int sample_loc_aisle_slam(int loc, int action, float q) const {
+    int sample_loc_corridor_slam(int loc, int action, float q) const {
         return sample_loc_standard(loc, action, q);
     }
 
   public:
     int sample_loc(int loc, int action, float pa = -1) const {
         float q = pa == -1 ? pa_ : pa;
-        if( slam_type_ == COLOR_SLAM )
+        if( slam_type_ == COLOR )
             return sample_loc_standard(loc, action, q);
         else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
             return sample_loc_mine_mapping(loc, action, q);
         else
-            return sample_loc_aisle_slam(loc, action, q);
+            return sample_loc_corridor_slam(loc, action, q);
     }
 
 
@@ -393,38 +393,38 @@ struct cellmap_t {
         }
     }
 
-    float probability_obs_aisle_slam(int obs, int loc, int slabels, int last_action) const {
-        assert(slam_type_ == AISLE_SLAM);
+    float probability_obs_corridor_slam(int obs, int loc, int slabels, int last_action) const {
+        assert(slam_type_ == CORRIDOR);
         int loc_type = (loc == 0 ? 2 : 0) + (loc + 1 == ncols_ ? 1 : 0);
-        return probability_obs_aisle_slam_[calculate_index_aisle_slam(slabels, obs, loc_type)];
+        return probability_obs_corridor_slam_[calculate_index_corridor_slam(slabels, obs, loc_type)];
     }
-    float probability_obs_aisle_slam(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        assert(slam_type_ == AISLE_SLAM);
+    float probability_obs_corridor_slam(int obs, int loc, const std::vector<int> &labels, int last_action) const {
+        assert(slam_type_ == CORRIDOR);
         assert(loc / ncols_ == 0);
         int slabels = 0;
         if( loc > 0 ) slabels += labels[loc - 1];
         slabels += labels[loc] << 1;
         if( loc + 1 < ncols_ ) slabels += labels[loc + 1] << 2;
         assert((slabels >= 0) && (slabels < 8));
-        return probability_obs_aisle_slam(obs, loc, slabels, last_action);
+        return probability_obs_corridor_slam(obs, loc, slabels, last_action);
     }
 
   public:
     float probability_obs(int obs, int loc, int label_or_slabels, int last_action) const {
-        if( slam_type_ == COLOR_SLAM )
+        if( slam_type_ == COLOR )
             return probability_obs_standard(obs, loc, label_or_slabels, last_action);
         else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
             return probability_obs_mine_mapping(obs, loc, label_or_slabels, last_action);
         else
-            return probability_obs_aisle_slam(obs, loc, label_or_slabels, last_action);
+            return probability_obs_corridor_slam(obs, loc, label_or_slabels, last_action);
     }
     float probability_obs(int obs, int loc, const std::vector<int> &labels, int last_action) const {
-        if( slam_type_ == COLOR_SLAM )
+        if( slam_type_ == COLOR )
             return probability_obs_standard(obs, loc, labels, last_action);
         else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
             return probability_obs_mine_mapping(obs, loc, labels, last_action);
         else
-            return probability_obs_aisle_slam(obs, loc, labels, last_action);
+            return probability_obs_corridor_slam(obs, loc, labels, last_action);
     }
 
 
@@ -446,7 +446,7 @@ struct cellmap_t {
     }
 
     int sample_obs_standard(int loc, int /*last_action*/, float q) const {
-        assert(slam_type_ == COLOR_SLAM);
+        assert(slam_type_ == COLOR);
         assert((loc >= 0) && (loc < nloc_));
         return sample_label(cells_[loc].label_, q);
     }
@@ -498,8 +498,8 @@ struct cellmap_t {
         return obs;
     }
 
-    int sample_obs_aisle_slam(int loc, int last_action, float q) const {
-        assert(slam_type_ == AISLE_SLAM);
+    int sample_obs_corridor_slam(int loc, int last_action, float q) const {
+        assert(slam_type_ == CORRIDOR);
         float p = q;
         if( (loc > 0) && (cells_[loc].label_ != cells_[loc - 1].label_) ) p *= q;
         if( (loc + 1 < ncols_) && (cells_[loc].label_ != cells_[loc + 1].label_) ) p *= q;
@@ -509,12 +509,12 @@ struct cellmap_t {
   public:
     int sample_obs(int loc, int last_action, float po = -1) const {
         float q = po == -1 ? po_ : po;
-        if( slam_type_ == COLOR_SLAM )
+        if( slam_type_ == COLOR )
             return sample_obs_standard(loc, last_action, q);
         else if( (slam_type_ == MINE_MAPPING_PEAKED) || (slam_type_ == MINE_MAPPING_NON_PEAKED) )
             return sample_obs_mine_mapping(loc, last_action, q);
         else
-            return sample_obs_aisle_slam(loc, last_action, q);
+            return sample_obs_corridor_slam(loc, last_action, q);
     }
 
   private:
@@ -741,18 +741,18 @@ struct cellmap_t {
         }
     }
 
-    void precompute_stored_information_aisle_slam() {
+    void precompute_stored_information_corridor_slam() {
         // dimension is product of 8 valuations, 2 obs and 4 loc-types
-        probability_obs_aisle_slam_ = std::vector<float>(8 * 2 * 4, 0);
+        probability_obs_corridor_slam_ = std::vector<float>(8 * 2 * 4, 0);
         for( int loc_type = 0; loc_type < 4; ++loc_type ) {
             for( int obs = 0; obs < 2; ++obs ) {
                 for( int slabels = 0; slabels < 8; ++slabels ) {
                     int label = (slabels >> 1) & 1;
-                    int index = calculate_index_aisle_slam(slabels, obs, loc_type);
+                    int index = calculate_index_corridor_slam(slabels, obs, loc_type);
                     float p = po_;
                     if( ((loc_type & 1) == 0) && ((slabels & 1) != label) ) p *= po_;
                     if( ((loc_type & 2) == 0) && (((slabels >> 2) & 1) != label) ) p *= po_;
-                    probability_obs_aisle_slam_[index] = obs == label ? p : 1 - p;
+                    probability_obs_corridor_slam_[index] = obs == label ? p : 1 - p;
 
                     std::cout << "# P( obs=" << obs << " | loc=" << loc_type << ":["
                               << ((loc_type & 2) >> 1) << (loc_type & 1) << "], slabels=" << slabels << ":[";
@@ -765,7 +765,7 @@ struct cellmap_t {
                         std::cout << ((slabels >> 2) & 1);
                     else
                         std::cout << "-";
-                    std::cout << "] ) = " << probability_obs_aisle_slam_[index] << std::endl;
+                    std::cout << "] ) = " << probability_obs_corridor_slam_[index] << std::endl;
                 }
             }
         }
