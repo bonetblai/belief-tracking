@@ -181,7 +181,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         std::vector<std::pair<float, int> > map_values;
         tracker->MAP_on_var(marginals_, base_.nloc_, map_values, .001);
         assert(!map_values.empty());
-        //std::cout << "(cloc=" << coord_t(map_values[0].second) << ",p=" << map_values[0].first << ",best-action=" << base_.action_label(best_action_[map_values[0].second]) << ")" << std::flush;
+        //std::cout << "(cloc=" << coord_t(map_values[0].second) << ",p=" << map_values[0].first << ",best-action=" << cellmap_t::action_label(best_action_[map_values[0].second]) << ")" << std::flush;
 }
 #endif
 
@@ -189,7 +189,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
 
         // calculate best action and return
         int action = greedy_action(&marginals_[base_.variable_offset(base_.nloc_)]);
-        std::cout << "(" << base_.action_label(action) << ")" << std::flush;
+        std::cout << "(" << cellmap_t::action_label(action) << ")" << std::flush;
         return action == cellmap_t::noop ? Utils::random(4) : action;
     }
 
@@ -325,7 +325,7 @@ struct murphy_nips99_slam_policy_t : public action_selection_t<cellmap_t> {
         std::cout << "(loc-maxV=" << coord_t(loc_with_max_value) << ",V=" << value_loc_with_max_value << ")" << std::flush;
         std::cout << "(";
         for( int loc = 0; loc < base_.nloc_; ++loc )
-            std::cout << coord_t(loc) << "=[" << value_function_[loc] << "," << base_.action_label(best_action_[loc]) << "]," << std::flush;
+            std::cout << coord_t(loc) << "=[" << value_function_[loc] << "," << cellmap_t::action_label(best_action_[loc]) << "]," << std::flush;
         std::cout << ")" << std::flush;
 #endif
 

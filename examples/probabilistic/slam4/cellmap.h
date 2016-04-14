@@ -205,7 +205,7 @@ struct cellmap_t {
 
     // action labels
     enum { up, down, right, left, noop };
-    std::string action_label(int action) const {
+    static std::string action_label(int action) {
         if( action == 0 )
             return std::string("up");
         else if( action == 1 )
@@ -820,7 +820,8 @@ struct cellmap_t {
         execution_step_t(int loc = 0, int obs = 0, int last_action = 0)
           : loc_(loc), obs_(obs), last_action_(last_action) { }
         void print(std::ostream &os) const {
-            os << "[" << coord_t(loc_) << "," << obs_ << "," << last_action_ << "]";
+            std::string action_label = cellmap_t::action_label(last_action_);
+            os << "[" << coord_t(loc_) << "," << obs_ << "," << action_label << "]";
         }
         void dump(std::ostream &os) const {
             os << loc_ << " " << obs_ << " " << last_action_;
