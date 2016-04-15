@@ -1,12 +1,14 @@
 BELIEF_TRACKING_HOME=	../../..
 #MDP_ENGINE_HOME=	$(ROOT)/mdp-engine
+LIBDAI_HOME=		~/software/libdai
 
 INCLUDES=		-I $(BELIEF_TRACKING_HOME)/engine #-I $(BELIEF_TRACKING_HOME)/probabilistic_engine #-I $(MDP_ENGINE_HOME)/engine
 
 CXX=			c++
 MPICXX=			mpic++
 
-CXXEXT=			-std=c++11 -DMACOSX -I ~/software/libdai/include -I /usr/local/include -Wno-deprecated -Wall -W -Wextra -DDAI_DEBUG -L ~/software/libdai/lib -L /usr/local/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter
+#CXXEXT=			-std=c++11 -DMACOSX -I $(LIBDAI_HOME)/include -I /usr/local/include -Wno-deprecated -Wall -W -Wextra -L $(LIBDAI_HOME)/lib -L /usr/local/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter
+CXXEXT=			-std=c++11 -DMACOSX -I $(LIBDAI_HOME)/include -I /usr/local/include -Wno-deprecated -Wall -W -Wextra -DDAI_DEBUG -L $(LIBDAI_HOME)/lib -L /usr/local/lib -Wno-overloaded-virtual -Wno-unused-local-typedef -Wno-unused-parameter
 
 CFLAGS=			-Wall -O3 $(CXXEXT) $(INCLUDES) #-DNDEBUG
 
