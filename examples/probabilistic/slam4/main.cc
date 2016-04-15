@@ -42,7 +42,9 @@
 
 #include "slam_particles.h"
 #include "mine_mapping_particles.h"
+#if 0
 #include "mine_mapping_v2_particles.h"
+#endif
 #include "corridor_slam_particles.h"
 
 using namespace std;
