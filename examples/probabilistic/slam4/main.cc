@@ -340,7 +340,7 @@ int main(int argc, const char **argv) {
                 slam_type = cellmap_t::CORRIDOR;
                 nrows = 1;
             } else {
-                cerr << "error: undefined task '" << task << "'" << endl;
+                cerr << "error: undefined task '" << task << "'. Valid values are 'color', 'mine-mapping-peaked', 'mine-mapping-non-peaked', and '1d'." << endl;
                 exit(-1);
             }
             --argc;
@@ -384,6 +384,7 @@ int main(int argc, const char **argv) {
         //Inference::edbp_t::initialize();
         //Inference::inference_t::initialize_edbp(tmp_path);
         kappa_t::initialize(epsilon_for_kappa, 10);
+        Decomposable::cache_t::initialize(nrows, ncols);
         if( (slam_type == cellmap_t::MINE_MAPPING_PEAKED) || (slam_type == cellmap_t::MINE_MAPPING_NON_PEAKED) ) {
             MineMapping::cache_t::initialize(nrows, ncols);
             MineMapping::kappa_arc_consistency_t::initialize(nrows, ncols);
@@ -395,7 +396,6 @@ int main(int argc, const char **argv) {
         if( slam_type == cellmap_t::CORRIDOR ) {
             Corridor::cache_t::initialize(nrows, ncols);
             Corridor::kappa_arc_consistency_t::initialize(nrows, ncols);
-            Decomposable::cache_t::initialize(nrows, ncols);
         }
     }
 
