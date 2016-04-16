@@ -53,6 +53,8 @@ using namespace std;
 // static members
 int coord_t::ncols_ = 0;
 const cellmap_t *base_particle_t::base_ = 0;
+template <> const cellmap_t *Decomposable::decomposable_t<cellmap_t>::static_base_ = 0;
+
 
 // static members for inference algorithms
 string Inference::inference_t::edbp_factors_fn_;
@@ -381,6 +383,7 @@ int main(int argc, const char **argv) {
     // set static members
     coord_t::ncols_ = ncols;
     base_particle_t::base_ = &cellmap;
+    Decomposable::decomposable_t<cellmap_t>::static_base_ = &cellmap; // CHECK: remove this stuff used in var_offset(). Hide it inside cellmap.h
 
     if( !save_execution_and_exit ) {
         //Inference::edbp_t::initialize();

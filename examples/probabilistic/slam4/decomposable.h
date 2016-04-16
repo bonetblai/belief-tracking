@@ -104,9 +104,23 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
         delete[] inv_tr_;
     }
 
-    // CHECK: don't remember this stuff below
-    static int var_offset(int loc, int var_id) { return 1 + var_id - loc; }
+    // CHECK: don't remember this stuff below. Must move this into cellmap_t as slam-type should be hidden
+    static const BASE *static_base_;
+    static int var_offset_corridor_slam(int loc, int var_id) {
+        return 1 + var_id - loc;
+    }
+    static int var_offset_mine_mapping(int loc, int var_id) {
+        assert(static_base_ != 0);
+        return static_base_->var_offset(loc, var_id);
+    }
     int get_slabels(int loc, const dai::VarSet &varset, int value) const {
+        int (*var_offset)(int loc, int var_id) = 0;
+        if( base_.slam_type_ == cellmap_t::CORRIDOR ) {
+            var_offset = var_offset_corridor_slam;
+        } else if( (base_.slam_type_ == cellmap_t::MINE_MAPPING_PEAKED) || (base_.slam_type_ == cellmap_t::MINE_MAPPING_NON_PEAKED) ) {
+            var_offset = var_offset_mine_mapping;
+        }
+        assert(var_offset != 0);
         return cache_t::get_slabels(loc, varset, value, var_offset);
     }
 
@@ -195,7 +209,10 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
                     new_factor.set(value, p * base_.probability_obs(obs, j, slabels, last_action));
                 } else {
                     assert(base_.nlabels_ == 2);
-                    new_factor.set(value, p / float(base_.nlabels_));
+                    if( base_.slam_type_ == cellmap_t::MINE_MAPPING_NON_PEAKED )
+                        new_factor.set(value, p / 10.0);
+                    else
+                        new_factor.set(value, p / float(base_.nlabels_));
                 }
                 change = change || (factor[value] != new_factor[value]);
             }
