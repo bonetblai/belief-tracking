@@ -68,7 +68,8 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
     std::vector<dai::Factor> marginals_on_vars_;
 
     // store inv. transition model for update()
-    float *inv_tr_;
+    std::vector<std::pair<int, float> > *sparse_inv_tr_vec_;
+    std::vector<std::pair<int, float> > sparse_inv_tr_;
 
     // computation of marginals in factor model
     mutable std::vector<int> indices_for_updated_factors_;
@@ -89,7 +90,8 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
         if( i != 0 ) inference_ = *i;
 
         // create storage for inv. transition model
-        inv_tr_ = new float[base_.nloc_ * base_.nloc_];
+        sparse_inv_tr_vec_ = new std::vector<std::pair<int, float> >[base_.nloc_];
+        sparse_inv_tr_.reserve(base_.nloc_);
     }
     decomposable_t(const std::string &name, const BASE &base, const std::multimap<std::string, std::string> &parameters)
       : decomposable_t(name, base, 0) {
@@ -101,7 +103,7 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
         }
     }
     virtual ~decomposable_t() {
-        delete[] inv_tr_;
+        delete[] sparse_inv_tr_vec_;
     }
 
     // CHECK: don't remember this stuff below. Must move this into cellmap_t as slam-type should be hidden
@@ -171,16 +173,19 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
         dai::Factor &loc_marginal = marginals_on_vars_[base_.nloc_];
         assert(base_.nloc_ == int(loc_marginal.nrStates()));
         for( int new_loc = 0; new_loc < base_.nloc_; ++new_loc ) {
+            sparse_inv_tr_.clear();
             float alpha = 0;
             for( int loc = 0; loc < base_.nloc_; ++loc ) {
                 float tr = base_.probability_tr_loc(last_action, loc, new_loc);
                 assert(tr * loc_marginal[loc] >= 0);
-                inv_tr_[loc * base_.nloc_ + new_loc] = tr * loc_marginal[loc];
+                if( tr * loc_marginal[loc] != 0 )
+                    sparse_inv_tr_.push_back(std::make_pair(loc, tr * loc_marginal[loc]));
                 alpha += tr * loc_marginal[loc];
             }
             if( alpha != 0 ) {
-                for( int loc = 0; loc < base_.nloc_; ++loc )
-                    inv_tr_[loc * base_.nloc_ + new_loc] /= alpha;
+                for( int loc = 0; loc < int(sparse_inv_tr_.size()); ++loc )
+                    sparse_inv_tr_[loc].second /= alpha;
+                sparse_inv_tr_vec_[new_loc] = sparse_inv_tr_;
             }
         }
 
@@ -195,13 +200,13 @@ template <typename BASE> class decomposable_t : public tracking_t<BASE> {
                 int new_loc = state.at(cache_t::variable(base_.nloc_));
 
                 float p = 0;
-                for( int loc = 0; loc < base_.nloc_; ++loc ) {
-                    float inv_tr = inv_tr_[loc * base_.nloc_ + new_loc];
-                    if( inv_tr != 0 ) {
-                        float tr = base_.probability_tr_loc(last_action, loc, new_loc);
-                        int value_with_replaced_loc = cache_t::replace_loc_in_value(j, factor.vars(), value, new_loc, loc);
-                        p += inv_tr * tr * factor[value_with_replaced_loc];
-                    }
+                const std::vector<std::pair<int, float> > &inv_tr = sparse_inv_tr_vec_[new_loc];
+                for( int i = 0; i < int(inv_tr.size()); ++i ) {
+                    int loc = inv_tr[i].first;
+                    assert(inv_tr[i].second != 0);
+                    float tr = base_.probability_tr_loc(last_action, loc, new_loc);
+                    int value_with_replaced_loc = cache_t::replace_loc_in_value(j, factor.vars(), value, new_loc, loc);
+                    p += inv_tr[i].second * tr * factor[value_with_replaced_loc];
                 }
 
                 if( new_loc == j ) {
