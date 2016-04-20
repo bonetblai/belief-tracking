@@ -98,8 +98,16 @@ template<typename T> class arc_consistency_t {
     explicit arc_consistency_t(const arc_consistency_t &ac)
       : nvars_(ac.nvars_), domain_(ac.domain_), digraph_(ac.digraph_) {
     }
-    arc_consistency_t(arc_consistency_t &&ac) = default;
-    ~arc_consistency_t() { clear(); }
+    //arc_consistency_t(arc_consistency_t &&ac) = default; // CHECK: when this is enabled, segfault occurs
+    virtual ~arc_consistency_t() { clear(); }
+
+    const arc_consistency_t<T>& operator=(const arc_consistency_t<T> &ac) {
+        nvars_ = ac.nvars_;
+        domain_ = ac.domain_;
+        assert(&digraph_ == &ac.digraph_);
+        worklist_ = ac.worklist_;
+        return *this;
+    }
 
     int nvars() const { return nvars_; }
     const constraint_digraph_t& digraph() const { return digraph_; }
