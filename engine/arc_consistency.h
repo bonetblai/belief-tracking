@@ -202,9 +202,11 @@ template<typename T> class arc_consistency_t {
         if( !inverse_check ) {
             arc_reduce_preprocessing_0(var_x, var_y);
             for( typename T::const_iterator it = domain_[var_x]->begin(); it != domain_[var_x]->end(); ++it ) {
+                //std::cout << "var-x: it.index=" << it.index() << ", it.value=" << *it << std::endl;
                 arc_reduce_preprocessing_1(var_x, *it);
                 bool found_compatible_value = false;
                 for( typename T::const_iterator jt = domain_[var_y]->begin(); jt != domain_[var_y]->end(); ++jt ) {
+                    //std::cout << "var-y: jt.index=" << jt.index() << ", jt.value=" << *jt << std::endl;
                     if( consistent(var_x, var_y, *it, *jt) ) {
                         found_compatible_value = true;
                         break;
@@ -272,6 +274,9 @@ template<typename T> class arc_consistency_t {
     bool ac3(std::vector<bool> &revised_vars, bool propagate = true, bool inverse_check = false) {
         assert(int(revised_vars.size()) >= nvars_);
 
+#ifdef DEBUG
+        std::cout << "ac3: worklist.size=" << worklist_.size() << std::endl;
+#endif
         // revise arcs until worklist becomes empty
         bool something_removed = false;
         while( !worklist_.empty() ) {
