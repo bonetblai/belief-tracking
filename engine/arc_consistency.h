@@ -133,6 +133,7 @@ template<typename T> class arc_consistency_t {
         for( int var = 0; var < nvars_; ++var )
             delete domain_[var];
         domain_.clear();
+        nvars_ = 0;
     }
     void clear_domains() {
         for( int var = 0; var < nvars_; ++var )
